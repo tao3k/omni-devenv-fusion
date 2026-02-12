@@ -364,7 +364,8 @@ A skill is OSS 2.0 compliant when:
 
 ## Related Documentation
 
-- [Trinity Architecture](../explanation/trinity-architecture.md)
+- [Omega Architecture](omega-architecture.md)
+- [Omni Loop](omni-loop.md)
 - [Adaptive Loader](../explanation/adaptive-loader.md)
 - [LangGraph Workflow Guide](../llm/langgraph-workflow-guide.md)
 - [LLM Skill Discovery](../llm/skill-discovery.md)

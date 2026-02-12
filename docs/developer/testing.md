@@ -66,6 +66,12 @@ The standard way to run tests is via `just` commands defined in the project root
 # Run ALL tests (Foundation, Core, MCP, Agent, Skills)
 just test
 
+# Run Rust compile gate only
+just rust-check
+
+# Run Rust snapshot contract tests only
+just rust-test-snapshots
+
 # Run only Python package tests
 just test-python
 
@@ -90,6 +96,72 @@ uv run pytest packages/python/core/tests/
 # Agent tests (no parallel for stability)
 uv run pytest packages/python/agent/tests/ -n0
 ```
+
+### Architecture Guardrails (Required)
+
+Architecture boundary tests are enforced for the tracer pipeline/invoker stack.
+
+```bash
+# Run only architecture guard tests
+uv run pytest -m architecture packages/python/foundation/tests/unit/tracer
+
+# Run specific architecture rule files
+uv run pytest \
+  packages/python/foundation/tests/unit/tracer/test_pipeline_architecture_rules.py \
+  packages/python/foundation/tests/unit/tracer/test_invoker_architecture_rules.py
+```
+
+CI enforcement:
+
+- GitHub Actions workflow `ci.yaml` includes a required job: `architecture-gate`
+- The job runs architecture tests for both tracer and retrieval namespaces:
+  `pytest -q -m architecture packages/python/foundation/tests/unit/tracer packages/python/foundation/tests/unit/rag`
+- Any architecture rule failure blocks merge
+
+### Retrieval Namespace Tests
+
+Retrieval has moved to the precise namespace `omni.rag.retrieval.*` with
+backend-specific modules and a backend factory.
+
+```bash
+# Retrieval backends + node factory + tracer invoker integration
+uv run pytest \
+  packages/python/foundation/tests/unit/rag/test_retrieval_namespace.py \
+  packages/python/foundation/tests/unit/rag/test_retrieval_factory.py \
+  packages/python/foundation/tests/unit/rag/test_retrieval_architecture_rules.py \
+  packages/python/foundation/tests/unit/rag/test_retrieval_node_factory.py \
+  packages/python/foundation/tests/unit/tracer/test_retrieval_invoker.py
+```
+
+Rust-owned hybrid contract validation:
+
+```bash
+uv run pytest \
+  packages/python/foundation/tests/unit/services/test_connection.py \
+  packages/python/foundation/tests/unit/rag/test_retrieval_quality.py
+```
+
+### Rust-First Contract Gate (Required Order)
+
+For retrieval/search changes, the required order is:
+
+1. `cargo check --workspace --all-targets`
+2. Rust snapshot contract tests (`omni-vector` fusion contracts)
+3. Python integration/contract tests
+
+Equivalent commands:
+
+```bash
+just rust-check
+just rust-test-snapshots
+uv run pytest \
+  packages/python/foundation/tests/unit/services/test_vector_schema.py \
+  packages/python/foundation/tests/unit/services/test_connection.py \
+  packages/python/foundation/tests/unit/rag/test_retrieval_namespace.py \
+  packages/python/foundation/tests/unit/rag/test_retrieval_quality.py
+```
+
+CI mirrors this sequence in `.github/workflows/ci.yaml`.
 
 ### All Package Tests Combined
 
@@ -149,6 +221,34 @@ pytest -v --timeout=30 test_slow_operation.py
 | `test_skills_path.py` | 10    | Skill utility functions                 |
 
 **Key Fixtures**: None (pure unit tests with mocked imports)
+
+### Tracer Architecture Tests (`packages/python/foundation/tests/unit/tracer/`)
+
+| File                                  | Purpose                                                                                       |
+| ------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `test_pipeline_architecture_rules.py` | Enforce pipeline layering (`schema -> builder -> runtime`) and no compatibility facade        |
+| `test_invoker_architecture_rules.py`  | Enforce invoker layering (`node_factory` contract base, `invoker_stack` as composition layer) |
+| `test_pipeline_modularity.py`         | Validate package-level exports map to modular implementations                                 |
+
+### Retrieval Architecture Tests (`packages/python/foundation/tests/unit/rag/`)
+
+| File                                   | Purpose                                                                                                   |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `test_retrieval_architecture_rules.py` | Enforce retrieval layering (`interface` contract base, backends isolated, factory/node_factory decoupled) |
+
+### Retrieval Tests (`packages/python/foundation/tests/unit/rag/`)
+
+| File                             | Purpose                                                        |
+| -------------------------------- | -------------------------------------------------------------- |
+| `test_retrieval_namespace.py`    | Validate Lance/Hybrid backend behavior and normalization       |
+| `test_retrieval_factory.py`      | Validate backend selection by `kind` (`lance`, `hybrid`)       |
+| `test_retrieval_node_factory.py` | Validate LangGraph retrieval node factory output/state mapping |
+
+### Vector Schema Tests (`packages/python/foundation/tests/unit/services/`)
+
+| File                    | Purpose                                                                                                                          |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `test_vector_schema.py` | Validate canonical Rust->Python payload schemas (`omni.vector.search.v1`, `omni.vector.hybrid.v1`) and parser rejection behavior |
 
 ### Core Tests (`packages/python/core/tests/`)
 
@@ -507,7 +607,7 @@ jobs:
 
 ## Related Documentation
 
-- [Trinity Architecture](../../explanation/trinity-architecture.md)
+- [Trinity Architecture](../../explanation/system-layering.md)
 - [Skills System](../../skills.md)
 - [Project Execution Standard](../../reference/project-execution-standard.md)
 - [Justfile](../../justfile)

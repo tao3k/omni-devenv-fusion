@@ -1,14 +1,12 @@
-//! omni-types - Common type definitions for Omni DevEnv
+//! omni-types - Common type definitions for Omni `DevEnv`
 //!
 //! This crate provides shared data structures used across all Omni crates.
-//! All types are designed to be serialization-compatible with Python (via PyO3).
+//! All types are designed to be serialization-compatible with Python (via `PyO3`).
 //!
 //! # Schema Singularity
 //! Types derive `schemars::JsonSchema` to enable automatic JSON Schema generation.
 //! This establishes Rust as the Single Source of Truth (SSOT) for type definitions,
 //! allowing Python and LLM consumers to dynamically retrieve authoritative schemas.
-
-#![allow(clippy::doc_markdown)]
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -19,7 +17,6 @@ pub type OmniResult<T> = Result<T, OmniError>;
 
 /// Unified error type for all Omni operations
 #[derive(Debug, Error, Serialize, Deserialize)]
-#[allow(clippy::enum_variant_names)]
 pub enum OmniError {
     /// Git-related operation failures
     #[error("Git error: {0}")]
@@ -27,7 +24,7 @@ pub enum OmniError {
 
     /// File system access failures
     #[error("File system error: {0}")]
-    FileSystem(String),
+    Filesystem(String),
 
     /// Configuration loading/parsing failures
     #[error("Configuration error: {0}")]
@@ -52,7 +49,7 @@ pub struct Skill {
 /// Skill definition with generic metadata container.
 /// This enables schema-driven metadata evolution without recompiling Rust.
 ///
-/// All schema-defined fields (version, permissions, require_refs, etc.)
+/// All schema-defined fields (version, permissions, `require_refs`, etc.)
 /// are stored in the flexible `metadata` JSON object.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(from = "SkillDefinitionHelper", into = "SkillDefinitionHelper")]
@@ -129,7 +126,7 @@ impl SkillDefinition {
         }
     }
 
-    /// Get require_refs from metadata safely.
+    /// Get `require_refs` from metadata safely.
     #[must_use]
     pub fn get_require_refs(&self) -> Vec<String> {
         self.metadata
@@ -145,7 +142,7 @@ impl SkillDefinition {
     }
 
     /// Get a specific metadata field as string.
-    /// Tries both camelCase and snake_case variations.
+    /// Tries both camelCase and `snake_case` variations.
     pub fn get_meta_string(&self, key: &str) -> Option<String> {
         // Try camelCase (first char uppercase) and original key
         let camel_key = key
@@ -315,14 +312,12 @@ pub fn get_schema_json(type_name: &str) -> Result<String, SchemaError> {
     let schema = match type_name {
         // Core types
         "Skill" => schemars::schema_for!(Skill),
-        "SkillDefinition" => schemars::schema_for!(SkillDefinition),
+        "SkillDefinition" | "OmniTool" => schemars::schema_for!(SkillDefinition),
         "TaskBrief" => schemars::schema_for!(TaskBrief),
         "AgentResult" => schemars::schema_for!(AgentResult),
         "AgentContext" => schemars::schema_for!(AgentContext),
         "VectorSearchResult" => schemars::schema_for!(VectorSearchResult),
         "EnvironmentSnapshot" => schemars::schema_for!(EnvironmentSnapshot),
-        // Legacy alias
-        "OmniTool" => schemars::schema_for!(SkillDefinition),
         _ => return Err(SchemaError::UnknownType(type_name.to_string())),
     };
     serde_json::to_string_pretty(&schema)
@@ -330,6 +325,7 @@ pub fn get_schema_json(type_name: &str) -> Result<String, SchemaError> {
 }
 
 /// Get list of all registered type names.
+#[must_use]
 pub fn get_registered_types() -> Vec<&'static str> {
     vec![
         "Skill",

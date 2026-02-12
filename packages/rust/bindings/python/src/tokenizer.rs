@@ -38,8 +38,10 @@ pub fn py_truncate(text: &str, max_tokens: usize) -> String {
 #[pyclass]
 #[derive(Clone, Debug)]
 pub struct PyMessage {
+    /// Message role (system/user/assistant/tool).
     #[pyo3(get)]
     pub role: String,
+    /// Message body content.
     #[pyo3(get)]
     pub content: String,
 }
@@ -128,7 +130,7 @@ impl PyContextPruner {
         let mut rust_messages: Vec<Message> = Vec::with_capacity(messages.len());
 
         for msg in messages {
-            let dict = msg.downcast_bound::<pyo3::types::PyDict>(py)?;
+            let dict = msg.cast_bound::<pyo3::types::PyDict>(py)?;
             let role: String = dict.get_item("role")?.unwrap().extract()?;
             let content: String = dict.get_item("content")?.unwrap().extract()?;
             rust_messages.push(Message { role, content });
@@ -153,16 +155,16 @@ impl PyContextPruner {
 
     /// Count tokens in a text string using Rust.
     fn count_tokens(&self, text: &str) -> usize {
-        self.inner.count_tokens(text)
+        ContextPruner::count_tokens(text)
     }
 
     /// Get token count for a list of messages.
     fn count_message_tokens(&self, messages: Vec<Py<PyAny>>, py: Python) -> PyResult<usize> {
         let mut total = 0;
         for msg in messages {
-            let dict = msg.downcast_bound::<pyo3::types::PyDict>(py)?;
+            let dict = msg.cast_bound::<pyo3::types::PyDict>(py)?;
             let content: String = dict.get_item("content")?.unwrap().extract()?;
-            total += self.inner.count_tokens(&content);
+            total += ContextPruner::count_tokens(&content);
         }
         Ok(total)
     }

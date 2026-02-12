@@ -6,8 +6,15 @@ to omni-vector's search_tools for vector search + keyword rescue.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from omni.test_kit.fixtures.vector import make_tool_search_payload
+
+
+def _stub_embed(search) -> None:
+    """Inject deterministic async embedding to keep tests hermetic."""
+    search._embed_func = AsyncMock(return_value=[[0.1, 0.2, 0.3, 0.4]])
 
 
 class TestHybridSearchRustNative:
@@ -62,6 +69,23 @@ class TestHybridSearchRustNative:
         assert semantic == 1.0
         assert keyword == 1.5
 
+    def test_get_weights_reads_rust_profile(self):
+        """Weights should be sourced from Rust profile, not Python constants."""
+        from omni.core.router.hybrid_search import HybridSearch
+
+        search = HybridSearch()
+        search._store.get_search_profile = MagicMock(
+            return_value={
+                "semantic_weight": 0.9,
+                "keyword_weight": 1.7,
+                "rrf_k": 20,
+                "implementation": "rust-profile-test",
+            }
+        )
+        semantic, keyword = search.get_weights()
+        assert semantic == 0.9
+        assert keyword == 1.7
+
 
 class TestHybridSearchWithMockedStore:
     """Test HybridSearch with mocked Rust store."""
@@ -73,23 +97,22 @@ class TestHybridSearchWithMockedStore:
 
         # Create mock results that Rust would return
         mock_results = [
-            {
-                "name": "git.commit",
-                "description": "Commit changes",
-                "score": 0.95,
-                "skill_name": "git",
-                "tool_name": "commit",
-                "file_path": "git/scripts/commit.py",
-                "keywords": ["commit", "git"],
-                "input_schema": "{}",
-            }
+            make_tool_search_payload(
+                score=0.95,
+                final_score=0.97,
+                tool_name="commit",
+                file_path="git/scripts/commit.py",
+                routing_keywords=["commit", "git"],
+                input_schema="{}",
+            )
         ]
 
         with patch.object(
             MagicMock(), "search_tools", new_callable=AsyncMock, return_value=mock_results
-        ) as mock_search:
+        ):
             # We need to patch the store's search_tools
             search = HybridSearch()
+            _stub_embed(search)
             search._store.search_tools = AsyncMock(return_value=mock_results)
 
             results = await search.search("git commit")
@@ -102,6 +125,8 @@ class TestHybridSearchWithMockedStore:
             assert results[0]["id"] == "git.commit"
             assert results[0]["skill_name"] == "git"
             assert results[0]["command"] == "commit"
+            assert results[0]["confidence"] == "high"
+            assert results[0]["final_score"] == 0.97
 
     @pytest.mark.asyncio
     async def test_search_with_limit(self):
@@ -109,6 +134,7 @@ class TestHybridSearchWithMockedStore:
         from omni.core.router.hybrid_search import HybridSearch
 
         search = HybridSearch()
+        _stub_embed(search)
         search._store.search_tools = AsyncMock(return_value=[])
 
         await search.search("test", limit=5)
@@ -123,6 +149,7 @@ class TestHybridSearchWithMockedStore:
         from omni.core.router.hybrid_search import HybridSearch
 
         search = HybridSearch()
+        _stub_embed(search)
         search._store.search_tools = AsyncMock(return_value=[])
 
         await search.search("test", min_score=0.7)
@@ -132,11 +159,45 @@ class TestHybridSearchWithMockedStore:
         assert call_args.kwargs.get("threshold") == 0.7
 
     @pytest.mark.asyncio
+    async def test_search_with_confidence_profile_override(self):
+        """Confidence profile override should be forwarded to Rust bridge."""
+        from omni.core.router.hybrid_search import HybridSearch
+
+        search = HybridSearch()
+        _stub_embed(search)
+        search._store.search_tools = AsyncMock(return_value=[])
+
+        profile = {
+            "high_threshold": 0.81,
+            "medium_threshold": 0.55,
+            "low_floor": 0.12,
+        }
+        await search.search("test", confidence_profile=profile)
+
+        call_args = search._store.search_tools.call_args
+        assert call_args.kwargs.get("confidence_profile") == profile
+
+    @pytest.mark.asyncio
+    async def test_search_with_rerank_override(self):
+        """Rerank override should be forwarded to Rust bridge."""
+        from omni.core.router.hybrid_search import HybridSearch
+
+        search = HybridSearch()
+        _stub_embed(search)
+        search._store.search_tools = AsyncMock(return_value=[])
+
+        await search.search("test", rerank=False)
+
+        call_args = search._store.search_tools.call_args
+        assert call_args.kwargs.get("rerank") is False
+
+    @pytest.mark.asyncio
     async def test_search_passes_query_for_keyword_rescue(self):
         """Test that query text is passed for keyword rescue."""
         from omni.core.router.hybrid_search import HybridSearch
 
         search = HybridSearch()
+        _stub_embed(search)
         search._store.search_tools = AsyncMock(return_value=[])
 
         await search.search("git commit message")
@@ -155,19 +216,23 @@ class TestHybridSearchIntegration:
         from omni.core.router.hybrid_search import HybridSearch
 
         mock_results = [
-            {
-                "name": "python.run",
-                "description": "Run Python code",
-                "score": 0.88,
-                "skill_name": "python",
-                "tool_name": "run",
-                "file_path": "python/scripts/run.py",
-                "keywords": ["python", "run", "execute"],
-                "input_schema": '{"type": "object", "properties": {"code": {"type": "string"}}}',
-            }
+            make_tool_search_payload(
+                name="python.run",
+                description="Run Python code",
+                score=0.88,
+                final_score=0.86,
+                confidence="medium",
+                skill_name="python",
+                tool_name="run",
+                file_path="python/scripts/run.py",
+                routing_keywords=["python", "run", "execute"],
+                input_schema='{"type": "object", "properties": {"code": {"type": "string"}}}',
+                category="python",
+            )
         ]
 
         search = HybridSearch()
+        _stub_embed(search)
         search._store.search_tools = AsyncMock(return_value=mock_results)
 
         results = await search.search("run python")
@@ -177,14 +242,23 @@ class TestHybridSearchIntegration:
 
         # All required fields should be present
         assert "id" in result
-        assert "content" in result
+        assert "description" in result
         assert "score" in result
+        assert "confidence" in result
+        assert "final_score" in result
         assert "skill_name" in result
+        assert "tool_name" in result
         assert "command" in result
         assert "file_path" in result
-        assert "keywords" in result
+        assert "routing_keywords" in result
         assert "input_schema" in result
         assert "payload" in result
+        assert "metadata" in result["payload"]
+        assert result["tool_name"] == "python.run"
+        assert result["routing_keywords"] == ["python", "run", "execute"]
+        assert result["payload"]["metadata"]["tool_name"] == "python.run"
+        assert result["payload"]["metadata"]["routing_keywords"] == ["python", "run", "execute"]
+        assert result["payload"]["metadata"]["input_schema"]["type"] == "object"
 
     @pytest.mark.asyncio
     async def test_empty_results_on_error(self):
@@ -192,11 +266,71 @@ class TestHybridSearchIntegration:
         from omni.core.router.hybrid_search import HybridSearch
 
         search = HybridSearch()
+        _stub_embed(search)
         search._store.search_tools = AsyncMock(return_value=[])
 
         results = await search.search("nonexistent_tool_xyz")
 
         assert results == []
+
+    @pytest.mark.asyncio
+    async def test_invalid_payload_is_skipped(self):
+        """Invalid tool-search payload should be ignored by parser."""
+        from omni.core.router.hybrid_search import HybridSearch
+
+        search = HybridSearch()
+        _stub_embed(search)
+        search._store.search_tools = AsyncMock(
+            return_value=[
+                {"name": "git.commit", "score": 0.9},  # missing schema/tool_name
+            ]
+        )
+        results = await search.search("git commit")
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_uuid_like_tool_name_is_skipped(self):
+        """UUID-like tool names must be filtered out from router results."""
+        from omni.core.router.hybrid_search import HybridSearch
+
+        search = HybridSearch()
+        _stub_embed(search)
+        search._store.search_tools = AsyncMock(
+            return_value=[
+                {
+                    "schema": "omni.vector.tool_search.v1",
+                    "name": "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+                    "description": "bad record",
+                    "score": 0.95,
+                    "final_score": 0.92,
+                    "confidence": "high",
+                    "skill_name": "unknown",
+                    "tool_name": "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+                    "file_path": "",
+                    "routing_keywords": [],
+                    "input_schema": "{}",
+                    "intents": [],
+                    "category": "unknown",
+                },
+                {
+                    **make_tool_search_payload(
+                        name="advanced_tools.smart_find",
+                        tool_name="advanced_tools.smart_find",
+                        description="Find files",
+                        score=0.91,
+                        final_score=0.89,
+                        skill_name="advanced_tools",
+                        file_path="assets/skills/advanced_tools/scripts/search.py",
+                        routing_keywords=["find", "files"],
+                        input_schema="{}",
+                        category="search",
+                    )
+                },
+            ]
+        )
+        results = await search.search("find python files")
+        assert len(results) == 1
+        assert results[0]["id"] == "advanced_tools.smart_find"
 
 
 if __name__ == "__main__":

@@ -1,6 +1,5 @@
 """Watcher test fixtures and helpers for Live-Wire testing."""
 
-import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 import pytest
@@ -32,10 +31,11 @@ def mock_watcher_indexer_with_count(mock_watcher_indexer):
 
 
 @pytest.fixture
-def temp_skill_dir() -> Path:
+def temp_skill_dir(tmp_path: Path) -> Path:
     """Create a temporary directory simulating a skills directory."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
+    target = tmp_path / "skills"
+    target.mkdir(parents=True, exist_ok=True)
+    return target
 
 
 @pytest.fixture

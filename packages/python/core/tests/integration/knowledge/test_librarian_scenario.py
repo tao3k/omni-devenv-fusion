@@ -16,6 +16,7 @@ class MockEmbeddingService:
     def __init__(self, dimension: int = 384):
         self.dimension = dimension
         self.backend = "mock"
+        self._load_local_model = False  # Attribute needed by Librarian
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Generate deterministic embeddings based on text content."""
@@ -149,7 +150,10 @@ class TestLibrarian:
 
         assert len(results) > 0, "Expected to find 'multiply'"
 
-        found_multiply = any("multiply" in res["text"] for res in results)
+        # Rust store returns 'content' field, not 'text'
+        found_multiply = any(
+            "multiply" in res.get("content", res.get("text", "")) for res in results
+        )
         assert found_multiply, "Expected to find multiply in results"
 
     @pytest.mark.asyncio
@@ -169,11 +173,25 @@ class TestLibrarian:
         results = librarian.query("Greeter", limit=20)
 
         # Check that at least one result contains Rust code from lib.rs
-        rust_results = [r for r in results if r["metadata"].get("file_path", "").endswith(".rs")]
+        rust_results = []
+        for r in results:
+            # Handle metadata - it could be a dict or a JSON string
+            meta = r.get("metadata", {})
+            if isinstance(meta, str):
+                import json
+
+                try:
+                    meta = json.loads(meta)
+                except (json.JSONDecodeError, TypeError):
+                    meta = {}
+            file_path = meta.get("file_path", "") if isinstance(meta, dict) else ""
+            if file_path.endswith(".rs"):
+                rust_results.append(r)
+
         assert len(rust_results) > 0, f"Expected Rust results"
 
         # Verify the impl block with Greeter is indexed
-        found_greeter = any("Greeter" in res["text"] for res in rust_results)
+        found_greeter = any("Greeter" in res.get("content", "") for res in rust_results)
         assert found_greeter, f"Expected 'Greeter' in Rust results"
 
     @pytest.mark.asyncio
@@ -214,7 +232,8 @@ class TestLibrarian:
 
         for res in results:
             assert "id" in res, "Result should have id"
-            assert "text" in res, "Result should have text"
+            # Rust store returns 'content' field, not 'text'
+            assert "content" in res or "text" in res, "Result should have content or text"
             assert "metadata" in res, "Result should have metadata"
 
             metadata = res["metadata"]

@@ -84,14 +84,20 @@ def get_server(verbose: bool = False) -> MCPServer:
 
     @server.request("tools/call")
     async def handle_call_tool(name: str = "", arguments: dict | None = None, **params) -> dict:
-        """Handle MCP tools/call request."""
+        """Handle MCP tools/call request. Ensures client always receives valid result or error."""
         request = {
             "method": "tools/call",
             "params": {"name": name, "arguments": arguments or {}},
             "id": None,
         }
-        result = await handler.handle_request(request)
-        return result.get("result", {})
+        response = await handler.handle_request(request)
+        if response.get("error") is not None:
+            err = response["error"]
+            raise ValueError(err.get("message", "Tool call failed"))
+        payload = response.get("result")
+        if payload is None or not isinstance(payload, dict):
+            payload = {"content": [{"type": "text", "text": ""}], "isError": False}
+        return payload
 
     return server
 

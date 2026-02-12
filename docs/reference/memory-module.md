@@ -12,7 +12,7 @@ The `omni.foundation.services.memory` module provides long-term memory storage f
 ```
 omni.foundation.services.memory/
 ├── __init__.py                    # Package entry point, public API exports
-├── base.py                        # Re-exports for backward compatibility
+├── base.py                        # Public API exports
 ├── core/
 │   ├── __init__.py               # Core module exports
 │   ├── interface.py              # Abstract interfaces and data types
@@ -20,8 +20,7 @@ omni.foundation.services.memory/
 │   └── utils.py                  # Shared utility functions
 └── stores/
     ├── __init__.py               # Stores module exports
-    ├── lancedb.py                # LanceDB storage implementation
-    └── file.py                   # File-based storage (legacy)
+    └── lancedb.py                # LanceDB storage implementation
 ```
 
 ## Module Responsibilities
@@ -29,10 +28,9 @@ omni.foundation.services.memory/
 | Module                   | Responsibility                                                                |
 | ------------------------ | ----------------------------------------------------------------------------- |
 | `core/interface.py`      | Defines `MemoryStore` abstract interfaces and `Decision`, `Task` data classes |
-| `core/project_memory.py` | `ProjectMemory` main class, coordinates storage backends                      |
+| `core/project_memory.py` | `ProjectMemory` main class, LanceDB-backed operations                         |
 | `core/utils.py`          | `format_decision`, `parse_decision` utility functions                         |
-| `stores/lancedb.py`      | LanceDB storage implementation (default)                                      |
-| `stores/file.py`         | File-based storage implementation (backward compatible)                       |
+| `stores/lancedb.py`      | LanceDB storage implementation                                                |
 
 ## Quick Start
 
@@ -40,17 +38,13 @@ omni.foundation.services.memory/
 from omni.foundation.services.memory import (
     ProjectMemory,
     STORAGE_MODE_LANCE,
-    STORAGE_MODE_FILE,
 )
 
-# Default: LanceDB mode
+# LanceDB mode (default and only backend)
 memory = ProjectMemory()
 
-# Explicit LanceDB mode
-memory = ProjectMemory(storage_mode=STORAGE_MODE_LANCE)
-
-# Legacy file mode
-memory = ProjectMemory(storage_mode=STORAGE_MODE_FILE)
+# Explicit constant remains available for API clarity
+assert STORAGE_MODE_LANCE == "lance"
 ```
 
 ## Core Interfaces
@@ -154,7 +148,7 @@ memory = ProjectMemory()
 # Add a task
 memory.add_task(
     title="Implement Memory Migration",
-    content="Create migration script from file to LanceDB",
+    content="Create migration script from markdown exports to LanceDB",
     status="pending",
     assignee="Claude",
 )
@@ -196,37 +190,27 @@ status = memory.get_status()
 memory.log_scratchpad("Running unit tests", source="System")
 ```
 
-### Migration from File-based Storage
+### Migration from Markdown Exports
 
 ```python
 from omni.foundation.services.memory import ProjectMemory
 from pathlib import Path
 
-# Create LanceDB memory with migration
-lance_memory = ProjectMemory(
-    dir_path=Path(".cache/memory"),
-    storage_mode="lance"
-)
+# Create memory store
+memory = ProjectMemory(dir_path=Path(".cache/memory"))
 
-# Migrate from old file-based storage
-if lance_memory.is_lance_mode:
-    result = lance_memory.migrate_from_file(Path(".cache/memory"))
-    print(f"Migrated: {result['decisions']} decisions, {result['tasks']} tasks")
+# Import from legacy markdown directory layout (decisions/*.md, tasks/*.md)
+result = memory.migrate_from_file(Path(".cache/memory"))
+print(f"Migrated: {result['decisions']} decisions, {result['tasks']} tasks")
 ```
 
-## Storage Backends
+## Storage Backend
 
-### LanceDB (Default)
+### LanceDB
 
 - **Location**: `.cache/omni-vector/memory.lance`
 - **Tables**: `decisions`, `tasks`, `context`, `active_context`
 - **Performance**: Fast structured data queries with ACID guarantees
-
-### File-based (Legacy)
-
-- **Location**: Custom directory (default: `.cache/omni-dev-fusion/memory`)
-- **Format**: Markdown for decisions/tasks, JSON for context
-- **Purpose**: Backward compatibility, debugging
 
 ## Comparison: Memory vs Knowledge vs Episodic
 

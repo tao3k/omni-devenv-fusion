@@ -162,9 +162,9 @@ class SemanticRouter:
         return self._indexer.is_ready
 
 
-class FallbackRouter:
+class ExplicitCommandRouter:
     """
-    Fallback router for explicit command matching.
+    Router for explicit `skill.command` command matching.
     Handles exact command names like "git.status", "memory.save".
     """
 
@@ -215,38 +215,34 @@ class UnifiedRouter:
     def __init__(
         self,
         semantic_router: SemanticRouter,
-        fallback_router: FallbackRouter,
+        explicit_router: ExplicitCommandRouter,
         skill_context_provider: Callable[[], SkillContext] | None = None,
     ):
         """Initialize the unified router.
 
         Args:
             semantic_router: SemanticRouter instance
-            fallback_router: FallbackRouter instance
+            explicit_router: ExplicitCommandRouter instance
             skill_context_provider: Optional callable to get SkillContext
         """
         self._semantic = semantic_router
-        self._fallback = fallback_router
+        self._explicit = explicit_router
         self._context_provider = skill_context_provider
         self._skill_index = self._load_skill_index()
 
     def _load_skill_index(self) -> dict:
         """Load skill index for keyword-based routing."""
         try:
-            import asyncio
             from omni.foundation.bridge.rust_vector import get_vector_store
 
             store = get_vector_store()
-            tools = asyncio.run(store.list_all_tools())
+            tools = store.list_all_tools()
 
             # Build keyword -> skill mapping from tool records
-            # Note: routingKeywords should be stored in the tool metadata
             keyword_map: dict[str, list[str]] = {}
             for tool in tools:
                 skill_name = tool.get("skill_name", "unknown")
-                # Try to get routing keywords from description or metadata
                 description = tool.get("description", "")
-                # Extract keywords from description (simple approach)
                 words = description.lower().split()[:5]
                 for kw in words:
                     if len(kw) > 3:
@@ -281,13 +277,13 @@ class UnifiedRouter:
         # First try semantic routing
         semantic_result = await self._semantic.route(query, threshold)
 
-        # Only try fallback if semantic failed
+        # Only try explicit router if semantic failed
         explicit_result = None
         if semantic_result is None or semantic_result.confidence in (
             RouteConfidence.LOW,
             RouteConfidence.MEDIUM,
         ):
-            explicit_result = await self._fallback.route(query)
+            explicit_result = await self._explicit.route(query)
 
         # Collect results from all methods
         candidates: dict[str, float] = {}  # command -> score
@@ -403,4 +399,10 @@ class UnifiedRouter:
         return RouteConfidence.LOW
 
 
-__all__ = ["FallbackRouter", "RouteConfidence", "RouteResult", "SemanticRouter", "UnifiedRouter"]
+__all__ = [
+    "ExplicitCommandRouter",
+    "RouteConfidence",
+    "RouteResult",
+    "SemanticRouter",
+    "UnifiedRouter",
+]

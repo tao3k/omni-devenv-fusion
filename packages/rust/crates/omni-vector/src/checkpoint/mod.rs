@@ -2,7 +2,9 @@
 //!
 //! This module provides checkpoint storage for LangGraph workflows using LanceDB.
 
+/// Checkpoint record model types.
 pub mod record;
+/// Checkpoint storage engine and query APIs.
 pub mod store;
 
 pub use record::{CheckpointRecord, TimelineRecord};

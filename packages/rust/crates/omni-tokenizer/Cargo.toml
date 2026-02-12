@@ -10,3 +10,6 @@ workspace = true
 tiktoken-rs = "0.5"
 thiserror = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+rand = { workspace = true }

@@ -32,10 +32,15 @@ pub use omni_scanner::{
 pub use checkpoint::{CheckpointRecord, CheckpointStore};
 pub use error::VectorStoreError;
 pub use keyword::{
-    HybridSearchResult, KEYWORD_WEIGHT, KeywordIndex, RRF_K, SEMANTIC_WEIGHT, apply_rrf,
-    apply_weighted_rrf,
+    HybridSearchResult, KEYWORD_WEIGHT, KeywordIndex, KeywordSearchBackend, RRF_K, SEMANTIC_WEIGHT,
+    apply_rrf, apply_weighted_rrf,
 };
-pub use skill::ToolSearchResult;
+pub use ops::{
+    FragmentInfo, MergeInsertStats, TableColumnAlteration, TableColumnType, TableInfo,
+    TableNewColumn, TableVersionInfo,
+};
+pub use search::SearchOptions;
+pub use skill::{ToolSearchOptions, ToolSearchResult};
 
 // ============================================================================
 // Module Declarations
@@ -60,7 +65,10 @@ pub struct VectorStore {
     base_path: PathBuf,
     datasets: Arc<Mutex<DashMap<String, Dataset>>>,
     dimension: usize,
-    keyword_index: Option<Arc<KeywordIndex>>,
+    /// Optional keyword index used for hybrid dense+keyword retrieval.
+    pub keyword_index: Option<Arc<KeywordIndex>>,
+    /// Active keyword backend strategy.
+    pub keyword_backend: KeywordSearchBackend,
 }
 
 // ----------------------------------------------------------------------------

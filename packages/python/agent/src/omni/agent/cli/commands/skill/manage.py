@@ -3,7 +3,7 @@
 Management commands for skill CLI.
 
 Contains: run, test, check commands.
-(install/update deprecated in thin client model)
+(install/update unavailable in thin client model)
 """
 
 from __future__ import annotations
@@ -30,20 +30,22 @@ def skill_run(
     run_skills(commands, json_output=json_output, log_handler=cli_log_handler)
 
 
-# Deprecated commands - remote install/update not available in thin client model
+# Remote install/update are intentionally unavailable in thin client mode.
 @skill_app.command("install")
 def skill_install(
     url: str = typer.Argument(..., help="Git repository URL"),
     name: str | None = typer.Argument(None, help="Skill name (derived from URL if not provided)"),
     version: str = typer.Option("main", "--version", "-v", help="Git ref (default: main)"),
 ):
-    """Install a skill from a remote repository. [DEPRECATED]"""
+    """Install a skill from a remote repository (unavailable in thin client mode)."""
+    from omni.foundation.config.dirs import get_skills_dir
+
     err_console.print(
         Panel(
             "Remote skill installation is not available in thin client mode.\n"
-            "Skills are loaded from assets/skills/ automatically.",
-            title="⚠️ Deprecated",
-            style="yellow",
+            f"Skills are loaded from {get_skills_dir()}/ automatically.",
+            title="Unavailable",
+            style="blue",
         )
     )
 
@@ -53,13 +55,15 @@ def skill_update(
     name: str = typer.Argument(..., help="Skill name"),
     version: str = typer.Option("main", "--version", "-v", help="Git ref"),
 ):
-    """Update an installed skill. [DEPRECATED]"""
+    """Update an installed skill (unavailable in thin client mode)."""
+    from omni.foundation.config.dirs import get_skills_dir
+
     err_console.print(
         Panel(
             "Remote skill updates are not available in thin client mode.\n"
-            "Skills are loaded from assets/skills/ automatically.",
-            title="⚠️ Deprecated",
-            style="yellow",
+            f"Skills are loaded from {get_skills_dir()}/ automatically.",
+            title="Unavailable",
+            style="blue",
         )
     )
 
@@ -74,6 +78,7 @@ def skill_test(
     import subprocess
     import tempfile
 
+    from omni.foundation.config.dirs import get_prj_dir
     from omni.foundation.config.skills import SKILLS_DIR
 
     skills_dir = SKILLS_DIR()
@@ -144,11 +149,17 @@ def skill_test(
                         if skill_path.is_dir() and not skill_path.name.startswith("_"):
                             tests_dir = skill_path / "tests"
                             tests_dir_str = str(tests_dir)
+                            project_relative_marker = ""
+                            try:
+                                skills_rel = skills_dir.relative_to(get_prj_dir()).as_posix()
+                                project_relative_marker = f"{skills_rel}/{skill_path.name}/tests"
+                            except ValueError:
+                                project_relative_marker = ""
                             # Check both relative and absolute paths
                             if (
                                 tests_dir_str in nodeid
                                 or nodeid.startswith(str(skill_path.name) + "/")
-                                or "assets/skills/" + skill_path.name + "/tests" in nodeid
+                                or (project_relative_marker and project_relative_marker in nodeid)
                             ):
                                 skill_name = skill_path.name
                                 break

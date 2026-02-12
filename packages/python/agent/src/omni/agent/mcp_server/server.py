@@ -32,6 +32,7 @@ from mcp.types import Resource, Tool, TextContent, GetPromptResult, PromptMessag
 from pydantic.networks import AnyUrl
 
 from omni.foundation.config.logging import configure_logging, get_logger
+from omni.foundation.utils.asyncio import run_async_blocking
 from omni.core.kernel import get_kernel
 from omni.core.config.loader import load_command_overrides, is_filtered
 from omni.core.omni_tool import get_omni_tool_info
@@ -309,6 +310,66 @@ class AgentMCPServer:
         if self._alias_to_real:
             logger.info(f"🔀 Built routing table with {len(self._alias_to_real)} aliases")
 
+    @staticmethod
+    def _text_response(text: str) -> list[TextContent]:
+        """Build a plain text MCP response payload."""
+        return [TextContent(type="text", text=text)]
+
+    @classmethod
+    def _error_response(cls, message: str) -> list[TextContent]:
+        """Build a standardized MCP error text payload."""
+        return cls._text_response(f"Error: {message}")
+
+    # ============================================================================
+    # [Live-Wire] Tool List Changed Notification (v2.1)
+    # ============================================================================
+
+    async def send_tool_list_changed(self) -> None:
+        """Send 'notifications/tools/listChanged' to MCP clients for live cache invalidation.
+
+        This is the key method for Live-Wire Skill Watcher.
+        When skills are added/modified/removed, this notifies Claude/Cursor to refresh.
+
+        Called by lifespan._notify_tools_changed() when skill registry updates.
+        """
+        notification = {
+            "jsonrpc": "2.0",
+            "method": "notifications/tools/listChanged",
+            "params": None,
+        }
+
+        # Try to get transport's broadcast method
+        transport = getattr(self, "_transport", None) or getattr(self, "transport", None)
+        if transport:
+            broadcast = getattr(transport, "broadcast", None)
+            if broadcast and callable(broadcast):
+                try:
+                    await broadcast(notification)
+                    logger.info("🔔 AgentMCPServer: Broadcasted tools/listChanged to clients")
+                    return
+                except Exception as e:
+                    logger.warning(f"Failed to broadcast via transport: {e}")
+
+        # Fallback: Try to send notification through MCP SDK Server
+        app = getattr(self, "_app", None)
+        if app and hasattr(app, "request_context"):
+            try:
+                # MCP SDK way to send notification
+                from mcp.types import Notification
+
+                # Get the current session context if available
+                ctx = getattr(app, "request_context", None)
+                if ctx and hasattr(ctx, "session") and ctx.session:
+                    await ctx.session.send_notification(
+                        Notification("notifications/tools/listChanged")
+                    )
+                    logger.info("🔔 AgentMCPServer: Sent tools/listChanged via session")
+                    return
+            except Exception as e:
+                logger.warning(f"Failed to send via session: {e}")
+
+        logger.warning("AgentMCPServer: No method available to send tools/listChanged notification")
+
     def _validate_overrides(self):
         """Check if configured overrides actually exist in kernel.
 
@@ -467,9 +528,7 @@ class AgentMCPServer:
                 if intent and not real_target:
                     logger.info(f"🔮 Master Proxy Routing Intent: '{intent}'")
                     if not self._kernel or not self._kernel.is_ready:
-                        return [
-                            TextContent(type="text", text="Error: Kernel not ready for routing")
-                        ]
+                        return self._error_response("Kernel not ready for routing")
 
                     route_result = await self._kernel.router.route(intent)
                     if route_result and route_result.command_name:
@@ -478,35 +537,47 @@ class AgentMCPServer:
                             f"🎯 Routed to: {real_target} (Score: {route_result.score:.2f})"
                         )
                     else:
-                        return [
-                            TextContent(
-                                type="text",
-                                text=f"Error: Could not resolve intent '{intent}' to any command",
-                            )
-                        ]
+                        return self._error_response(
+                            f"Could not resolve intent '{intent}' to any command"
+                        )
 
                 if not real_target:
-                    return [
-                        TextContent(
-                            type="text",
-                            text="Error: Either 'command' or 'intent' is required for omni proxy",
-                        )
-                    ]
+                    return self._error_response(
+                        "Either 'command' or 'intent' is required for omni proxy"
+                    )
 
                 name = real_target
                 arguments = real_args
 
             if not self._kernel or not self._kernel.is_ready:
-                return [TextContent(type="text", text="Error: Kernel not ready")]
+                return self._error_response("Kernel not ready")
+
+            # Resolve alias before validation so validation always targets canonical command.
+            real_command = self._alias_to_real.get(name, name)
+
+            # [NEW] FAST-FAIL: Validate parameters BEFORE kernel execution
+            # This prevents expensive initialization when args are missing/invalid
+            try:
+                from omni.core.skills.validation import validate_tool_args, format_validation_errors
+
+                validation_errors = validate_tool_args(real_command, arguments)
+                if validation_errors:
+                    error_msg = format_validation_errors(real_command, validation_errors)
+                    logger.warning(f"Parameter validation failed: {real_command}")
+                    return self._text_response(error_msg)
+            except Exception as validation_error:
+                # Validation is best-effort - if it fails, let kernel handle it
+                logger.debug(
+                    "Validation step failed, continuing with kernel execution",
+                    command=real_command,
+                    error=str(validation_error),
+                )
 
             try:
                 # [NEW] Log the INCOMING request cleanly
                 # Solves the "noise" problem when Claude writes huge files
                 clean_args = sanitize_tool_args(arguments)
                 logger.info(f"🔧 Call: {name}({clean_args})")
-
-                # Resolve Alias
-                real_command = self._alias_to_real.get(name, name)
 
                 # Optional: Debug log for alias resolution
                 if name != real_command:
@@ -522,10 +593,10 @@ class AgentMCPServer:
                 clean_result = one_line_preview(result, max_len=100)
                 logger.info(f"✅ Done: {name} -> {clean_result} ({duration:.2f}s)")
 
-                return [TextContent(type="text", text=str(result))]
+                return self._text_response(str(result))
             except Exception as e:
                 logger.error(f"❌ Fail: {name} -> {e}")
-                return [TextContent(type="text", text=f"Error: {str(e)}")]
+                return self._error_response(str(e))
 
         @self._app.call_tool()
         async def system_status(arguments: dict) -> list[Any]:
@@ -587,7 +658,7 @@ class AgentMCPServer:
                     )
                 ]
             except Exception as e:
-                return [TextContent(type="text", text=f"Error: {str(e)}")]
+                return self._error_response(str(e))
 
         @self._app.call_tool()
         async def sys_query(arguments: dict) -> list[Any]:
@@ -604,7 +675,7 @@ class AgentMCPServer:
             try:
                 query = arguments.get("query")
                 if not query:
-                    return [TextContent(type="text", text="Error: 'query' parameter required")]
+                    return self._error_response("'query' parameter required")
 
                 logger.info(f"[MCP] sys_query called: {query[:100]}...")
                 runner = get_runner()
@@ -631,7 +702,7 @@ class AgentMCPServer:
                     ]
             except Exception as e:
                 logger.error(f"sys_query failed: {e}")
-                return [TextContent(type="text", text=f"Error: {str(e)}")]
+                return self._error_response(str(e))
 
         @self._app.call_tool()
         async def sys_exec(arguments: dict) -> list[Any]:
@@ -649,7 +720,7 @@ class AgentMCPServer:
             try:
                 script = arguments.get("script")
                 if not script:
-                    return [TextContent(type="text", text="Error: 'script' parameter required")]
+                    return self._error_response("'script' parameter required")
 
                 logger.info(f"[MCP] sys_exec called: {script[:100]}...")
                 runner = get_runner()
@@ -664,7 +735,7 @@ class AgentMCPServer:
                     return [TextContent(type="text", text=f"Success: {output}")]
                 elif result.status == "blocked":
                     reason = result.metadata.get("reason", "Safety check failed")
-                    logger.warn(f"[MCP] sys_exec blocked: {reason}")
+                    logger.warning(f"[MCP] sys_exec blocked: {reason}")
                     return [
                         TextContent(
                             type="text",
@@ -682,11 +753,10 @@ class AgentMCPServer:
                     ]
             except Exception as e:
                 logger.error(f"sys_exec failed: {e}")
-                return [TextContent(type="text", text=f"Error: {str(e)}")]
+                return self._error_response(str(e))
 
         @self._app.list_resources()
         async def list_resources() -> list[Resource]:
-            """Expose Agentic OS internals as Resources."""
             return [
                 Resource(
                     uri=AnyUrl("omni://project/context"),
@@ -757,6 +827,11 @@ class AgentMCPServer:
                 ],
             )
 
+        # [NEW] Register modular tools (embedding, etc.)
+        from omni.agent.mcp_server.tools import register_embedding_tools
+
+        register_embedding_tools(self._app)
+
     def _read_project_context(self) -> str:
         """Read project context from Sniffer (Step 5 integration)."""
         try:
@@ -788,10 +863,10 @@ class AgentMCPServer:
                 return json.dumps({"error": "Kernel not ready"}, indent=2)
 
             # Use configured path from settings.yaml
-            from omni.foundation.config.dirs import get_checkpoints_db_path
+            from omni.foundation.config.database import get_checkpoint_db_path
             from omni.langgraph.checkpoint.lance import RustLanceCheckpointSaver
 
-            db_path = get_checkpoints_db_path()
+            db_path = get_checkpoint_db_path()
             checkpointer = RustLanceCheckpointSaver(
                 base_path=str(db_path),
                 table_name="agent_checkpoints",
@@ -899,7 +974,10 @@ Focus on:
         }
 
     async def run_stdio(self, verbose: bool = False) -> None:
-        """Run the MCP server over Stdio."""
+        """Run the MCP server over Stdio.
+
+        Embedding: Auto-detected (embedding service handles server/client mode)
+        """
         mode = "Holographic" if self._use_holographic else "Standard"
         logger.info(f"🚀 Starting Agent MCP Server v2.1 ({mode} Mode - STDIO)")
 
@@ -908,12 +986,11 @@ Focus on:
         if not self._kernel.is_ready:
             await self._kernel.initialize()
 
-            # [FIX] Register MCP server BEFORE kernel.start() to ensure Live-Wire
-            # callbacks can access _mcp_server when file changes are detected
+            # [FIX] Register AgentMCPServer (self) BEFORE kernel.start() to ensure Live-Wire
             from .lifespan import set_mcp_server
 
-            set_mcp_server(self._app)
-            logger.debug("MCP server registered for Live-Wire notifications")
+            set_mcp_server(self)
+            logger.debug("AgentMCPServer registered for Live-Wire notifications")
 
             await self._kernel.start()
             logger.info(
@@ -931,13 +1008,38 @@ Focus on:
         # [NEW] Validate overrides against loaded tools
         self._validate_overrides()
 
-        # Enable verbose mode (hot reload is already enabled by default)
+        # [NEW] Initialize embedding service
+        logger.info("Initializing embedding service...")
+        try:
+            from omni.foundation.services.embedding import get_embedding_service
+
+            embed_service = get_embedding_service()
+            embed_service.initialize()
+            logger.info(
+                "Embedding service initialized",
+                backend=embed_service.backend,
+                dimension=embed_service.dimension,
+            )
+        except Exception as e:
+            logger.warning("Embedding service init failed", error=str(e))
+
+        # Enable verbose mode
         if verbose:
             logger.info("👀 Verbose mode enabled")
 
         try:
             # Use stdio_server context manager for proper stream handling
             async with stdio_server() as (read_stream, write_stream):
+                # Start model loading in background AFTER connection is established
+                try:
+                    from omni.foundation.services.embedding import get_embedding_service
+
+                    embed_svc = get_embedding_service()
+                    embed_svc.start_model_loading()
+                    logger.info("Embedding: model loading started in background")
+                except Exception as e:
+                    logger.warning("Failed to start model loading", error=str(e))
+
                 await self._app.run(
                     read_stream,
                     write_stream,
@@ -952,17 +1054,23 @@ Focus on:
         finally:
             if self._kernel:
                 await self._kernel.shutdown()
-                logger.info("🔒 Kernel shutdown complete")
+                logger.info("Kernel shutdown complete")
 
 
 async def run_stdio_server(verbose: bool = False) -> None:
-    """Run the Agent in STDIO mode."""
+    """Run the Agent in STDIO mode.
+
+    Args:
+        verbose: Enable verbose logging
+    """
     server = AgentMCPServer()
     await server.run_stdio(verbose=verbose)
 
 
 async def run_sse_server(
-    port: int = 8080, verbose: bool = False, use_holographic: bool = False
+    port: int = 8080,
+    verbose: bool = False,
+    use_holographic: bool = False,
 ) -> None:
     """Run the Agent in SSE mode.
 
@@ -1050,7 +1158,7 @@ async def main_async() -> None:
 def main() -> None:
     """CLI entry point."""
     try:
-        asyncio.run(main_async())
+        run_async_blocking(main_async())
     except KeyboardInterrupt:
         logger.info("Server interrupted by user")
 

@@ -1,0 +1,17 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_data_layer_snapshots.rs
+expression: view
+---
+{
+  "checks": {
+    "added_custom_note": true,
+    "dropped_custom_label": true,
+    "renamed_custom_label": true
+  },
+  "versions": {
+    "added": 3,
+    "dropped": 5,
+    "renamed": 4,
+    "seed": 2
+  }
+}

@@ -1,0 +1,156 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_keyword_backend_quality.rs
+expression: report
+---
+{
+  "k": 5,
+  "lance_fts_details": [
+    {
+      "matched_relevant": [
+        "git.commit"
+      ],
+      "p_at_5": "0.2000",
+      "query": "commit_flow",
+      "r_at_5": "1.0000",
+      "rr": "1.0000",
+      "text": "commit changes message",
+      "top1": "git.commit"
+    },
+    {
+      "matched_relevant": [
+        "git.rebase"
+      ],
+      "p_at_5": "0.2000",
+      "query": "history_rewrite",
+      "r_at_5": "1.0000",
+      "rr": "1.0000",
+      "text": "rewrite history squash commits",
+      "top1": "git.rebase"
+    },
+    {
+      "matched_relevant": [
+        "docker.build"
+      ],
+      "p_at_5": "0.2000",
+      "query": "container_image",
+      "r_at_5": "1.0000",
+      "rr": "1.0000",
+      "text": "build container image dockerfile",
+      "top1": "docker.build"
+    },
+    {
+      "matched_relevant": [
+        "python.pytest"
+      ],
+      "p_at_5": "0.2000",
+      "query": "test_execution",
+      "r_at_5": "1.0000",
+      "rr": "1.0000",
+      "text": "run pytest coverage test suite",
+      "top1": "python.pytest"
+    },
+    {
+      "matched_relevant": [
+        "security.gitleaks"
+      ],
+      "p_at_5": "0.2000",
+      "query": "secret_scanning",
+      "r_at_5": "1.0000",
+      "rr": "1.0000",
+      "text": "scan repository leaked tokens secrets",
+      "top1": "security.gitleaks"
+    },
+    {
+      "matched_relevant": [
+        "k8s.rollout_restart"
+      ],
+      "p_at_5": "0.2000",
+      "query": "deployment_restart",
+      "r_at_5": "1.0000",
+      "rr": "1.0000",
+      "text": "restart kubernetes deployment rollout",
+      "top1": "k8s.rollout_restart"
+    }
+  ],
+  "queries": 6,
+  "summary": {
+    "lance_fts": {
+      "mean_p_at_5": "0.2000",
+      "mean_r_at_5": "1.0000",
+      "mrr": "1.0000"
+    },
+    "tantivy": {
+      "mean_p_at_5": "0.2000",
+      "mean_r_at_5": "1.0000",
+      "mrr": "1.0000"
+    }
+  },
+  "tantivy_details": [
+    {
+      "matched_relevant": [
+        "git.commit"
+      ],
+      "p_at_5": "0.2000",
+      "query": "commit_flow",
+      "r_at_5": "1.0000",
+      "rr": "1.0000",
+      "text": "commit changes message",
+      "top1": "git.commit"
+    },
+    {
+      "matched_relevant": [
+        "git.rebase"
+      ],
+      "p_at_5": "0.2000",
+      "query": "history_rewrite",
+      "r_at_5": "1.0000",
+      "rr": "1.0000",
+      "text": "rewrite history squash commits",
+      "top1": "git.rebase"
+    },
+    {
+      "matched_relevant": [
+        "docker.build"
+      ],
+      "p_at_5": "0.2000",
+      "query": "container_image",
+      "r_at_5": "1.0000",
+      "rr": "1.0000",
+      "text": "build container image dockerfile",
+      "top1": "docker.build"
+    },
+    {
+      "matched_relevant": [
+        "python.pytest"
+      ],
+      "p_at_5": "0.2000",
+      "query": "test_execution",
+      "r_at_5": "1.0000",
+      "rr": "1.0000",
+      "text": "run pytest coverage test suite",
+      "top1": "python.pytest"
+    },
+    {
+      "matched_relevant": [
+        "security.gitleaks"
+      ],
+      "p_at_5": "0.2000",
+      "query": "secret_scanning",
+      "r_at_5": "1.0000",
+      "rr": "1.0000",
+      "text": "scan repository leaked tokens secrets",
+      "top1": "security.gitleaks"
+    },
+    {
+      "matched_relevant": [
+        "k8s.rollout_restart"
+      ],
+      "p_at_5": "0.2000",
+      "query": "deployment_restart",
+      "r_at_5": "1.0000",
+      "rr": "1.0000",
+      "text": "restart kubernetes deployment rollout",
+      "top1": "k8s.rollout_restart"
+    }
+  ]
+}

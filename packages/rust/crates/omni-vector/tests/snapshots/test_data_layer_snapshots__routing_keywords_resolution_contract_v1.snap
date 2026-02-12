@@ -1,0 +1,16 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_data_layer_snapshots.rs
+expression: resolved
+---
+[
+  [
+    "find",
+    "files"
+  ],
+  [],
+  [
+    "find",
+    "files"
+  ],
+  []
+]

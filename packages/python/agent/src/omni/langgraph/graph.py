@@ -9,6 +9,7 @@ Architecture:
 - Nodes: plan, execute, reflect (think-act-observe cycle)
 - Edges: Conditional transitions based on state
 - Checkpointer: Cross-session state persistence
+- Optional Tracing: Fine-grained execution tracking (UltraRAG-style)
 
 Usage:
     from omni.langgraph.graph import OmniGraph, get_graph
@@ -18,10 +19,18 @@ Usage:
         user_query="Fix the bug in main.py",
         thread_id="session-123",
     )
+
+    # With tracing
+    graph = get_graph(enable_tracing=True)
+    result, trace = await graph.run_with_trace(
+        user_query="Fix the bug",
+        thread_id="session-123",
+    )
 """
 
 from __future__ import annotations
 
+import uuid
 from typing import Any, Literal, TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -416,6 +425,13 @@ class OmniGraph:
                     recall (if not approved)
                       ↓
                     plan (with recalled wisdom)
+
+    Tracing (UltraRAG-style):
+        When enable_tracing=True, captures full execution trajectory including:
+        - Step-by-step execution path
+        - LLM thinking/process
+        - Tool calls and results
+        - Variable memory pool
     """
 
     def __init__(
@@ -425,7 +441,8 @@ class OmniGraph:
         router: Any = None,
         checkpointer: StateCheckpointer | None = None,
         use_rust_checkpointer: bool = True,
-        lance_checkpointer: Any = None,  # LanceCheckpointer for recall
+        lance_checkpointer: Any = None,  # Rust checkpoint-backed recall store
+        enable_tracing: bool = False,  # Enable UltraRAG-style tracing
     ):
         """
         Initialize the cognitive graph.
@@ -436,15 +453,18 @@ class OmniGraph:
             router: Optional router for task routing
             checkpointer: Optional StateCheckpointer for persistence (not used by LangGraph)
             use_rust_checkpointer: Use RustCheckpointSaver for LangGraph (default: True)
-            lance_checkpointer: Optional LanceCheckpointer for semantic recall
+            lance_checkpointer: Optional recall checkpoint store for semantic recall
+            enable_tracing: Enable fine-grained execution tracing (default: False)
         """
         self.inference = inference_client
         self.skill_runner = skill_runner
         self.router = router
         self.checkpointer = checkpointer or get_checkpointer()
         self.lance_checkpointer = lance_checkpointer
+        self.enable_tracing = enable_tracing
         self._app: CompiledGraph | None = None
         self._rust_checkpointer = RustCheckpointSaver() if use_rust_checkpointer else None
+        self._tracer: Any = None  # ExecutionTracer when tracing enabled
 
     def _create_workflow(self) -> StateGraph:
         """Create the state workflow with nodes and edges."""
@@ -614,6 +634,128 @@ class OmniGraph:
             approved=success,
         )
 
+    async def run_with_trace(
+        self,
+        user_query: str,
+        thread_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> tuple[GraphOutput, Any]:
+        """
+        Run the graph with full execution tracing (UltraRAG-style).
+
+        Captures complete execution trajectory including thinking, tool calls,
+        and variable history.
+
+        Args:
+            user_query: The user's request
+            thread_id: Session identifier for checkpointer
+            context: Optional context (e.g., relevant files)
+
+        Returns:
+            Tuple of (GraphOutput, ExecutionTrace)
+        """
+        from omni.tracer import ExecutionTracer, TracingCallbackHandler
+
+        log = logger.bind(graph="OmniGraph", thread_id=thread_id)
+        log.info("graph_invocation_with_trace", query=user_query[:100])
+
+        # Initialize tracer
+        self._tracer = ExecutionTracer(
+            trace_id=f"trace_{thread_id}_{uuid.uuid4().hex[:8]}",
+            user_query=user_query,
+            thread_id=thread_id,
+        )
+        self._tracer.start_trace()
+
+        # Create callback handler
+        handler = TracingCallbackHandler(self._tracer)
+
+        app = self.get_app()
+
+        # Initial state
+        initial_state = GraphState(
+            messages=[{"role": "user", "content": user_query}],
+            context_ids=[],
+            current_plan="",
+            error_count=0,
+            workflow_state={
+                "context": context or {},
+            },
+        )
+
+        result_content = ""
+        success = False
+        confidence = 0.0
+        iterations = 0
+        error_message: str | None = None
+
+        try:
+            # Stream execution with callbacks
+            config = {"callbacks": [handler]}
+
+            async for event in app.graph.astream(initial_state, config=config, thread_id=thread_id):
+                for node_name, state_update in event.items():
+                    iterations += 1
+
+                    # Track final result
+                    if node_name == "execute":
+                        messages = state_update.get("messages", [])
+                        if messages:
+                            result_content = messages[-1].get("content", "")
+
+                    # Check approval
+                    if node_name == "reflect":
+                        workflow = state_update.get("workflow_state", {})
+                        if workflow.get("approved"):
+                            success = True
+                            confidence = workflow.get("audit_confidence", 0.9)
+
+                    log.debug(
+                        "node_progress",
+                        node=node_name,
+                        iteration=iterations,
+                    )
+
+            # Get final confidence from workflow state
+            if success:
+                final_state = app.graph.get_state(app.get_config(thread_id))
+                if final_state and final_state.values:
+                    workflow = final_state.values.get("workflow_state", {})
+                    confidence = workflow.get("last_result", {}).get("confidence", 0.9)
+
+        except Exception as e:
+            log.error("graph_error", error=str(e))
+            result_content = f"Error: {e!s}"
+            error_message = str(e)
+
+        # End trace
+        trace = self._tracer.end_trace(success=success, error_message=error_message)
+
+        output = GraphOutput(
+            success=success,
+            content=result_content,
+            confidence=confidence,
+            iterations=iterations,
+            approved=success,
+        )
+
+        log.info(
+            "graph_completed_with_trace",
+            trace_id=trace.trace_id,
+            step_count=trace.step_count(),
+            thinking_steps=trace.thinking_step_count(),
+        )
+
+        return output, trace
+
+    def get_tracer(self) -> Any | None:
+        """Get the current tracer if tracing is enabled.
+
+        Returns:
+            ExecutionTracer instance or None
+        """
+        return self._tracer
+
 
 # =============================================================================
 # Factory Functions
@@ -628,8 +770,19 @@ def get_graph(
     inference_client: Any = None,
     skill_runner: Any = None,
     router: Any = None,
+    enable_tracing: bool = False,
 ) -> OmniGraph:
-    """Get or create the global graph instance."""
+    """Get or create the global graph instance.
+
+    Args:
+        inference_client: Optional inference client for LLM calls
+        skill_runner: Optional skill runner for executing skills
+        router: Optional router for task routing
+        enable_tracing: Enable UltraRAG-style execution tracing
+
+    Returns:
+        OmniGraph instance
+    """
     global _graph, _graph_lock
     if _graph_lock is None:
         import threading
@@ -637,11 +790,16 @@ def get_graph(
         _graph_lock = threading.Lock()
 
     with _graph_lock:
+        # Reset graph if tracing setting changed
+        if _graph is not None and enable_tracing != _graph.enable_tracing:
+            _graph = None
+
         if _graph is None:
             _graph = OmniGraph(
                 inference_client=inference_client,
                 skill_runner=skill_runner,
                 router=router,
+                enable_tracing=enable_tracing,
             )
         return _graph
 

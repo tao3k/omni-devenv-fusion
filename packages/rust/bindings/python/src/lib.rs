@@ -33,6 +33,7 @@ mod events;
 mod executor;
 mod io;
 mod navigation;
+mod sandbox; // NCL-driven sandbox executor
 mod scanner;
 mod schema; // Schema Registry for Schema Singularity
 mod security;
@@ -71,7 +72,9 @@ pub use io::{
     get_cache_home, get_config_home, get_data_home, read_file_safe, should_skip_path,
     truncate_tokens,
 };
-pub use navigation::{get_file_outline, search_code, search_directory, search_with_rules};
+pub use navigation::{
+    get_file_outline, get_files_outline, search_code, search_directory, search_with_rules,
+};
 pub use scanner::{
     PySkillMetadata, PySkillScanner, PySyncReport, diff_skills, parse_script_content, scan_paths,
     scan_skill, scan_skill_from_content, scan_skill_tools,
@@ -99,8 +102,30 @@ pub use tags::{
 };
 
 // Knowledge Sync Engine (omni-knowledge)
+pub use omni_knowledge::PyEntity;
+pub use omni_knowledge::PyEntityType;
+pub use omni_knowledge::PyKnowledgeGraph;
+pub use omni_knowledge::PyRelation;
 pub use omni_knowledge::PySyncEngine;
 pub use omni_knowledge::PySyncResult;
+
+// Dependency Indexer (External crate symbol search)
+pub use omni_knowledge::PyDependencyConfig;
+pub use omni_knowledge::PyDependencyIndexResult;
+pub use omni_knowledge::PyDependencyIndexer;
+pub use omni_knowledge::PyDependencyStats;
+pub use omni_knowledge::PyExternalSymbol;
+pub use omni_knowledge::PySymbolIndex;
+
+// ZK Entity Reference Extraction (Rust-accelerated)
+pub use omni_knowledge::PyZkEntityRef;
+pub use omni_knowledge::PyZkRefStats;
+pub use omni_knowledge::zk_count_refs;
+pub use omni_knowledge::zk_extract_entity_refs;
+pub use omni_knowledge::zk_find_referencing_notes;
+pub use omni_knowledge::zk_get_ref_stats;
+pub use omni_knowledge::zk_is_valid_ref;
+pub use omni_knowledge::zk_parse_entity_ref;
 
 // AST Extraction
 pub use ast::{
@@ -168,6 +193,7 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Cartographer and Hunter (Code Navigation)
     m.add_function(pyo3::wrap_pyfunction!(get_file_outline, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(get_files_outline, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(search_code, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(search_directory, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(search_with_rules, m)?)?;
@@ -264,6 +290,46 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySyncEngine>()?;
     m.add_class::<PySyncResult>()?;
     m.add_function(pyo3::wrap_pyfunction!(omni_knowledge::compute_hash, m)?)?;
+
+    // Knowledge Graph (omni-knowledge)
+    m.add_class::<omni_knowledge::PyKnowledgeGraph>()?;
+    m.add_class::<omni_knowledge::PyEntity>()?;
+    m.add_class::<omni_knowledge::PyRelation>()?;
+    m.add_class::<omni_knowledge::PyEntityType>()?;
+
+    // ZK Entity Reference Extraction (Rust-accelerated)
+    m.add_function(pyo3::wrap_pyfunction!(zk_extract_entity_refs, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(zk_get_ref_stats, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(zk_parse_entity_ref, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(zk_is_valid_ref, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(zk_count_refs, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(zk_find_referencing_notes, m)?)?;
+    m.add_class::<omni_knowledge::PyZkEntityRef>()?;
+    m.add_class::<omni_knowledge::PyZkRefStats>()?;
+
+    // Dependency Indexer (External crate symbol search)
+    use omni_knowledge::dep_indexer_py::register_dependency_indexer_module;
+    register_dependency_indexer_module(m)?;
+
+    // Unified Symbol Index (Project + External dependency search)
+    use omni_knowledge::unified_symbol_py::register_unified_symbol_module;
+    // NCL-driven Sandbox Executor (omni-sandbox)
+    m.add_function(pyo3::wrap_pyfunction!(sandbox::sandbox_detect_platform, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(
+        sandbox::sandbox_is_nsjail_available,
+        m
+    )?)?;
+    m.add_function(pyo3::wrap_pyfunction!(
+        sandbox::sandbox_is_seatbelt_available,
+        m
+    )?)?;
+    m.add_class::<sandbox::ExecutionResult>()?;
+    m.add_class::<sandbox::SandboxConfig>()?;
+    m.add_class::<sandbox::MountConfig>()?;
+    m.add_class::<sandbox::NsJailExecutor>()?;
+    m.add_class::<sandbox::SeatbeltExecutor>()?;
+
+    register_unified_symbol_module(m)?;
 
     m.add("VERSION", "0.5.0")?;
     Ok(())

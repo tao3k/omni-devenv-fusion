@@ -139,6 +139,76 @@ class TestTransactionShield:
         assert "task_1" in all_tx
         assert "task_2" in all_tx
 
+    @pytest.mark.asyncio
+    async def test_verify_transaction_fails_on_immune_scan(self, shield):
+        """verify_transaction should fail when immune scan reports violations."""
+        tx = Transaction(
+            task_id="task_immune_fail",
+            branch_name="omni-task/task_immune_fail",
+            status=TransactionStatus.COMMITTED,
+            changes={"foo.py": {"new_hash": "abc"}},
+        )
+        shield._transactions[tx.task_id] = tx
+        shield._run_immune_scan = AsyncMock(
+            return_value=(False, "Immune scan failed: foo.py:1 [RULE] blocked")
+        )
+
+        ok = await shield.verify_transaction(tx.task_id)
+
+        assert ok is False
+        assert tx.status == TransactionStatus.FAILED
+        assert tx.error is not None
+        assert "Immune scan failed" in tx.error
+
+    @pytest.mark.asyncio
+    async def test_verify_transaction_marks_verified_on_immune_pass(self, shield):
+        """verify_transaction should mark transaction verified when immune scan passes."""
+        tx = Transaction(
+            task_id="task_immune_ok",
+            branch_name="omni-task/task_immune_ok",
+            status=TransactionStatus.COMMITTED,
+            changes={"foo.py": {"new_hash": "abc"}},
+        )
+        shield._transactions[tx.task_id] = tx
+        shield._run_immune_scan = AsyncMock(return_value=(True, None))
+
+        ok = await shield.verify_transaction(tx.task_id)
+
+        assert ok is True
+        assert tx.status == TransactionStatus.VERIFIED
+        assert tx.verified_at is not None
+
+    @pytest.mark.asyncio
+    async def test_run_immune_scan_uses_changed_python_files_only(self, tmp_path):
+        """_run_immune_scan should scan only changed .py files and ignore non-Python files."""
+        shield = TransactionShield(base_branch="main")
+        shield._repo_root = tmp_path
+
+        py_file = tmp_path / "a.py"
+        txt_file = tmp_path / "notes.txt"
+        py_file.write_text("print('ok')\n")
+        txt_file.write_text("plain text\n")
+
+        tx = Transaction(
+            task_id="task_scan_paths",
+            branch_name="omni-task/task_scan_paths",
+            changes={
+                "a.py": {"new_hash": "1"},
+                "notes.txt": {"new_hash": "2"},
+                "_commit": "deadbeef",
+            },
+        )
+
+        with patch(
+            "omni.foundation.bridge.rust_immune.scan_code_security",
+            return_value=(True, []),
+        ) as mock_scan:
+            ok, err = await shield._run_immune_scan(tx)
+
+        assert ok is True
+        assert err is None
+        mock_scan.assert_called_once_with("print('ok')\n")
+
 
 class TestConflictDetector:
     """Tests for ConflictDetector."""

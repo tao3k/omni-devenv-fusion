@@ -6,7 +6,7 @@ Provides unified API for resolving knowledge document paths from references.yaml
 Uses YAML-based references for single source of truth.
 
 Features:
-- Reads from conf_dir/references.yaml (supports --conf flag)
+- Reads from `$PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml` via dirs API
 - Dot-notation path access (e.g., "specs.dir")
 - Thread-safe singleton pattern
 - Hot reload support
@@ -14,19 +14,18 @@ Features:
 Usage:
     from omni.foundation.services.reference import ReferenceLibrary, get_reference_path
 
-    # Default (uses assets/ directory)
-    specs_dir = get_reference_path("specs.dir")  # Returns: "assets/specs"
-
-    # Custom configuration directory
-    python script.py --conf /path/to/conf
+    specs_dir = get_reference_path("specs.dir")
 """
 
 from __future__ import annotations
 
-import sys
 import threading
 from pathlib import Path
 from typing import Any
+
+from omni.foundation.config.directory import get_conf_dir as _get_conf_dir
+from omni.foundation.config.directory import set_conf_dir as _set_conf_dir
+from omni.foundation.config.dirs import PRJ_CONFIG
 
 # Project root detection using GitOps
 from omni.foundation.runtime.gitops import get_project_root
@@ -40,44 +39,23 @@ except ImportError:
     YAML_AVAILABLE = False
 
 
-# Global configuration directory (set by --conf flag)
-_CONF_DIR: str | None = None
-_conf_dir_lock = threading.Lock()
-
-
 def set_conf_dir(path: str) -> None:
-    """Set the configuration directory."""
-    global _CONF_DIR
-    with _conf_dir_lock:
-        _CONF_DIR = path
+    """Set config directory via canonical PRJ_CONFIG_HOME API."""
+    _set_conf_dir(path)
+    # Config root changed; invalidate singleton cache so next read reloads.
+    ReferenceLibrary._instance = None
 
 
 def get_conf_dir() -> str:
-    """Get the configuration directory."""
-    global _CONF_DIR
-    if _CONF_DIR is not None:
-        return _CONF_DIR
-
-    # Parse --conf from command line args
-    args = sys.argv
-    for i, arg in enumerate(args):
-        if arg == "--conf" and i + 1 < len(args):
-            _CONF_DIR = args[i + 1]
-            return _CONF_DIR
-        if arg.startswith("--conf="):
-            _CONF_DIR = arg.split("=", 1)[1]
-            return _CONF_DIR
-
-    # Default to assets/
-    _CONF_DIR = "assets"
-    return _CONF_DIR
+    """Get config directory via canonical PRJ_CONFIG_HOME API."""
+    return _get_conf_dir()
 
 
 class ReferenceLibrary:
     """
     Reference Knowledge Library - Singleton for knowledge document references.
 
-    Reads from conf_dir/references.yaml and provides path resolution.
+    Reads from `$PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml` and provides path resolution.
 
     Usage:
         ref = ReferenceLibrary()
@@ -110,10 +88,8 @@ class ReferenceLibrary:
                     self._loaded = True
 
     def _load(self) -> None:
-        """Load references from conf_dir/references.yaml."""
-        project_root = get_project_root()
-        conf_dir = get_conf_dir()
-        refs_path = project_root / conf_dir / "references.yaml"
+        """Load references from `$PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml`."""
+        refs_path = PRJ_CONFIG("omni-dev-fusion", "references.yaml")
 
         if not refs_path.exists():
             self._data = {}
@@ -327,7 +303,18 @@ def get_reference_path(key: str, fallback: str | None = None) -> str:
     Returns:
         Absolute path string, or empty string if not found and no fallback
     """
-    return str(ref(key, fallback)) if fallback else str(ref(key))
+    if fallback is not None:
+        return str(ref(key, fallback))
+
+    lib = ReferenceLibrary()
+    value = lib.get_path(key)
+    if not value:
+        return ""
+
+    path = Path(value)
+    if path.is_absolute():
+        return str(path)
+    return str(get_project_root() / path)
 
 
 def get_reference_cache(key: str) -> str:

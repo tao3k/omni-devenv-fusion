@@ -19,6 +19,41 @@ pub fn get_file_outline(path: String, language: Option<&str>) -> String {
     })
 }
 
+/// Generate outlines for multiple files in parallel using scoped threads.
+///
+/// This is significantly faster than calling get_file_outline() for each file
+/// because it eliminates Python-Rust boundary crossing overhead.
+///
+/// Args:
+///     paths: List of file paths to process
+///     language: Optional default language hint
+///
+/// Returns:
+///     JSON string with file_path -> outline mapping
+#[pyfunction]
+#[pyo3(signature = (paths, language = None))]
+pub fn get_files_outline(paths: Vec<String>, language: Option<&str>) -> String {
+    use rayon::iter::ParallelIterator;
+    use rayon::prelude::IntoParallelIterator;
+
+    // Use rayon for parallel processing without GIL
+    let results: Vec<(String, String)> = paths
+        .into_par_iter()
+        .map(|path| {
+            let outline = TagExtractor::outline_file(&path, language)
+                .unwrap_or_else(|e| format!("[Error: {}]", e));
+            (path, outline)
+        })
+        .collect();
+
+    let json_map: serde_json::Map<String, serde_json::Value> = results
+        .into_iter()
+        .map(|(path, outline)| (path, serde_json::Value::String(outline)))
+        .collect();
+
+    serde_json::to_string(&json_map).unwrap_or_else(|_| "{}".to_string())
+}
+
 /// Search for AST patterns in a single file using ast-grep syntax.
 ///
 /// Examples:

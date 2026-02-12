@@ -10,7 +10,7 @@ async fn setup_store(path: &std::path::Path, dim: usize) -> VectorStore {
 }
 
 #[tokio::test]
-async fn test_hybrid_search_requires_keyword_index() {
+async fn test_hybrid_search_without_keyword_index_falls_back_to_vector() {
     let temp_dir = tempfile::tempdir().unwrap();
     let store = VectorStore::new(temp_dir.path().to_str().unwrap(), None)
         .await
@@ -28,18 +28,13 @@ async fn test_hybrid_search_requires_keyword_index() {
         .await
         .unwrap();
 
-    // Attempt hybrid search without keyword index should fail
+    // Without keyword backend enabled, hybrid search should degrade gracefully.
     let result = store
         .hybrid_search("test", "test query", vec![0.1; 1024], 10)
         .await;
 
-    assert!(result.is_err());
-    let err_msg = format!("{:?}", result.err().unwrap());
-    assert!(
-        err_msg.contains("Keyword index not enabled") || err_msg.contains("keyword"),
-        "Expected error about keyword index, got: {}",
-        err_msg
-    );
+    assert!(result.is_ok());
+    assert!(!result.unwrap().is_empty());
 }
 
 #[tokio::test]

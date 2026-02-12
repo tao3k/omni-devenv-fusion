@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omni.vector.search.v1.schema.json",
+  "title": "Omni Vector Search Payload v1",
+  "description": "Single vector search result. Legacy field 'keywords' is forbidden (use routing_keywords in tool_search only).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "content", "metadata", "distance"],
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content": {
+      "type": "string",
+      "minLength": 1
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "distance": {
+      "type": "number"
+    },
+    "score": {
+      "type": "number"
+    }
+  }
+}

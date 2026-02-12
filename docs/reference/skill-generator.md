@@ -273,4 +273,4 @@ Names are automatically sanitized:
 
 - [Skills Architecture](../architecture/skills.md)
 - [ODF-EP Protocol](odf-ep-protocol.md)
-- [Trinity Architecture](../explanation/trinity-architecture.md)
+- [Trinity Architecture](../explanation/system-layering.md)

@@ -11,6 +11,7 @@ Logging: Uses Foundation layer (omni.foundation.config.logging)
 
 from __future__ import annotations
 
+import json
 from typing import Any, TypedDict
 
 from omni.core.kernel import get_kernel
@@ -44,6 +45,17 @@ INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
+
+
+# Canonical MCP tools/call result shape so clients (e.g. Cursor) never see invalid_union
+# Result must be an object with "content" (list of { type, text }) and optional "isError"
+def _tool_result_content(text: str | None, is_error: bool = False) -> dict[str, Any]:
+    """Build MCP CallToolResult content payload. Ensures result is never null or malformed."""
+    safe_text = "" if text is None else str(text)
+    return {
+        "content": [{"type": "text", "text": safe_text}],
+        "isError": is_error,
+    }
 
 
 def _make_success_response(id_val: str | int | None, result: Any) -> JSONRPCResponse:
@@ -97,6 +109,29 @@ class AgentMCPHandler(MCPRequestHandler):
 
         # Hot reload is already enabled by default during kernel initialization
         # (Live-Wire Skill Watcher starts automatically)
+
+        # [NEW] Preload embedding service in BACKGROUND so MCP responds immediately
+        # The actual model loading happens in a thread, not blocking the event loop
+        # This allows MCP to receive messages while embedding model loads (~7s)
+        async def _warmup_embedding():
+            """Load embedding model in background thread."""
+            try:
+                from omni.foundation.services.embedding import get_embedding_service
+
+                embed_service = get_embedding_service()
+                # Run blocking embed() in thread to not block event loop
+                import asyncio
+
+                dummy_vec = await asyncio.to_thread(embed_service.embed, "[MODEL_WARMUP]")
+                logger.info(f"📦 Embedding service ready (dim={embed_service.dimension})")
+            except Exception as embed_err:
+                logger.warning(f"Embedding warmup failed: {embed_err}")
+
+        # Fire-and-forget: start warmup without blocking MCP response
+        import asyncio
+
+        asyncio.create_task(_warmup_embedding())
+        logger.info("📦 Embedding service warming up in background...")
 
         self._initialized = True
         logger.info(
@@ -262,6 +297,16 @@ class AgentMCPHandler(MCPRequestHandler):
         name = params.get("name", "")
         arguments = params.get("arguments", {})
 
+        logger.info(f"[MCP] _handle_call_tool called with name={name}")
+
+        # [NEW] Handle embedding tool calls directly (both "embed_texts" and "embedding.embed_texts")
+        if name == "embed_texts" or name == "embedding.embed_texts":
+            logger.info(f"[MCP] Calling _handle_embed_texts")
+            return await self._handle_embed_texts(req_id, arguments)
+        elif name == "embed_single" or name == "embedding.embed_single":
+            logger.info(f"[MCP] Calling _handle_embed_single")
+            return await self._handle_embed_single(req_id, arguments)
+
         if "." not in name:
             return _make_error_response(req_id, INVALID_PARAMS, "Tool name must be 'skill.command'")
 
@@ -273,9 +318,74 @@ class AgentMCPHandler(MCPRequestHandler):
 
         try:
             result = await skill.execute(command_name, **arguments)
-            return _make_success_response(
-                req_id, {"content": [{"type": "text", "text": str(result)}]}
-            )
+            return _make_success_response(req_id, _tool_result_content(result))
+        except Exception as e:
+            return _make_error_response(req_id, INTERNAL_ERROR, str(e))
+
+    async def _handle_embed_texts(
+        self, req_id: str | int | None, arguments: dict
+    ) -> JSONRPCResponse:
+        """Handle embed_texts tool call via preloaded embedding service."""
+        texts = arguments.get("texts", [])
+        if not texts:
+            return _make_error_response(req_id, INVALID_PARAMS, "'texts' parameter required")
+
+        logger.info(f"[MCP] _handle_embed_texts: processing {len(texts)} texts")
+
+        try:
+            from omni.foundation.services.embedding import embed_batch, get_embedding_service
+
+            logger.info(f"[MCP] Getting embedding service...")
+            embed_service = get_embedding_service()
+            logger.info(f"[MCP] Service dimension: {embed_service.dimension}")
+
+            logger.info(f"[MCP] Generating embeddings...")
+            vectors = embed_batch(texts)
+            logger.info(f"[MCP] Generated {len(vectors)} vectors")
+
+            result = {
+                "success": True,
+                "count": len(vectors),
+                "dimension": embed_service.dimension,
+                # Return full vectors for hybrid search
+                "vectors": vectors,
+                # Also include preview for debugging
+                "preview": [v[:10] for v in vectors] if vectors else [],
+            }
+
+            logger.info(f"[MCP] Returning result: count={len(vectors)}")
+            return _make_success_response(req_id, _tool_result_content(json.dumps(result)))
+        except Exception as e:
+            logger.error(f"[MCP] _handle_embed_texts error: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return _make_error_response(req_id, INTERNAL_ERROR, str(e))
+
+    async def _handle_embed_single(
+        self, req_id: str | int | None, arguments: dict
+    ) -> JSONRPCResponse:
+        """Handle embed_single tool call via preloaded embedding service."""
+        text = arguments.get("text", "")
+        if not text:
+            return _make_error_response(req_id, INVALID_PARAMS, "'text' parameter required")
+
+        try:
+            from omni.foundation.services.embedding import embed_text, get_embedding_service
+
+            embed_service = get_embedding_service()
+            vector = embed_text(text)
+
+            result = {
+                "success": True,
+                "dimension": embed_service.dimension,
+                # Return full vector
+                "vector": vector,
+                # Also include preview for debugging
+                "preview": vector[:10] if vector else [],
+            }
+
+            return _make_success_response(req_id, _tool_result_content(json.dumps(result)))
         except Exception as e:
             return _make_error_response(req_id, INTERNAL_ERROR, str(e))
 

@@ -99,7 +99,7 @@ def smart_search(
 
     rg_exec = shutil.which("rg")
     if not rg_exec:
-        return {"success": False, "error": "Tool 'rg' (ripgrep) not found in path."}
+        raise RuntimeError("Tool 'rg' (ripgrep) not found in path.")
 
     # Build ripgrep command
     cmd = [rg_exec, "--json", pattern]
@@ -119,7 +119,7 @@ def smart_search(
         stdout, stderr, returncode = _run_rg_with_retry(cmd, root)
 
         if returncode > 1:
-            return {"success": False, "error": f"ripgrep error: {stderr}"}
+            raise RuntimeError(f"ripgrep error: {stderr}")
 
         matches = []
         file_matches = 0
@@ -164,7 +164,7 @@ def smart_search(
 
     except Exception as e:
         logger.error(f"Smart search failed: {e}")
-        return {"success": False, "error": str(e)}
+        raise
 
 
 # =============================================================================
@@ -230,7 +230,7 @@ def smart_find(
     if search_mode == "content":
         rg_exec = shutil.which("rg")
         if not rg_exec:
-            return {"success": False, "error": "Tool 'rg' (ripgrep) not found."}
+            raise RuntimeError("Tool 'rg' (ripgrep) not found.")
 
         cmd = [rg_exec, "--files-with-matches", pattern]
         if extension:
@@ -259,12 +259,12 @@ def smart_find(
                 "files": files[:100],
             }
         except Exception as e:
-            return {"success": False, "error": f"Content search failed: {e}"}
+            raise RuntimeError(f"Content search failed: {e}")
 
     # Mode 2: Filename Search (Uses fd)
     fd_exec = shutil.which("fd") or shutil.which("fdfind")
     if not fd_exec:
-        return {"success": False, "error": "Tool 'fd' not found in system path."}
+        raise RuntimeError("Tool 'fd' not found in system path.")
 
     cmd = [fd_exec, "--type", "f"]  # Default to files
     if extension:
@@ -294,7 +294,7 @@ def smart_find(
             "files": files[:100],
         }
     except Exception as e:
-        return {"success": False, "error": f"Filename search failed: {e}"}
+        raise RuntimeError(f"Filename search failed: {e}")
 
 
 __all__ = ["smart_find", "smart_search"]

@@ -2,9 +2,7 @@
 """
 Configuration Directory Management
 
-Manages the configuration directory path with --conf flag support.
-
-Modularized from settings.py
+Canonical configuration directory helpers built on PRJ dirs.
 
 Usage:
     from omni.foundation.config.directory import get_conf_dir, set_conf_dir
@@ -12,12 +10,9 @@ Usage:
 
 from __future__ import annotations
 
-import sys
-import threading
+import os
 
-# Global configuration directory (set by --conf flag)
-_CONF_DIR: str | None = None
-_conf_dir_lock = threading.Lock()
+from .dirs import PRJ_DIRS
 
 
 def set_conf_dir(path: str) -> None:
@@ -27,9 +22,8 @@ def set_conf_dir(path: str) -> None:
     Args:
         path: Path to configuration directory (e.g., "./agent")
     """
-    global _CONF_DIR
-    with _conf_dir_lock:
-        _CONF_DIR = path
+    os.environ["PRJ_CONFIG_HOME"] = path
+    PRJ_DIRS.clear_cache()
 
 
 def get_conf_dir() -> str:
@@ -39,23 +33,7 @@ def get_conf_dir() -> str:
     Returns:
         Configuration directory path
     """
-    global _CONF_DIR
-    if _CONF_DIR is not None:
-        return _CONF_DIR
-
-    # Parse --conf from command line args
-    args = sys.argv
-    for i, arg in enumerate(args):
-        if arg == "--conf" and i + 1 < len(args):
-            _CONF_DIR = args[i + 1]
-            return _CONF_DIR
-        if arg.startswith("--conf="):
-            _CONF_DIR = arg.split("=", 1)[1]
-            return _CONF_DIR
-
-    # Default to assets/
-    _CONF_DIR = "assets"
-    return _CONF_DIR
+    return str(PRJ_DIRS.config_home / "omni-dev-fusion")
 
 
 __all__ = [

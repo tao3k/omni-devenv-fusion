@@ -101,6 +101,10 @@ let
                   glob = "*.rs";
                   run = "rustfmt -- {staged_files}";
                 };
+                format-nickel = {
+                  glob = "*.ncl";
+                  run = "nickel format -- {staged_files}";
+                };
               };
               commit-msg = lefthook.default.data.commit-msg;
               # Remove unnecessary commands from default pre-commit

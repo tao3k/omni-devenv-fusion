@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "tool_contracts": {
+    "retriever.search": {
+      "required_input_keys": ["query"]
+    },
+    "retriever.hybrid_search": {
+      "required_input_keys": ["query"]
+    },
+    "retriever.index": {
+      "required_input_keys": ["documents"]
+    }
+  }
+}

@@ -89,6 +89,49 @@ class TestSystemPersonaProvider:
             result = await provider.provide({}, 1000)
             assert f"<role>You are a" in result.content
 
+    @pytest.mark.asyncio
+    async def test_system_core_prompt_uses_relative_path_from_project_root(
+        self, tmp_path, monkeypatch
+    ):
+        """Relative prompts.system_core should resolve from project root."""
+        prompt_path = tmp_path / "custom_prompts" / "system_core.md"
+        prompt_path.parent.mkdir(parents=True)
+        prompt_path.write_text("SYSTEM CORE RELATIVE", encoding="utf-8")
+
+        monkeypatch.setattr(
+            "omni.foundation.config.get_setting",
+            lambda key, default=None: "custom_prompts/system_core.md"
+            if key == "prompts.system_core"
+            else default,
+        )
+        monkeypatch.setattr(
+            "omni.foundation.config.get_config_paths",
+            lambda: type("P", (), {"project_root": tmp_path})(),
+        )
+
+        provider = SystemPersonaProvider(role="architect")
+        result = await provider.provide({}, 1000)
+        assert "SYSTEM CORE RELATIVE" in result.content
+
+    @pytest.mark.asyncio
+    async def test_system_core_prompt_supports_absolute_path(self, tmp_path, monkeypatch):
+        """Absolute prompts.system_core should be used directly."""
+        prompt_path = tmp_path / "absolute_system_core.md"
+        prompt_path.write_text("SYSTEM CORE ABS", encoding="utf-8")
+
+        monkeypatch.setattr(
+            "omni.foundation.config.get_setting",
+            lambda key, default=None: str(prompt_path) if key == "prompts.system_core" else default,
+        )
+        monkeypatch.setattr(
+            "omni.foundation.config.get_config_paths",
+            lambda: type("P", (), {"project_root": tmp_path})(),
+        )
+
+        provider = SystemPersonaProvider(role="architect")
+        result = await provider.provide({}, 1000)
+        assert "SYSTEM CORE ABS" in result.content
+
 
 class TestActiveSkillProvider:
     """Test ActiveSkillProvider."""

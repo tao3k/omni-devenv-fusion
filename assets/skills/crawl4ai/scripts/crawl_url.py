@@ -9,12 +9,15 @@ for command discovery. The actual implementation is in engine.py.
 """
 
 import json
+import structlog
 from pathlib import Path
 from typing import Any
 
 from omni.foundation.api.decorators import skill_command
 from omni.foundation.runtime.isolation import run_skill_command
 from omni.foundation.services.llm.client import InferenceClient
+
+log = structlog.get_logger("omni.skill.crawl4ai")
 
 
 def _get_skill_dir() -> Path:
@@ -96,7 +99,7 @@ async def _generate_chunk_plan(skeleton: list, title: str) -> list | None:
         return chunk_plan
 
     except Exception as e:
-        print(f"LLM chunk planning failed: {e}", file=__import__("sys").stderr)
+        log.error("LLM chunk planning failed", error=str(e))
         return None
 
 
@@ -114,11 +117,14 @@ async def _generate_chunk_plan(skeleton: list, title: str) -> list | None:
     - Skeleton: Extract lightweight TOC without full content
     - Basic: Crawl URL and extract full markdown content
 
+    Auto-Upgrade: When max_depth > 1, action is automatically upgraded to "smart"
+    because smart mode uses LLM to plan optimal chunking for multi-page crawls.
+
     Args:
         - url: str - Target URL to crawl (required)
-        - action: str = "smart" - Action: smart (default), skeleton, crawl
+        - action: str = "smart" - Action: smart (default), skeleton, crawl (auto-upgraded if max_depth > 1)
         - fit_markdown: bool = true - Clean and simplify the markdown output
-        - max_depth: int = 0 - Maximum crawling depth (0 = single page)
+        - max_depth: int = 0 - Maximum crawling depth (0 = single page, >1 auto-upgrades to smart)
         - return_skeleton: bool = false - Also return document skeleton (TOC)
         - chunk_indices: list[int] - List of section indices to extract
 
@@ -131,6 +137,8 @@ async def _generate_chunk_plan(skeleton: list, title: str) -> list | None:
         @omni("crawl4ai.CrawlUrl", {"url": "https://example.com"})
         @omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "action": "skeleton"})
         @omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "action": "crawl"})
+        @omni("crawl4ai.CrawlUrl", {"url": "https://example.com", "action": "crawl", "max_depth": 2})
+        #                                           ^ auto-upgraded to "smart" internally
     """,
     read_only=True,
     destructive=False,
@@ -156,6 +164,11 @@ async def CrawlUrl(
         - return_skeleton: Include skeleton in response
         - chunk_indices: Specific sections to extract
     """
+    # Auto-upgrade to smart mode when crawling depth > 1
+    # Smart mode uses LLM to plan optimal chunking for multi-page crawls
+    if max_depth > 1 and action == "crawl":
+        action = "smart"
+        log.info("Auto-upgraded to smart mode", max_depth=max_depth)
     # For smart action, we need to:
     # 1. First crawl to get skeleton
     # 2. Generate chunk plan with LLM

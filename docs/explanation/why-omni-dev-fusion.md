@@ -381,7 +381,7 @@ Every skill:
 | --------------------- | ------------------------------------------------------------ |
 | **Skills Overview**   | [Skills Guide](../skills.md)                                 |
 | **Writing Standards** | [Writing Style Index](../design/writing-style/00_index.md)   |
-| **Architecture**      | [Trinity Architecture](trinity-architecture.md)              |
+| **Architecture**      | [Trinity Architecture](system-layering.md)                   |
 | **Getting Started**   | [Tutorial: Getting Started](../tutorials/getting-started.md) |
 
 ---

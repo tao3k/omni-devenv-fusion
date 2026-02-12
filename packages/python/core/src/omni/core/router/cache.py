@@ -43,6 +43,8 @@ class SearchCache:
         self._cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self._max_size = max_size
         self._ttl = ttl
+        self._hits = 0
+        self._misses = 0
 
     def get(self, query: str) -> list[Any] | None:
         """Get cached results for a query.
@@ -54,6 +56,7 @@ class SearchCache:
             Cached results list, or None if not found/expired
         """
         if query not in self._cache:
+            self._misses += 1
             return None
 
         entry = self._cache[query]
@@ -61,11 +64,13 @@ class SearchCache:
         # Check TTL
         if self._is_expired(entry):
             del self._cache[query]
+            self._misses += 1
             logger.debug(f"Cache expired for query: {query[:50]}...")
             return None
 
         # Move to end (LRU)
         self._cache.move_to_end(query)
+        self._hits += 1
         return entry["results"]
 
     def set(self, query: str, results: list[Any]) -> None:
@@ -93,6 +98,8 @@ class SearchCache:
         """
         count = len(self._cache)
         self._cache.clear()
+        self._hits = 0
+        self._misses = 0
         logger.info(f"Cache cleared: {count} entries removed")
         return count
 
@@ -106,6 +113,9 @@ class SearchCache:
             "size": len(self._cache),
             "max_size": self._max_size,
             "ttl_seconds": self._ttl,
+            "hits": self._hits,
+            "misses": self._misses,
+            "requests": self._hits + self._misses,
             "hit_rate": self._calculate_hit_rate(),
         }
 
@@ -133,9 +143,11 @@ class SearchCache:
         return (time.time() - timestamp) > self._ttl
 
     def _calculate_hit_rate(self) -> float:
-        """Calculate cache hit rate (placeholder for future stats)."""
-        # TODO: Add hit/miss tracking for accurate hit rate
-        return 0.0
+        """Calculate cache hit rate as hits / total requests."""
+        total = self._hits + self._misses
+        if total == 0:
+            return 0.0
+        return self._hits / total
 
     def __len__(self) -> int:
         """Return the number of cached entries."""

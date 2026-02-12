@@ -4,19 +4,7 @@ use std::fs::File;
 use std::io::Write;
 use tempfile::TempDir;
 
-use omni_edit::{EditResult, StructuralEditor};
-
-/// Helper function to create a simple edit result for testing.
-#[allow(dead_code)]
-fn make_edit_result(original: &str, modified: &str, count: usize) -> EditResult {
-    EditResult {
-        original: original.to_string(),
-        modified: modified.to_string(),
-        count,
-        diff: String::new(),
-        edits: Vec::new(),
-    }
-}
+use omni_edit::StructuralEditor;
 
 #[test]
 fn test_simple_replace() {

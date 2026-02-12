@@ -54,6 +54,23 @@ class ToolsLoader:
         self._context[key] = value
         logger.debug(f"[{self.skill_name}] Injected context: {key}")
 
+    def _register_for_validation(self, full_name: str, cmd: Callable) -> None:
+        """Register a command's config in the validation registry for fast-fail validation.
+
+        Args:
+            full_name: Full command name (e.g., 'knowledge.ingest_document')
+            cmd: The command function with _skill_config attached
+        """
+        try:
+            from omni.core.skills.validation import register_skill_command
+
+            config = getattr(cmd, "_skill_config", None)
+            if config and isinstance(config, dict):
+                register_skill_command(full_name, config)
+        except Exception:
+            # Validation module may not be available - silent fail is OK
+            pass
+
     def load_all(self) -> None:
         """Load all scripts and register commands.
 
@@ -234,20 +251,35 @@ class ToolsLoader:
                 del sys.modules[full_module_name]
 
     def get_command(self, full_name: str) -> Callable | None:
-        """Get a command by its full name (e.g., 'git.status')."""
-        return self.commands.get(full_name)
+        """Get a command by its full name (e.g., 'git.status').
+
+        Also registers the command's config in the validation registry
+        for fast-fail parameter validation.
+        """
+        cmd = self.commands.get(full_name)
+        if cmd is not None:
+            self._register_for_validation(full_name, cmd)
+        return cmd
 
     def get_command_simple(self, name: str) -> Callable | None:
-        """Get a command by simple name (e.g., 'status')."""
+        """Get a command by simple name (e.g., 'status').
+
+        Also registers the command's config in the validation registry.
+        """
         # Try skill.command format first
         full_name = f"{self.skill_name}.{name}"
         if full_name in self.commands:
-            return self.commands[full_name]
+            cmd = self.commands[full_name]
+            self._register_for_validation(full_name, cmd)
+            return cmd
         # Fall back to native functions
         if name in self.native_functions:
             return self.native_functions[name]
         # Fall back to direct match in commands
-        return self.commands.get(name)
+        cmd = self.commands.get(name)
+        if cmd is not None:
+            self._register_for_validation(name, cmd)
+        return cmd
 
     def list_commands(self) -> list[str]:
         """List all registered commands."""

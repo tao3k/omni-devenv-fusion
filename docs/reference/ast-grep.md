@@ -11,12 +11,12 @@ The Confucius Code Agent (CCA) paper establishes a fundamental insight: **code u
 
 This philosophical shift has profound implications:
 
-| Traditional Approach         | CCA Approach                      |
-| ---------------------------- | --------------------------------- |
-| Read file line by line       | Parse into AST, extract structure |
-| Search text patterns         | Match code patterns semantically  |
-| Consume full context         | Use summaries and outlines        |
-| 大海捞针 (fish in the ocean) | Surgical precision                |
+| Traditional Approach                 | CCA Approach                      |
+| ------------------------------------ | --------------------------------- |
+| Read file line by line               | Parse into AST, extract structure |
+| Search text patterns                 | Match code patterns semantically  |
+| Consume full context                 | Use summaries and outlines        |
+| Searching for a needle in a haystack | Surgical precision                |
 
 ### 1.2 AX: The Agent's Internal Workspace
 

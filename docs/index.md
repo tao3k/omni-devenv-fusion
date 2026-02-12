@@ -30,16 +30,19 @@ Problem-oriented. Recipes for solving specific tasks.
 
 Information-oriented. Technical details, API specs, and configuration options.
 
-| Document                                                          | Description                                  |
-| ----------------------------------------------------------------- | -------------------------------------------- |
-| [MCP Orchestrator](./reference/mcp-orchestrator.md)               | Omni MCP tool configuration and usage        |
-| [MCP Best Practices](./reference/mcp-best-practices.md)           | MCP server design patterns and anti-patterns |
-| [Documentation Standards](./reference/documentation-standards.md) | Doc guidelines for this project              |
-| [ODF-EP Protocol](./reference/odf-ep-protocol.md)                 | MANDATORY for LLMs - Engineering Protocol    |
-| [CLI Reference](./reference/cli.md)                               | Omni run, omni run exec commands             |
-| [Code Tools Skill](./reference/code-tools.md)                     | AST-based code navigation and refactoring    |
-| [AST-Based Search](./reference/ast-grep.md)                       | ast-grep patterns and Cartographer/Hunter    |
-| [Skill Generator](./reference/skill-generator.md)                 | Hybrid skill generator (Jinja2 + LLM)        |
+| Document                                                          | Description                                                    |
+| ----------------------------------------------------------------- | -------------------------------------------------------------- |
+| [MCP Orchestrator](./reference/mcp-orchestrator.md)               | Omni MCP tool configuration and usage                          |
+| [MCP Best Practices](./reference/mcp-best-practices.md)           | MCP server design patterns and anti-patterns                   |
+| [Documentation Standards](./reference/documentation-standards.md) | Doc guidelines for this project                                |
+| [ODF-EP Protocol](./reference/odf-ep-protocol.md)                 | MANDATORY for LLMs - Engineering Protocol                      |
+| [CLI Reference](./reference/cli.md)                               | Omni run, omni run exec commands                               |
+| [Code Tools Skill](./reference/code-tools.md)                     | AST-based code navigation and refactoring                      |
+| [AST-Based Search](./reference/ast-grep.md)                       | ast-grep patterns and Cartographer/Hunter                      |
+| [Skill Generator](./reference/skill-generator.md)                 | Hybrid skill generator (Jinja2 + LLM)                          |
+| [Execution Tracing](./reference/tracer.md)                        | UltraRAG-style execution tracing system                        |
+| [LangGraph UltraRAG Demo](./reference/langgraph-ultrarag-demo.md) | XML contracts, quality gates, and fail-fast                    |
+| [Retrieval Namespace](./reference/retrieval-namespace.md)         | Unified retrieval API, backends, factory, and runtime defaults |
 
 ---
 
@@ -51,7 +54,7 @@ Internal documentation for Omni-Dev Fusion developers.
 | ------------------------------------------------------------- | -------------------------------------------- |
 | [Skill Discovery](./developer/discover.md)                    | Skill discovery (MIGRATION GUIDE)            |
 | [Testing Guide](./developer/testing.md)                       | Test system architecture and developer guide |
-| [CLI Guide](./developer/cli.md)                               | CLI developer documentation (OUTDATED)       |
+| [CLI Guide](./developer/cli.md)                               | CLI developer documentation                  |
 | [MCP Core Architecture](./developer/mcp-core-architecture.md) | Shared library architecture guide            |
 | [Routing Guide](./developer/routing.md)                       | Routing architecture (MIGRATION GUIDE)       |
 
@@ -100,14 +103,15 @@ Guides specifically for LLMs interacting with the system:
 
 Detailed codebase structure and architecture documentation.
 
-| Document                                                   | Description                                        |
-| ---------------------------------------------------------- | -------------------------------------------------- |
-| [Codebase Structure](./architecture/codebase-structure.md) | Complete directory tree and file descriptions      |
-| [Rust Crates](./architecture/rust-crates.md)               | Rust crates reference with modules and performance |
-| [Skills System](./architecture/skills.md)                  | Zero-Code skill architecture and development guide |
-| [Kernel Architecture](./architecture/kernel.md)            | Microkernel engine, lifecycle management           |
-| [Router Architecture](./architecture/router.md)            | Semantic routing system (OmniRouter, HiveRouter)   |
-| [MCP-Server Architecture](./architecture/mcp-server.md)    | MCP protocol implementation                        |
+| Document                                                        | Description                                        |
+| --------------------------------------------------------------- | -------------------------------------------------- |
+| [Codebase Structure](./architecture/codebase-structure.md)      | Complete directory tree and file descriptions      |
+| [Rust Crates](./architecture/rust-crates.md)                    | Rust crates reference with modules and performance |
+| [Skills System](./architecture/skills.md)                       | Zero-Code skill architecture and development guide |
+| [Kernel Architecture](./architecture/kernel.md)                 | Microkernel engine, lifecycle management           |
+| [Router Architecture](./architecture/router.md)                 | Semantic routing system (OmniRouter, HiveRouter)   |
+| [MCP-Server Architecture](./architecture/mcp-server.md)         | MCP protocol implementation                        |
+| [UltraRAG Gap Analysis](./explanation/ultrarag-gap-analysis.md) | Comparison with UltraRAG implementation            |
 
 ---
 

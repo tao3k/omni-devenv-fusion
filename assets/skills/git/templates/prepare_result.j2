@@ -24,11 +24,11 @@
 
 📁 **{{ staged_file_count }} Files to Commit**
 
-{% for f in staged_files[:30] %}
+{% for f in staged_files[:20] %}
 - `{{ f }}`
 {% endfor %}
-{% if staged_file_count > 30 %}
-- ... and {{ staged_file_count - 30 }} more files
+{% if staged_file_count > 20 %}
+- ... and {{ staged_file_count - 20 }} more files
 {% endif %}
 
 {% if lefthook_summary %}
@@ -67,10 +67,10 @@
 | 🔧 other | {{ other|length }} | {{ other[:3]|join(', ') }}{% if other|length > 3 %}...{% endif %} |
 
 {% if diff_content %}
-### 📝 Diff Preview (50000 chars - enough for detailed message)
+### 📝 Diff Preview (8000 chars - limited for MCP stability)
 
 ```diff
-{{ diff_content[:50000] }}
+{{ diff_content[:8000] }}
 ```
 _(Full diff: `git diff --cached`)_
 {% endif %}

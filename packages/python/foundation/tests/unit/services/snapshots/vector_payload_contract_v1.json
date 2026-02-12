@@ -1,0 +1,10 @@
+{
+  "id": "doc-1",
+  "content": "hello",
+  "metadata": {
+    "k": "v"
+  },
+  "distance": 0.2,
+  "schema": "omni.vector.search.v1",
+  "score": 0.8333
+}

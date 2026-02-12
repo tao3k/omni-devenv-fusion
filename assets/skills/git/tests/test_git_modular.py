@@ -8,19 +8,12 @@ class TestGitCommandsModular:
     """Test git skill commands using modular SDK and GitOpsVerifier."""
 
     async def test_git_status(self, skill_tester, gitops_verifier):
-        """Verify git status command returns a valid result."""
-        # gitops_verifier fixture sets up the git environment and resets caches
+        """Verify git status command returns a valid result.
 
-        # Verify initial state
-        gitops_verifier.assert_clean().assert_branch("main")
-
-        # Explicitly pass repo_path="." to ensure we check the CWD (temp repo)
-        # bypassing potentially cached ConfigPaths project root resolution
-        result = await skill_tester.run("git", "status", repo_path=".")
-        assert result.success
-        # Should now correctly identify the temp repo
-        assert result.output.get("branch") == "main"
-        assert result.output.get("is_clean") is True
+        NOTE: git status is a READ operation and should use bash directly.
+        This test is skipped because status command was removed.
+        """
+        pytest.skip("git status is a READ operation - use bash directly")
 
     async def test_git_commit(self, skill_tester, git_test_env, gitops_verifier):
         """Verify git commit command creates a new commit."""

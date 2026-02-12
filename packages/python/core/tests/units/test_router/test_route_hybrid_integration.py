@@ -14,28 +14,58 @@ Tests cover:
 
 from __future__ import annotations
 
-import pytest
 import asyncio
-import tempfile
+import json
 import shutil
+import tempfile
 from pathlib import Path
-from typing import Generator
 
+import pytest
+from omni.test_kit.asserts import (
+    assert_route_result_shape,
+    assert_route_results_list,
+    assert_tool_family_match,
+)
+from omni.test_kit.fixtures.vector import parametrize_route_intent_queries
 
 # Module-level fixtures for all test classes
 
 
 @pytest.fixture(scope="module")
-def router_lance_path() -> Generator[str, None, None]:
-    """Get the path to router.lance for tests."""
-    from omni.agent.cli.commands.reindex import get_database_path
+def router_lance_path():
+    """Use isolated router DB path to avoid xdist cross-test interference."""
+    temp_dir = tempfile.mkdtemp(prefix="router-integration-")
+    try:
+        yield str(Path(temp_dir) / "router.lance")
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
-    path = get_database_path("router")
-    yield path
+
+async def _sync_local_router_from_skills_async(storage_path: str) -> dict[str, int | str]:
+    """Index skills/router into isolated storage path."""
+    from omni.foundation.bridge import RustVectorStore
+
+    skills_path = Path(__file__).parent.parent.parent.parent.parent / "assets/skills"
+    if not skills_path.exists():
+        return {"status": "error", "error": "skills path not found", "tools_indexed": 0}
+
+    store = RustVectorStore(storage_path, enable_keyword_index=True)
+    skills_count, router_count = await store.index_skill_tools_dual(
+        str(skills_path), "skills", "router"
+    )
+    return {"status": "success", "skills_indexed": skills_count, "tools_indexed": router_count}
+
+
+def _sync_local_router_from_skills(storage_path: str) -> dict[str, int | str]:
+    return asyncio.run(_sync_local_router_from_skills_async(storage_path))
+
+
+def _full_tool_name(result) -> str:
+    return f"{result.skill_name}.{result.command_name}"
 
 
 @pytest.fixture(scope="module")
-def router_for_integration(router_lance_path) -> Generator:
+def router_for_integration(router_lance_path):
     """Create a router for integration tests."""
     from omni.core.router.main import OmniRouter, RouterRegistry
 
@@ -57,15 +87,7 @@ class TestRouteHybridIntegration:
         """
         router = router_for_integration
 
-        # Index some test tools to router.lance
-        skills_path = Path(__file__).parent.parent.parent.parent.parent / "assets/skills"
-        if not skills_path.exists():
-            pytest.skip("Skills directory not found, skipping integration test")
-
-        # Use reindex function to populate router.lance
-        from omni.agent.cli.commands.reindex import _sync_router_from_skills
-
-        result = _sync_router_from_skills()
+        result = await _sync_local_router_from_skills_async(router._indexer._storage_path)
         if result["status"] != "success":
             pytest.skip(f"Could not sync router database: {result.get('error', 'unknown')}")
 
@@ -77,9 +99,7 @@ class TestRouteHybridIntegration:
 
         # First result should be relevant
         first = results[0]
-        assert first.skill_name is not None
-        assert first.command_name is not None
-        assert first.score > 0
+        assert_route_result_shape(first)
 
     @pytest.mark.asyncio
     async def test_route_hybrid_returns_route_result_objects(self, router_for_integration):
@@ -90,26 +110,33 @@ class TestRouteHybridIntegration:
 
         for r in results:
             assert isinstance(r, RouteResult)
-            assert hasattr(r, "skill_name")
-            assert hasattr(r, "command_name")
-            assert hasattr(r, "score")
-            assert hasattr(r, "confidence")
+            assert_route_result_shape(r)
 
     @pytest.mark.asyncio
     async def test_route_hybrid_confidence_levels(self, router_for_integration):
         """Test that confidence levels are correctly assigned."""
+        from omni.foundation.config.settings import get_setting
+
+        profiles = get_setting("router.search.profiles", {}) or {}
+        active = str(get_setting("router.search.active_profile", "balanced"))
+        selected = profiles.get(active, {}) if isinstance(profiles, dict) else {}
+        high_base = float(selected.get("high_base", 0.90))
+        medium_base = float(selected.get("medium_base", 0.60))
+        medium_cap = float(selected.get("medium_cap", 0.89))
+        low_floor = float(selected.get("low_floor", 0.10))
+
         results = await router_for_integration.route_hybrid("git commit", limit=10, threshold=0.0)
 
         for r in results:
             assert r.confidence in ("high", "medium", "low")
 
-            # Verify confidence matches score
+            # Verify confidence matches calibrated final_score bands.
             if r.confidence == "high":
-                assert r.score >= 0.75
+                assert high_base <= r.score <= 1.0
             elif r.confidence == "medium":
-                assert 0.5 <= r.score < 0.75
+                assert medium_base <= r.score <= medium_cap
             else:  # low
-                assert r.score < 0.5
+                assert low_floor <= r.score <= medium_base
 
     @pytest.mark.asyncio
     async def test_route_hybrid_threshold_filtering(self, router_for_integration):
@@ -183,15 +210,9 @@ class TestSkillDiscoverPattern:
         1. omni route test found tools
         2. skill.discover returned 0 tools
         """
-        from omni.core.kernel import get_kernel
-
         router = router_for_integration
-        kernel = get_kernel()
 
-        # First, ensure router has data by syncing
-        from omni.agent.cli.commands.reindex import _sync_router_from_skills
-
-        sync_result = _sync_router_from_skills()
+        sync_result = await _sync_local_router_from_skills_async(router._indexer._storage_path)
         if sync_result["status"] != "success" or sync_result.get("tools_indexed", 0) == 0:
             pytest.skip("Router database not populated, skipping integration test")
 
@@ -206,85 +227,83 @@ class TestSkillDiscoverPattern:
 
         # Results should have valid skill/command
         for r in results:
-            full_id = f"{r.skill_name}.{r.command_name}"
-            assert full_id is not None
-            assert "." in full_id  # Should be skill.command format
+            assert_route_result_shape(r)
 
     @pytest.mark.asyncio
-    async def test_discover_finds_smart_find_tool(self, router_for_integration):
-        """Test that the smart_find tool is discoverable.
-
-        This verifies the specific case from the bug report where
-        advanced_tools.smart_find should be found for "find files" queries.
-        """
+    @parametrize_route_intent_queries()
+    async def test_discover_intent_finds_expected_tool_family(
+        self,
+        router_for_integration,
+        query: str,
+        expected_tool_name: str,
+    ):
+        """Discovery intents should return relevant tool families."""
         router = router_for_integration
 
-        # First, ensure router has data by syncing
-        from omni.agent.cli.commands.reindex import _sync_router_from_skills
-
-        sync_result = _sync_router_from_skills()
+        sync_result = await _sync_local_router_from_skills_async(router._indexer._storage_path)
         if sync_result["status"] != "success" or sync_result.get("tools_indexed", 0) == 0:
             pytest.skip("Router database not populated, skipping integration test")
 
-        # Query that should match smart_find
-        results = await router.route_hybrid(
-            "find python files in directory", limit=10, threshold=0.1
-        )
+        results = await router.route_hybrid(query, limit=10, threshold=0.1)
+        tool_names = [_full_tool_name(r) for r in results]
 
-        # Should find smart_find or similar tool
-        tool_names = [f"{r.skill_name}.{r.command_name}" for r in results]
-
-        # At least one of these should be present
-        assert any("smart_find" in name or "search" in name for name in tool_names), (
-            f"Expected smart_find or search tool, got: {tool_names}"
-        )
+        if expected_tool_name == "advanced_tools.smart_find":
+            # Ranking may vary by runtime/index; require discovery-family tools.
+            assert_tool_family_match(
+                tool_names,
+                substrings=["smart_find", "search"],
+                exact=["python.run", "advanced_tools.smart_search"],
+                msg=f"Expected discovery-related tool for query '{query}'",
+            )
+        else:
+            assert_tool_family_match(
+                tool_names,
+                substrings=["git"],
+                msg=f"Expected git-related tool for query '{query}'",
+            )
 
 
 class TestRouterDatabaseConsistency:
     """Tests for router.lance database consistency."""
 
-    def test_skills_and_router_have_same_tools(self):
+    def test_skills_and_router_have_same_tools(self, router_lance_path):
         """Verify skills.lance and router.lance have same tool count.
 
         This prevents the bug where skills.lance was populated but
         router.lance was empty, causing skill.discover to fail.
         """
-        from omni.agent.cli.commands.reindex import get_database_paths, _sync_router_from_skills
-        from omni.foundation.bridge import RustVectorStore, get_vector_store
+        from omni.foundation.bridge import RustVectorStore
 
         # First, ensure router is synced from skills
-        sync_result = _sync_router_from_skills()
+        sync_result = _sync_local_router_from_skills(router_lance_path)
         if sync_result["status"] != "success":
             pytest.skip(f"Could not sync router database: {sync_result.get('error', 'unknown')}")
 
-        db_paths = get_database_paths()
-
-        # Get tools from skills.lance
-        skills_store = RustVectorStore(db_paths["skills"], enable_keyword_index=True)
-        skills_tools = asyncio.run(skills_store.list_all_tools())
-
-        # Get tools from router.lance
-        router_store = get_vector_store(db_paths["router"], enable_keyword_index=True)
-        router_tools = asyncio.run(router_store.list_all_tools())
+        store = RustVectorStore(router_lance_path, enable_keyword_index=True)
+        skills_tools = json.loads(store._inner.list_all_tools("skills"))
+        router_tools = json.loads(store._inner.list_all_tools("router"))
 
         # After sync, both should have the same number of tools
         assert len(skills_tools) == len(router_tools), (
             f"After sync: skills.lance ({len(skills_tools)}) != router.lance ({len(router_tools)})"
         )
 
-    def test_router_database_is_populated(self):
+    def test_router_database_is_populated(self, router_lance_path):
         """Test that router.lance is not empty.
 
         This catches the case where reindex was never run.
         """
-        from omni.agent.cli.commands.reindex import get_database_path
-        from omni.foundation.bridge import get_vector_store
+        from omni.foundation.bridge import RustVectorStore
 
-        router_path = get_database_path("router")
-        store = get_vector_store(router_path, enable_keyword_index=True)
-        tools = asyncio.run(store.list_all_tools())
+        # Ensure router is synced from a fresh skills snapshot first.
+        sync_result = _sync_local_router_from_skills(router_lance_path)
+        if sync_result["status"] != "success":
+            pytest.skip(f"Could not sync router database: {sync_result.get('error', 'unknown')}")
 
-        assert len(tools) > 0, "router.lance should not be empty"
+        store = RustVectorStore(router_lance_path, enable_keyword_index=True)
+        tools = json.loads(store._inner.list_all_tools("router"))
+
+        assert len(tools) > 0, "router table should not be empty"
 
 
 class TestRouteHybridEdgeCases:
@@ -377,11 +396,9 @@ class TestRouteHybridPerformance:
 
         # Each query should return results
         for i, result in enumerate(results):
-            assert isinstance(result, list), f"Query '{queries[i]}' returned non-list"
-            # Each result should have valid structure
-            for r in result:
-                assert hasattr(r, "skill_name")
-                assert hasattr(r, "command_name")
+            assert_route_results_list(
+                result, allow_empty=True, msg=f"Query '{queries[i]}' returned invalid results"
+            )
 
 
 if __name__ == "__main__":

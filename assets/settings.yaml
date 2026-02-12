@@ -1,11 +1,14 @@
 # assets/settings.yaml
-# Project Settings - Configuration File Paths
+# Project Settings - Base Defaults
 #
-# This file centralizes paths to configuration files.
-# Use --conf flag to override the configuration directory (default: ./assets)
+# This file provides repository-level default settings.
+# Runtime settings are loaded as a merge:
+#   1) <git-root>/assets/settings.yaml (this file)
+#   2) <conf-dir>/settings.yaml (user/project override, set by --conf)
 #
 # Usage:
-#   python script.py --conf ./assets
+#   omni ...                      # uses default conf dir (.config)
+#   omni --conf ./.config.dev ... # uses custom conf dir
 #
 #   from common.settings import get_setting
 #   cog_path = get_setting("config.cog_toml")
@@ -16,8 +19,8 @@
 # =============================================================================
 # Configuration Directory
 # =============================================================================
-# Root directory for all agent-related configurations
-# Override with: --conf /path/to/conf
+# Logical config directory key (used by legacy consumers).
+# User override path is still controlled by CLI flag: --conf /path/to/conf
 
 conf_dir: "assets"
 
@@ -80,14 +83,18 @@ api:
 # =============================================================================
 # Configure which LLM provider to use for internal inference (writer, semantic search, etc.)
 inference:
+  # Provider name for litellm (e.g., "anthropic", "openai", "azure", "minimax")
+  # Use "minimax" for MiniMax API
+  provider: "minimax"
+
   # Environment variable name for the API key
-  # Common options: ANTHROPIC_API_KEY, MINIMAX_API_KEY, OPENAI_API_KEY
+  # For MiniMax: "MINIMAX_API_KEY"
   api_key_env: "MINIMAX_API_KEY"
 
-  # API base URL (for OpenAI-compatible or Anthropic-compatible endpoints)
-  base_url: "https://api.minimax.io/anthropic"
+  # API base URL (not needed for minimax - LiteLLM handles it internally)
+  base_url: null
 
-  # Default model name
+  # Default model name (MiniMax model)
   model: "MiniMax-M2.1"
 
   # Request timeout in seconds
@@ -181,17 +188,79 @@ memory:
 # Embedding Configuration
 # =============================================================================
 # Configure embedding provider for vector storage (RAG, memory, skills)
-# Uses the same LLM as Omni Loop - no separate embedding model needed
-
+# Auto-detection: First MCP loads model + starts server, others auto-connect as clients
 embedding:
-  # Provider: "llm" (use same LLM as Omni Loop) or "fastembed" (local fallback)
-  # Using LLM means embedding quality matches your chat model
-  provider: "llm"
+  # Provider: empty=auto-detect (default), "client"=force HTTP client, "fallback"=hash only
+  # Override with: provider: "client" or provider: "fallback"
+  provider: ""
 
-  # Embedding dimension (depends on provider)
-  # LLM: 1024 (high-quality semantic vectors from LLM hidden states)
-  # FastEmbed: 384 (BAAI/bge-small-en-v1.5)
+  # Local model: Qwen3-Embedding-0.6B (1024 dimensions, lightweight for fast loading)
+  # Alternatives: Qwen/Qwen3-Embedding-4B (2560 dimensions, higher quality)
+  model: "Qwen/Qwen3-Embedding-0.6B"
+
+  # Embedding dimension (1024 for Qwen3-Embedding-0.6B, 2560 for Qwen3-Embedding-4B)
   dimension: 1024
+
+  # Auto rebuild skills/router vector indexes when embedding model or dimension changes.
+  auto_reindex_on_change: true
+
+  # HTTP server port
+  http_port: 18501
+
+  # HTTP client URL (only needed when forcing client mode)
+  # client_url: "http://127.0.0.1:18501"
+
+# =============================================================================
+# RAG Module Configuration
+# =============================================================================
+# Configuration for RAG-Anything integration with modular feature flags
+# Each capability can be independently enabled/disabled
+
+rag:
+  enabled: true
+
+  # Phase 1: Document Parsing (Foundation - always enabled if rag.enabled)
+  document_parsing:
+    enabled: true
+    parser: "docling" # docling, mineru, auto
+    max_workers: 4
+    show_progress: true
+
+  # Phase 2: Multimodal Processing (Optional - requires vision model)
+  multimodal:
+    enabled: false
+    vision_model: "gpt-4o" # or local VLM
+    table_processor: "auto"
+    equation_processor: "auto"
+    ocr_enabled: true
+
+  # Phase 3: Knowledge Graph (Core - Rust optimized)
+  knowledge_graph:
+    enabled: true
+    entity_types:
+      - "PERSON"
+      - "ORGANIZATION"
+      - "CONCEPT"
+      - "PROJECT"
+      - "TOOL"
+      - "SKILL"
+    extraction_llm: null # null = use default LLM
+    store_in_rust: true
+    max_entities_per_doc: 100
+    relation_types:
+      - "WORKS_FOR"
+      - "PART_OF"
+      - "USES"
+      - "DEPENDS_ON"
+      - "SIMILAR_TO"
+
+  # Phase 4: Rust Search Enhancements
+  rust_search:
+    enabled: true
+    entity_aware: true
+    rerank: true
+    hybrid_v2: true
+    rrf_k: 60
 
 # =============================================================================
 # Checkpoint / Workflow State Configuration
@@ -474,17 +543,57 @@ router:
 
   # Search weights (semantic + keyword fusion)
   search:
+    # Profile selection behavior.
+    # Runtime picks a profile automatically (LLM-assisted when available),
+    # then falls back to active_profile.
+    active_profile: "balanced"
+    auto_profile_select: true
+    profiles:
+      balanced:
+        high_threshold: 0.75
+        medium_threshold: 0.50
+        high_base: 0.90
+        high_scale: 0.05
+        high_cap: 0.99
+        medium_base: 0.60
+        medium_scale: 0.30
+        medium_cap: 0.89
+        low_floor: 0.10
+      precision:
+        high_threshold: 0.82
+        medium_threshold: 0.58
+        high_base: 0.92
+        high_scale: 0.04
+        high_cap: 0.99
+        medium_base: 0.62
+        medium_scale: 0.24
+        medium_cap: 0.88
+        low_floor: 0.10
+      recall:
+        high_threshold: 0.68
+        medium_threshold: 0.42
+        high_base: 0.88
+        high_scale: 0.06
+        high_cap: 0.99
+        medium_base: 0.56
+        medium_scale: 0.35
+        medium_cap: 0.90
+        low_floor: 0.08
+
+    # Defaults used by `omni route test` when flags are not provided.
+    default_limit: 10
+    default_threshold: 0.2
+    rerank: true # Canonical rerank toggle for router hybrid pipeline
+
     semantic_weight: 0.7 # Weight for semantic search
     keyword_weight: 0.3 # Weight for keyword search
+    adaptive_threshold_step: 0.15 # Threshold reduction step per retry in adaptive search
+    adaptive_max_attempts: 3 # Max adaptive attempts before returning best available
+    schema_file: "schemas/router.search.schema.json" # Relative to --conf directory (or absolute path)
 
-  # Result filtering
-  default_limit: 10 # Default number of results
-  default_threshold: 0.2 # Minimum score threshold (low to show more results)
-
-  # Confidence thresholds
-  confidence:
-    high: 0.75 # Score >= this = high confidence
-    medium: 0.5 # Score >= this = medium confidence
+  # Sniffer settings (context activation from filesystem + dynamic sniffers)
+  sniffer:
+    score_threshold: 0.5 # Dynamic sniffer activation threshold [0.0, 1.0]
 
 # =============================================================================
 # Claude Code Symbiosis - Post-Mortem Audit

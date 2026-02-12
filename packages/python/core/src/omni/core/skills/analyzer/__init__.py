@@ -10,7 +10,7 @@ Provides Arrow-native operations for:
 - Documentation coverage reporting
 
 Architecture:
-    LanceDB → RustVectorStore.get_analytics_table() → PyArrow Table → Analyzer Functions
+    LanceDB → RustVectorStore.get_analytics_table_sync() → PyArrow Table → Analyzer Functions
 
 Usage:
     from omni.core.skills.analyzer import get_analytics_dataframe, get_category_distribution
@@ -22,6 +22,7 @@ Usage:
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Any
 
 from omni.foundation.config.logging import get_logger
@@ -37,7 +38,7 @@ def get_analytics_dataframe():
 
     Returns:
         PyArrow Table with columns: id, content, skill_name, tool_name,
-        file_path, keywords, etc.
+        file_path, routing_keywords, etc.
 
     Raises:
         ImportError: If pyarrow is not installed
@@ -45,30 +46,28 @@ def get_analytics_dataframe():
     """
     try:
         import pyarrow as pa
-    except ImportError:
-        raise ImportError("pyarrow is required for analytics. Install with: pip install pyarrow")
+    except ImportError as err:
+        raise ImportError(
+            "pyarrow is required for analytics. Install with: pip install pyarrow"
+        ) from err
 
     try:
         from omni.foundation.bridge.rust_vector import get_vector_store
 
         store = get_vector_store()
-        import asyncio
 
-        # Use the Arrow-optimized export
-        table = asyncio.run(store.get_analytics_table())
+        # Use the Arrow-optimized sync export; avoids asyncio.run() in active loops.
+        table = store.get_analytics_table_sync()
 
         # Ensure it's a PyArrow Table
         if table is not None and not isinstance(table, pa.Table):
             # It's a Python object, convert if possible
-            try:
+            with suppress(Exception):
                 table = pa.Table.from_pydict(table)
-            except Exception:
-                # Fallback: try to convert from the object
-                pass
 
         return table
-    except Exception as e:
-        raise RuntimeError(f"Failed to get analytics table from LanceDB: {e}")
+    except Exception as err:
+        raise RuntimeError(f"Failed to get analytics table from LanceDB: {err}") from err
 
 
 def generate_system_context(limit: int | None = None) -> str:
@@ -90,8 +89,6 @@ def generate_system_context(limit: int | None = None) -> str:
 
     # Use PyArrow for vectorized string operations
     try:
-        import pyarrow.compute as pc
-
         # Vectorized formatting: "@omni(name)" format
         ids = table["id"]
         contents = table["content"]
@@ -100,7 +97,10 @@ def generate_system_context(limit: int | None = None) -> str:
         formatted_tools = [f'@omni("{id_}")' for id_ in ids.to_pylist()]
 
         # Combine with descriptions
-        lines = [f"{tool} - {desc}" for tool, desc in zip(formatted_tools, contents.to_pylist())]
+        lines = [
+            f"{tool} - {desc}"
+            for tool, desc in zip(formatted_tools, contents.to_pylist(), strict=False)
+        ]
     except Exception:
         # Fallback to simple iteration if PyArrow Compute fails
         lines = []
@@ -142,7 +142,7 @@ def get_category_distribution() -> dict[str, int]:
             result = pc.value_counts(skill_names)
             counts = result["counts"].to_pylist()
             unique = result["values"].to_pylist()
-            return dict(zip(unique, counts))
+            return dict(zip(unique, counts, strict=False))
         except Exception:
             # Fallback if value_counts fails
             pass
@@ -227,8 +227,8 @@ def analyze_tools(
 
 
 __all__ = [
-    "get_analytics_dataframe",
-    "generate_system_context",
-    "get_category_distribution",
     "analyze_tools",
+    "generate_system_context",
+    "get_analytics_dataframe",
+    "get_category_distribution",
 ]

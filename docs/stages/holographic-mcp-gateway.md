@@ -130,29 +130,31 @@ tools = await adapter.list_tools(query="undo my last change")
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │ MCPToolAdapter  │ ──→ │ _tools (dict)    │ ──→ │ MCP Server      │
-│ (内存注册)      │     │ 内存占用: 500MB+  │     │ list_tools      │
+│ (In-mem reg)    │     │ Memory Usage:    │     │ list_tools      │
+│                 │     │ 500MB+           │     │                 │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
         │
         │ register_tool()
         ▼
    Python Import
-   (启动时加载所有代码)
+   (Load all code at startup)
 ```
 
 ### After (Agentic OS)
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│ Holographic     │ ──→ │ LanceDB (磁盘)    │ ──→ │ MCP Server      │
-│ MCP Adapter     │     │ 内存占用: <10MB   │     │ list_tools      │
+│ Holographic     │ ──→ │ LanceDB (Disk)   │ ──→ │ MCP Server      │
+│ MCP Adapter     │     │ Memory Usage:    │     │ list_tools      │
+│                 │     │ <10MB            │     │                 │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
         │                       ▲
         │                       │
         │ list_tools()          │ Rust Scanner
-        │                       │ (文件变更监听)
+        │                       │ (File change watch)
         ▼                       │
    LazyTool.load() ─────────────┘
-   (按需加载代码)
+   (Load code on demand)
 ```
 
 ## 5. Factory Function

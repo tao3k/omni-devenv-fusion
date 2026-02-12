@@ -1,26 +1,23 @@
 use std::path::Path;
 
 impl VectorStore {
-    /// Index all tools found in a skill directory.
-    /// This drops and recreates the table to ensure sync with filesystem.
-    pub async fn index_skill_tools(
+    fn scan_unique_skill_tools(
         &self,
         base_path: &str,
-        table_name: &str,
-    ) -> Result<(), VectorStoreError> {
+    ) -> Result<Vec<omni_scanner::ToolRecord>, VectorStoreError> {
         let skill_scanner = SkillScanner::new();
         let script_scanner = ToolsScanner::new();
         let skills_path = Path::new(base_path);
         if !skills_path.exists() {
-            return Ok(());
+            log::warn!("Skills path does not exist: {:?}", skills_path);
+            return Ok(vec![]);
         }
-
-        // Drop existing table to ensure clean sync (removes deleted skills)
-        let _ = self.drop_table(table_name).await;
 
         let metadatas = skill_scanner
             .scan_all(skills_path, None)
             .map_err(|e| VectorStoreError::General(e.to_string()))?;
+        log::info!("Found {} skill manifests", metadatas.len());
+
         let mut tools_map = std::collections::HashMap::new();
         for metadata in &metadatas {
             let tools = script_scanner
@@ -31,14 +28,76 @@ impl VectorStore {
                     &metadata.intents,
                 )
                 .map_err(|e| VectorStoreError::General(e.to_string()))?;
+            log::debug!(
+                "Skill '{}': found {} tools",
+                metadata.skill_name,
+                tools.len()
+            );
             for tool in tools {
                 // tool.tool_name already includes skill_name prefix from tools_scanner
                 tools_map.insert(tool.tool_name.clone(), tool);
             }
         }
-        self.add(table_name, tools_map.into_values().collect())
-            .await?;
+
+        Ok(tools_map.into_values().collect())
+    }
+
+    /// Index all tools found in a skill directory.
+    /// This drops and recreates the table to ensure sync with filesystem.
+    pub async fn index_skill_tools(
+        &mut self,
+        base_path: &str,
+        table_name: &str,
+    ) -> Result<(), VectorStoreError> {
+        log::info!("Indexing skills from: {:?}", base_path);
+
+        // Drop existing table to ensure clean sync (removes deleted skills)
+        let drop_result = self.drop_table(table_name).await;
+        log::debug!("drop_table result: {:?}", drop_result);
+
+        let tools = self.scan_unique_skill_tools(base_path)?;
+        log::info!("Total tools to index: {}", tools.len());
+        if tools.is_empty() {
+            log::warn!("No tools found to index!");
+            return Ok(());
+        }
+
+        self.add(table_name, tools).await?;
+        log::info!("Successfully indexed tools for table: {}", table_name);
         Ok(())
+    }
+
+    /// Atomically rebuild two tool tables from a single filesystem scan.
+    ///
+    /// This guarantees skills/router are indexed from the same snapshot.
+    pub async fn index_skill_tools_dual(
+        &mut self,
+        base_path: &str,
+        skills_table: &str,
+        router_table: &str,
+    ) -> Result<(usize, usize), VectorStoreError> {
+        let tools = self.scan_unique_skill_tools(base_path)?;
+        if tools.is_empty() {
+            self.drop_table(skills_table).await.ok();
+            if router_table != skills_table {
+                self.drop_table(router_table).await.ok();
+            }
+            return Ok((0, 0));
+        }
+
+        self.drop_table(skills_table).await.ok();
+        self.add(skills_table, tools.clone()).await?;
+        let skills_count = self.count(skills_table).await? as usize;
+
+        if router_table == skills_table {
+            return Ok((skills_count, skills_count));
+        }
+
+        self.drop_table(router_table).await.ok();
+        self.add(router_table, tools).await?;
+        let router_count = self.count(router_table).await? as usize;
+
+        Ok((skills_count, router_count))
     }
 
     /// Scan skill tools without indexing them.
@@ -125,6 +184,27 @@ impl VectorStore {
         limit: usize,
         threshold: f32,
     ) -> Result<Vec<skill::ToolSearchResult>, VectorStoreError> {
+        self.search_tools_with_options(
+            table_name,
+            query_vector,
+            query_text,
+            limit,
+            threshold,
+            skill::ToolSearchOptions::default(),
+        )
+        .await
+    }
+
+    /// Search for tools with explicit ranking options.
+    pub async fn search_tools_with_options(
+        &self,
+        table_name: &str,
+        query_vector: &[f32],
+        query_text: Option<&str>,
+        limit: usize,
+        threshold: f32,
+        options: skill::ToolSearchOptions,
+    ) -> Result<Vec<skill::ToolSearchResult>, VectorStoreError> {
         let mut results_map: std::collections::HashMap<String, skill::ToolSearchResult> =
             std::collections::HashMap::new();
         let table_path = self.table_path(table_name);
@@ -190,62 +270,57 @@ impl VectorStore {
                                             {
                                                 continue;
                                             }
-                                            // Use id as the unique key (matches keyword index)
-                                            let tool_id = i_arr.value(i).to_string();
-                                            if tool_id.is_empty() {
+                                            let row_id = i_arr.value(i).to_string();
+                                            let Some(canonical_tool_name) =
+                                                canonical_tool_name_from_result_meta(
+                                                    &meta, &row_id,
+                                                )
+                                            else {
                                                 continue;
-                                            }
+                                            };
+                                            let skill_name = meta
+                                                .get("skill_name")
+                                                .and_then(|s| s.as_str())
+                                                .map(ToString::to_string)
+                                                .unwrap_or_else(|| {
+                                                    canonical_tool_name
+                                                        .split('.')
+                                                        .next()
+                                                        .unwrap_or("")
+                                                        .to_string()
+                                                });
                                             results_map.insert(
-                                                tool_id.clone(),
+                                                canonical_tool_name.clone(),
                                                 skill::ToolSearchResult {
-                                                    name: tool_id.clone(),
+                                                    name: canonical_tool_name.clone(),
                                                     description: c_arr.value(i).to_string(),
                                                     input_schema: meta
                                                         .get("input_schema")
-                                                        .cloned()
-                                                        .unwrap_or(serde_json::Value::Object(
-                                                            serde_json::Map::new(),
-                                                        )),
+                                                        .map(skill::normalize_input_schema_value)
+                                                        .unwrap_or_else(|| serde_json::json!({})),
                                                     score,
-                                                    skill_name: meta
-                                                        .get("skill_name")
-                                                        .and_then(|s| s.as_str())
-                                                        .unwrap_or("")
-                                                        .to_string(),
-                                                    tool_name: meta
-                                                        .get("tool_name")
-                                                        .and_then(|s| s.as_str())
-                                                        .unwrap_or("")
-                                                        .to_string(),
+                                                    vector_score: Some(score),
+                                                    keyword_score: None,
+                                                    skill_name,
+                                                    tool_name: canonical_tool_name,
                                                     file_path: meta
                                                         .get("file_path")
                                                         .and_then(|s| s.as_str())
                                                         .unwrap_or("")
                                                         .to_string(),
-                                                    keywords: meta
-                                                        .get("keywords")
-                                                        .and_then(|k| k.as_array())
-                                                        .map(|arr| {
-                                                            arr.iter()
-                                                                .filter_map(|k| {
-                                                                    k.as_str()
-                                                                        .map(|s| s.to_string())
-                                                                })
-                                                                .collect()
+                                                    keywords: skill::resolve_routing_keywords(
+                                                        &meta,
+                                                    ),
+                                                    intents: skill::resolve_intents(&meta),
+                                                    category: meta
+                                                        .get("category")
+                                                        .and_then(|c| c.as_str())
+                                                        .or_else(|| {
+                                                            meta.get("skill_name")
+                                                                .and_then(|s| s.as_str())
                                                         })
-                                                        .unwrap_or_default(),
-                                                    intents: meta
-                                                        .get("intents")
-                                                        .and_then(|k| k.as_array())
-                                                        .map(|arr| {
-                                                            arr.iter()
-                                                                .filter_map(|k| {
-                                                                    k.as_str()
-                                                                        .map(|s| s.to_string())
-                                                                })
-                                                                .collect()
-                                                        })
-                                                        .unwrap_or_default(),
+                                                        .unwrap_or("")
+                                                        .to_string(),
                                                 },
                                             );
                                         }
@@ -258,45 +333,70 @@ impl VectorStore {
             }
         }
         if let Some(text) = query_text {
-            if let Some(kw_index) = self.keyword_index.as_ref() {
-                let vector_scores: Vec<(String, f32)> = results_map
-                    .iter()
-                    .map(|(n, r)| (n.clone(), r.score))
-                    .collect();
-                if let Ok(kw_hits) = kw_index.search(text, limit * 2) {
-                    let fused = apply_weighted_rrf(
-                        vector_scores,
-                        kw_hits.clone(),
-                        keyword::RRF_K,
-                        keyword::SEMANTIC_WEIGHT,
-                        keyword::KEYWORD_WEIGHT,
-                        text,
-                    );
-                    let mut new_map = std::collections::HashMap::new();
-                    let kw_lookup: std::collections::HashMap<String, skill::ToolSearchResult> =
-                        kw_hits
-                            .into_iter()
-                            .map(|r| (r.tool_name.clone(), r))
-                            .collect();
-                    for f in fused {
-                        if let Some(mut tool) = results_map
-                            .get(&f.tool_name)
-                            .cloned()
-                            .or_else(|| kw_lookup.get(&f.tool_name).cloned())
-                        {
-                            tool.score = f.rrf_score;
-                            new_map.insert(f.tool_name, tool);
+            let mut vector_scores: Vec<(String, f32)> = results_map
+                .iter()
+                .map(|(n, r)| (n.clone(), r.score))
+                .collect();
+            vector_scores.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+            let kw_hits = self
+                .keyword_search(table_name, text, limit * 2)
+                .await
+                .unwrap_or_default();
+            let fused = apply_weighted_rrf(
+                vector_scores,
+                kw_hits.clone(),
+                keyword::RRF_K,
+                keyword::SEMANTIC_WEIGHT,
+                keyword::KEYWORD_WEIGHT,
+                text,
+            );
+            let mut new_map = std::collections::HashMap::new();
+            let kw_lookup: std::collections::HashMap<String, skill::ToolSearchResult> = kw_hits
+                .into_iter()
+                .map(|r| (r.tool_name.clone(), r))
+                .collect();
+            let query_parts = normalize_query_terms(text);
+            let file_discovery_intent = query_parts.iter().any(|part| {
+                matches!(
+                    part.as_str(),
+                    "find" | "list" | "file" | "files" | "directory" | "folder" | "path" | "glob"
+                ) || part.starts_with("*.")
+            });
+
+            for f in fused {
+                if let Some(mut tool) = results_map
+                    .get(&f.tool_name)
+                    .cloned()
+                    .or_else(|| kw_lookup.get(&f.tool_name).cloned())
+                {
+                    tool.score = f.rrf_score;
+                    if options.rerank {
+                        let mut rerank_bonus = tool_metadata_alignment_boost(&tool, &query_parts);
+                        if file_discovery_intent {
+                            if tool.tool_name == "advanced_tools.smart_find" {
+                                rerank_bonus += 0.70;
+                            } else if tool_file_discovery_match(&tool) {
+                                rerank_bonus += 0.30;
+                            }
                         }
+                        tool.score += rerank_bonus;
                     }
-                    results_map = new_map;
+                    tool.vector_score = Some(f.vector_score);
+                    tool.keyword_score = Some(f.keyword_score);
+                    new_map.insert(f.tool_name, tool);
                 }
             }
+            results_map = new_map;
         }
         let mut res: Vec<_> = results_map.into_values().collect();
         if threshold > 0.0 {
             res.retain(|r| r.score >= threshold);
         }
-        res.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        res.sort_by(|a, b| {
+            b.score
+                .total_cmp(&a.score)
+                .then_with(|| a.tool_name.cmp(&b.tool_name))
+        });
         res.truncate(limit);
         Ok(res)
     }
@@ -376,9 +476,11 @@ impl VectorStore {
                                 description: ca.value(i).to_string(),
                                 input_schema: meta
                                     .get("input_schema")
-                                    .cloned()
-                                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+                                    .map(skill::normalize_input_schema_value)
+                                    .unwrap_or_else(|| serde_json::json!({})),
                                 score: 1.0,
+                                vector_score: None,
+                                keyword_score: None,
                                 skill_name: meta
                                     .get("skill_name")
                                     .and_then(|s| s.as_str())
@@ -394,24 +496,14 @@ impl VectorStore {
                                     .and_then(|s| s.as_str())
                                     .unwrap_or("")
                                     .to_string(),
-                                keywords: meta
-                                    .get("keywords")
-                                    .and_then(|k| k.as_array())
-                                    .map(|arr| {
-                                        arr.iter()
-                                            .filter_map(|k| k.as_str().map(|s| s.to_string()))
-                                            .collect()
-                                    })
-                                    .unwrap_or_default(),
-                                intents: meta
-                                    .get("intents")
-                                    .and_then(|k| k.as_array())
-                                    .map(|arr| {
-                                        arr.iter()
-                                            .filter_map(|k| k.as_str().map(|s| s.to_string()))
-                                            .collect()
-                                    })
-                                    .unwrap_or_default(),
+                                keywords: skill::resolve_routing_keywords(&meta),
+                                intents: skill::resolve_intents(&meta),
+                                category: meta
+                                    .get("category")
+                                    .and_then(|c| c.as_str())
+                                    .or_else(|| meta.get("skill_name").and_then(|s| s.as_str()))
+                                    .unwrap_or("")
+                                    .to_string(),
                             });
                         }
                     }
@@ -420,4 +512,114 @@ impl VectorStore {
         }
         Ok(tools)
     }
+}
+
+fn normalize_query_terms(query: &str) -> Vec<String> {
+    query
+        .to_lowercase()
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '*' || c == '.' || c == '_'))
+        .filter(|t| !t.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn canonical_tool_name_from_result_meta(meta: &serde_json::Value, row_id: &str) -> Option<String> {
+    let skill_name = meta
+        .get("skill_name")
+        .and_then(|s| s.as_str())
+        .map(str::trim)
+        .unwrap_or("");
+    let tool_name = meta
+        .get("tool_name")
+        .and_then(|s| s.as_str())
+        .map(str::trim)
+        .unwrap_or("");
+    if skill::is_routable_tool_name(tool_name) && tool_name.contains('.') {
+        return Some(tool_name.to_string());
+    }
+    if !skill_name.is_empty() && skill::is_routable_tool_name(tool_name) {
+        let candidate = format!("{skill_name}.{tool_name}");
+        if skill::is_routable_tool_name(&candidate) {
+            return Some(candidate);
+        }
+    }
+
+    let command = meta
+        .get("command")
+        .and_then(|s| s.as_str())
+        .map(str::trim)
+        .unwrap_or("");
+    if !skill_name.is_empty() && !command.is_empty() {
+        let candidate = format!("{skill_name}.{command}");
+        if skill::is_routable_tool_name(&candidate) {
+            return Some(candidate);
+        }
+    }
+
+    if skill::is_routable_tool_name(command) {
+        return Some(command.to_string());
+    }
+    if skill::is_routable_tool_name(row_id) {
+        return Some(row_id.to_string());
+    }
+    None
+}
+
+fn tool_metadata_alignment_boost(tool: &skill::ToolSearchResult, query_parts: &[String]) -> f32 {
+    if query_parts.is_empty() {
+        return 0.0;
+    }
+
+    let mut boost = 0.0f32;
+    let category = tool.category.to_lowercase();
+    let description = tool.description.to_lowercase();
+
+    for term in query_parts {
+        if term.len() <= 2 {
+            continue;
+        }
+        if !category.is_empty() && category.contains(term) {
+            boost += 0.05;
+        }
+        if description.contains(term) {
+            boost += 0.03;
+        }
+        if tool
+            .keywords
+            .iter()
+            .any(|k| k.to_lowercase().contains(term))
+        {
+            boost += 0.07;
+        }
+        if tool.intents.iter().any(|i| i.to_lowercase().contains(term)) {
+            boost += 0.08;
+        }
+    }
+
+    boost.min(0.50)
+}
+
+fn tool_file_discovery_match(tool: &skill::ToolSearchResult) -> bool {
+    let tool_name = tool.tool_name.to_lowercase();
+    if tool_name == "advanced_tools.smart_find" {
+        return true;
+    }
+
+    let category = tool.category.to_lowercase();
+    let description = tool.description.to_lowercase();
+    let terms = [
+        "find",
+        "file",
+        "files",
+        "directory",
+        "folder",
+        "path",
+        "glob",
+    ];
+    terms.iter().any(|t| {
+        category.contains(t)
+            || description.contains(t)
+            || tool.keywords.iter().any(|k| k.to_lowercase().contains(t))
+            || tool.intents.iter().any(|i| i.to_lowercase().contains(t))
+    })
 }

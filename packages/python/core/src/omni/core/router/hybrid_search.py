@@ -13,15 +13,10 @@ Rust Benefits:
 Architecture:
     User Query
         │
-        ├────────────────┬────────────────┤
-        │                │                │
-    Embedding      Query Cleaning      Raw Query
-    (Python)           │                │
-        │               ▼                │
-        │    Remove: " ' [ ] ( ) { }      │
-        │    (Tantivy-safe chars)        │
-        │               │                │
-        ▼               ▼                ▼
+        ▼
+    Embedding (Python)
+        │
+        ▼
     ┌─────────────────────────────────────────┐
     │         Rust omni-vector Search         │
     │  ┌─────────────────┬─────────────────┐  │
@@ -39,18 +34,12 @@ Architecture:
                     ▼
     ┌─────────────────────────────────────────┐
     │           Python Post-Processing        │
-    │  - Confidence calibration              │
+    │  - Contract validation                 │
     │  - Result formatting                   │
     └─────────────────────────────────────────┘
                     │
                     ▼
     List[dict] with: id, score, confidence, skill_name, command, etc.
-
-Scoring Model:
-    After Rust-level boosting, scores are calibrated as:
-    - Score > 0.8: High (Strong keyword match in tool name)
-    - Score > 0.4: Medium (Semantic consensus)
-    - Score <= 0.4: Low (Should be filtered out)
 
 Usage:
     search = HybridSearch()
@@ -67,12 +56,42 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Any
+import re
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, Awaitable
 
-from omni.foundation.bridge.rust_vector import get_vector_store
 from omni.foundation.config.logging import get_logger
+from omni.foundation.services.vector_schema import (
+    build_tool_router_result,
+    parse_tool_search_payload,
+)
+
+if TYPE_CHECKING:
+    from omni.foundation.bridge.rust_vector import RustVectorStore
 
 logger = get_logger("omni.core.router.hybrid")
+_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-"
+    r"[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{12}$"
+)
+_TOOL_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,160}$")
+
+
+def _is_routable_tool_name(value: str) -> bool:
+    name = value.strip()
+    if not name:
+        return False
+    if _UUID_RE.match(name):
+        return False
+    if not _TOOL_ID_RE.match(name):
+        return False
+    for segment in name.split("."):
+        if _UUID_RE.match(segment):
+            return False
+    return any(ch.isalpha() for ch in name)
 
 
 class HybridMatch:
@@ -114,8 +133,7 @@ class HybridSearch:
 
     Rust performs all heavy computation; Python handles:
     - Embedding generation for vector search
-    - Query cleaning for Tantivy compatibility
-    - Confidence calibration for downstream consumers
+    - Canonical payload validation for downstream consumers
 
     Intent extraction is handled by the discovery node LLM prompt.
 
@@ -148,28 +166,37 @@ class HybridSearch:
         - omni.core.skills.discovery.SkillDiscoveryService: Tool discovery service
     """
 
-    def __init__(self) -> None:
+    def __init__(self, storage_path: str | None = None) -> None:
         """Initialize hybrid search with Rust vector store.
 
         The vector store is cached globally to avoid repeated initialization.
         Embedding service is loaded lazily on first use.
         """
-        from omni.agent.cli.commands.reindex import get_database_path
+        from omni.foundation.bridge.rust_vector import get_vector_store
 
-        router_path = get_database_path("router")
-        self._store = get_vector_store(router_path)
+        # Use get_vector_store() without path to use the default base path.
+        # This ensures consistency with DiscoveryService which also uses the default path.
+        # The Rust store will then correctly find skills.lance for the 'skills' table.
+        resolved_storage_path = storage_path
+        if storage_path and storage_path != ":memory:" and storage_path.endswith(".lance"):
+            resolved_storage_path = str(Path(storage_path).parent)
+        self._store = get_vector_store(resolved_storage_path)
+        # Custom embedding function (set by CLI for MCP server access)
+        self._embed_func: Callable[[list[str]], Awaitable[list[list[float]]]] | None = None
 
     async def search(
         self,
         query: str,
         limit: int = 5,
         min_score: float = 0.0,
+        confidence_profile: dict[str, float] | None = None,
+        rerank: bool | None = None,
     ) -> list[dict[str, Any]]:
         """Perform hybrid search using Rust omni-vector engine.
 
         This method orchestrates the full hybrid search pipeline:
         1. Generate query embedding (semantic search)
-        2. Clean query for keyword search (Tantivy compatibility)
+        2. Normalize query for keyword search pipeline
         3. Call Rust search_tools for vector + keyword fusion
         4. Calibrate confidence levels for downstream consumers
 
@@ -179,6 +206,8 @@ class HybridSearch:
             limit: Maximum number of results to return. Default is 5.
             min_score: Minimum combined score threshold (0.0-1.0). Results below this
                 threshold are filtered out. Use 0.4 for "medium+" confidence only.
+            rerank: Optional override for Rust metadata-aware rerank stage.
+                None uses configured defaults.
 
         Returns:
             List of result dictionaries, sorted by score descending. Each dict contains:
@@ -190,7 +219,7 @@ class HybridSearch:
             - skill_name: Skill name (e.g., "git")
             - command: Command name (e.g., "commit")
             - file_path: Source file path
-            - keywords: Indexed keywords
+            - routing_keywords: Indexed routing keywords
             - input_schema: JSON schema for tool parameters
             - payload: Complete metadata for routing
 
@@ -210,129 +239,77 @@ class HybridSearch:
             for embedding generation to preserve semantic meaning.
 
         See Also:
-            - _calibrate_confidence: Confidence level assignment logic
-            - Rust omni-vector::hybrid_search for underlying algorithm
+            - Rust omni-vector hybrid search for underlying algorithm
         """
-        import re
-
-        # Clean query for keyword search (remove Tantivy-problematic chars)
-        # Keep original for embedding to preserve semantic meaning
-        #
-        # Removed chars that cause Tantivy parse errors or unexpected field searches:
-        # - Quotes: " ' (trigger phrase queries requiring position index)
-        # - Brackets/Braces/Parentheses: [ ] { } ( ) (syntax chars)
-        # - Colon: : (triggers field search: "https:..." -> searches field "https")
-        # - Slash/Backslash: / \ (path delimiters)
-        # - Comma: , ， (punctuation)
-        keyword_query = re.sub(r'[:"\'\[\](){}/\\,，]', " ", query).strip()
-        keyword_query = re.sub(r"\s+", " ", keyword_query)  # Normalize spaces
-
-        # Get query embedding (required for vector search) - use original query
-        embed_service = self._get_embed_service()
-        query_vector = embed_service.embed(query)
-
-        # Ensure vector is flat list
-        if isinstance(query_vector[0], list):
-            query_vector = query_vector[0]
+        # Get query embedding (required for vector search)
+        # Use custom embed function if set (e.g., for MCP server access)
+        if self._embed_func is not None:
+            # Custom embedding function (async)
+            vectors = await self._embed_func([query])
+            if vectors and len(vectors) > 0:
+                query_vector = vectors[0]
+            else:
+                # Fallback to local embedding
+                embed_service = self._get_embed_service()
+                query_vector = embed_service.embed(query)[0]
+        else:
+            # Default: use local embedding service
+            embed_service = self._get_embed_service()
+            query_vector = embed_service.embed(query)[0]
 
         # Call Rust search_tools (does vector + keyword rescue + fusion)
         # Use cleaned query for keyword search to avoid Tantivy parse errors
         results = await self._store.search_tools(
-            table_name="skills",
+            table_name="router",
             query_vector=query_vector,
-            query_text=keyword_query,  # Cleaned query for keyword rescue
+            query_text=query,
             limit=limit,
             threshold=min_score,
+            confidence_profile=confidence_profile,
+            rerank=rerank,
         )
 
         # Format results for Python consumers
         formatted = []
-        for r in results:
-            raw_score = r.get("score", 0.0)
-            confidence, final_score = self._calibrate_confidence(raw_score)
+        for raw in results:
+            candidate = dict(raw)
+            try:
+                payload = parse_tool_search_payload(candidate)
+            except Exception as exc:
+                logger.debug(f"Skipping invalid tool search payload: {exc}")
+                continue
 
-            # Extract command from tool_name (tool_name is "skill.command" format)
-            full_tool_name = r.get("tool_name", "")
-            parts = full_tool_name.split(".")
-            command = ".".join(parts[1:]) if len(parts) > 1 else full_tool_name
+            raw_score = payload.score
+            confidence = payload.confidence
+            final_score = payload.final_score
 
-            # r is already a dict from Rust
-            formatted.append(
-                {
-                    "id": r.get("name", ""),
-                    "content": r.get("description", ""),
-                    "score": raw_score,
-                    "confidence": confidence,
-                    "final_score": final_score,
-                    "skill_name": r.get("skill_name", ""),
-                    "command": command,
-                    "file_path": r.get("file_path", ""),
-                    "keywords": r.get("keywords", []),
-                    "input_schema": r.get("input_schema", "{}"),
-                    "payload": {
-                        "skill_name": r.get("skill_name", ""),
-                        "command": command,
-                        "type": "command",
-                        "content": r.get("description", ""),
-                    },
-                }
+            # Canonicalize tool_name to "skill.command".
+            # Prefer routed canonical name from payload.name when available.
+            raw_tool_name = payload.tool_name.strip()
+            canonical_name = payload.name.strip()
+            if _is_routable_tool_name(canonical_name) and "." in canonical_name:
+                full_tool_name = canonical_name
+            elif "." not in raw_tool_name and payload.skill_name:
+                full_tool_name = f"{payload.skill_name}.{raw_tool_name}"
+            else:
+                full_tool_name = raw_tool_name
+            if not _is_routable_tool_name(full_tool_name):
+                logger.debug("Skipping non-routable tool_name: %s", full_tool_name)
+                continue
+            command = (
+                ".".join(full_tool_name.split(".")[1:]) if "." in full_tool_name else full_tool_name
             )
+            if not command:
+                continue
+
+            router_result = build_tool_router_result(payload, full_tool_name)
+            router_result["score"] = raw_score
+            router_result["final_score"] = final_score
+            router_result["confidence"] = confidence
+            formatted.append(router_result)
 
         logger.debug(f"Hybrid search for '{query}': {len(formatted)} results")
         return formatted
-
-    def _calibrate_confidence(self, score: float) -> tuple[str, float]:
-        """Calibrate raw RRF scores into interpretable confidence levels.
-
-        This method translates raw Weighted RRF scores into human-readable
-        confidence levels. The thresholds are calibrated based on Rust-level
-        field boosting (NAME_TOKEN_BOOST=0.5, EXACT_PHRASE_BOOST=1.5).
-
-        Confidence Levels:
-            - **High** (score > 0.8): Strong keyword match in tool name.
-              Example: Query "commit" matches "git.commit" (+0.5 boost per match).
-            - **Medium** (score > 0.4): Good semantic consensus.
-              Multiple search streams agree on relevance.
-            - **Low** (score <= 0.4): Vague or weak match.
-              Should be filtered out by threshold for production use.
-
-        Display Score Calibration:
-            High scores are mapped to 0.90-0.99 for UI readability.
-            Medium scores are scaled to 0.60-0.89.
-            Low scores are preserved as-is for transparency.
-
-        Args:
-            score: Raw RRF score from Rust (typically 0.0-2.0+).
-
-        Returns:
-            Tuple of (confidence_level, final_score) where:
-            - confidence_level: "high", "medium", or "low"
-            - final_score: Display-calibrated score (0.0-1.0)
-
-        Example:
-            ```python
-            conf, display = search._calibrate_confidence(1.0)
-            print(conf, display)  # "high", 0.95
-
-            conf, display = search._calibrate_confidence(0.5)
-            print(conf, display)  # "medium", 0.75
-
-            conf, display = search._calibrate_confidence(0.2)
-            print(conf, display)  # "low", 0.2
-            ```
-
-        See Also:
-            - Rust omni-vector::keyword::apply_weighted_rrf for scoring algorithm
-        """
-        if score >= 0.8:
-            # Strong match (hit keywords in tool name)
-            return ("high", min(0.99, 0.90 + score * 0.05))
-        elif score >= 0.4:
-            # Good semantic match
-            return ("medium", min(0.89, 0.60 + score * 0.3))
-        else:
-            # Weak match - should be filtered out by threshold
-            return ("low", max(0.1, score))
 
     def _get_embed_service(self) -> Any:
         """Lazily load and return the embedding service.
@@ -370,7 +347,7 @@ class HybridSearch:
             - omni-vector/src/keyword.rs: SEMANTIC_WEIGHT, KEYWORD_WEIGHT
         """
         logger.info(f"Weights requested: semantic={semantic}, keyword={keyword}")
-        logger.info("Note: Currently using fixed Rust weights (semantic=1.0, keyword=1.5)")
+        logger.info("Note: runtime weights are Rust-owned; Python does not override them")
 
     def get_weights(self) -> tuple[float, float]:
         """Get the current search weights used by Rust.
@@ -384,7 +361,11 @@ class HybridSearch:
             The keyword weight is higher because exact keyword matches
             are more reliable indicators of relevance for tool search.
         """
-        return (1.0, 1.5)
+        profile = self._store.get_search_profile()
+        return (
+            float(profile.get("semantic_weight", 1.0)),
+            float(profile.get("keyword_weight", 1.5)),
+        )
 
     def stats(self) -> dict[str, Any]:
         """Get hybrid search engine statistics and configuration.
@@ -401,17 +382,7 @@ class HybridSearch:
             - strategy: Fusion strategy used
             - field_boosting: Token/phrase boost values
         """
-        return {
-            "semantic_weight": 1.0,
-            "keyword_weight": 1.5,
-            "rrf_k": 10,
-            "implementation": "rust-native-weighted-rrf",
-            "strategy": "weighted_rrf_field_boosting",
-            "field_boosting": {
-                "name_token_boost": 0.5,  # Per matched term in tool name
-                "exact_phrase_boost": 1.5,  # Full query in tool name
-            },
-        }
+        return self._store.get_search_profile()
 
 
 __all__ = ["HybridSearch", "HybridMatch"]

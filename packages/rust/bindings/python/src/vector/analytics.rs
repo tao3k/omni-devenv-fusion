@@ -28,7 +28,7 @@ pub(crate) fn get_all_file_hashes_async(
 }
 
 /// Get analytics table for Arrow-native operations.
-/// Returns a PyArrow Table with columns: id, content, skill_name, tool_name, file_path, keywords.
+/// Returns a PyArrow Table with columns: id, content, skill_name, tool_name, file_path, routing_keywords.
 pub(crate) fn get_analytics_table_async(
     path: &str,
     dimension: usize,
@@ -61,7 +61,7 @@ pub(crate) fn get_analytics_table_async(
         let skill_names = pyo3::types::PyList::empty(py);
         let tool_names = pyo3::types::PyList::empty(py);
         let file_paths = pyo3::types::PyList::empty(py);
-        let keywords = pyo3::types::PyList::empty(py);
+        let routing_keywords = pyo3::types::PyList::empty(py);
 
         for item in tools_py.iter() {
             let tool_dict = item.cast::<pyo3::types::PyDict>()?;
@@ -85,7 +85,7 @@ pub(crate) fn get_analytics_table_async(
                 let fp: String = fp_any.extract()?;
                 file_paths.append(fp)?;
             }
-            if let Ok(Some(kw_any)) = tool_dict.get_item("keywords") {
+            if let Ok(Some(kw_any)) = tool_dict.get_item("routing_keywords") {
                 let kw_list: pyo3::Bound<'_, pyo3::types::PyList> = kw_any.extract()?;
                 let mut kw_strings: Vec<String> = Vec::new();
                 for kw in kw_list.iter() {
@@ -93,7 +93,7 @@ pub(crate) fn get_analytics_table_async(
                         kw_strings.push(kw_str);
                     }
                 }
-                keywords.append(kw_strings)?;
+                routing_keywords.append(kw_strings)?;
             }
         }
 
@@ -106,7 +106,7 @@ pub(crate) fn get_analytics_table_async(
         columns_dict.set_item("skill_name", skill_names.as_any())?;
         columns_dict.set_item("tool_name", tool_names.as_any())?;
         columns_dict.set_item("file_path", file_paths.as_any())?;
-        columns_dict.set_item("keywords", keywords.as_any())?;
+        columns_dict.set_item("routing_keywords", routing_keywords.as_any())?;
 
         let table = table_fn.call1((columns_dict,))?;
         Ok(table.unbind())

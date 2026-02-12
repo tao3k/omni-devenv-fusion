@@ -12,7 +12,7 @@ async fn test_apply_keyword_boost_metadata_match() {
             id: "git.commit".to_string(),
             content: "Execute git.commit".to_string(),
             metadata: serde_json::json!({
-                "keywords": ["git", "commit", "version"]
+                "routing_keywords": ["git", "commit", "version"]
             }),
             distance: 0.35, // Slightly worse vector similarity
         },
@@ -20,7 +20,7 @@ async fn test_apply_keyword_boost_metadata_match() {
             id: "file.save".to_string(),
             content: "Save a file".to_string(),
             metadata: serde_json::json!({
-                "keywords": ["file", "save", "write"]
+                "routing_keywords": ["file", "save", "write"]
             }),
             distance: 0.3, // Better vector similarity
         },
@@ -48,7 +48,7 @@ async fn test_apply_keyword_boost_no_keywords() {
     let mut results = vec![VectorSearchResult {
         id: "git.commit".to_string(),
         content: "Execute git.commit".to_string(),
-        metadata: serde_json::json!({"keywords": ["git"]}),
+        metadata: serde_json::json!({"routing_keywords": ["git"]}),
         distance: 0.5,
     }];
 
@@ -68,7 +68,7 @@ async fn test_apply_keyword_boost_multiple_keywords() {
             id: "git.commit".to_string(),
             content: "Execute git.commit".to_string(),
             metadata: serde_json::json!({
-                "keywords": ["git", "commit", "version"]
+                "routing_keywords": ["git", "commit", "version"]
             }),
             distance: 0.4,
         },
@@ -76,7 +76,7 @@ async fn test_apply_keyword_boost_multiple_keywords() {
             id: "file.save".to_string(),
             content: "Save a file".to_string(),
             metadata: serde_json::json!({
-                "keywords": ["file", "save"]
+                "routing_keywords": ["file", "save"]
             }),
             distance: 0.3,
         },
@@ -253,11 +253,14 @@ async fn test_vector_distance_calculation() {
         description: "Identical vector".to_string(),
         input_schema: serde_json::json!({}),
         score: identical_score,
+        vector_score: Some(identical_score),
+        keyword_score: None,
         skill_name: "test".to_string(),
         tool_name: "identical".to_string(),
         file_path: "".to_string(),
         keywords: vec![],
         intents: vec![],
+        category: "test".to_string(),
     };
 
     let opposite = ToolSearchResult {
@@ -265,11 +268,14 @@ async fn test_vector_distance_calculation() {
         description: "Opposite vector".to_string(),
         input_schema: serde_json::json!({}),
         score: opposite_score,
+        vector_score: Some(opposite_score),
+        keyword_score: None,
         skill_name: "test".to_string(),
         tool_name: "opposite".to_string(),
         file_path: "".to_string(),
         keywords: vec![],
         intents: vec![],
+        category: "test".to_string(),
     };
 
     let orthogonal = ToolSearchResult {
@@ -277,11 +283,14 @@ async fn test_vector_distance_calculation() {
         description: "Orthogonal vector".to_string(),
         input_schema: serde_json::json!({}),
         score: orthogonal_score,
+        vector_score: Some(orthogonal_score),
+        keyword_score: None,
         skill_name: "test".to_string(),
         tool_name: "orthogonal".to_string(),
         file_path: "".to_string(),
         keywords: vec![],
         intents: vec![],
+        category: "test".to_string(),
     };
 
     // Verify results are ordered by score

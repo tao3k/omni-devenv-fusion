@@ -1,4 +1,4 @@
-# Knowledge Matrix (知识矩阵)
+# Knowledge Matrix
 
 > Unified Knowledge Index for Context-Aware AI Agents
 > **Status**: Active
@@ -229,12 +229,12 @@ for r in results:
 ### Agent Tool Usage
 
 ```
-User: "我们的 git commit 规范是什么?"
+User: "What is our git commit convention?"
 
 Agent:
   @omni("knowledge.search_project_knowledge", {
-    "query": "git commit 规范是什么",
-    "keywords": ["git", "commit", "规范"]
+    "query": "git commit convention",
+    "keywords": ["git", "commit", "convention"]
   })
 
 Result:
@@ -268,7 +268,9 @@ assets/skills/knowledge/scripts/
 
 ## 7. Configuration
 
-**File**: `assets/settings.yaml`
+**File**: merged `settings.yaml` runtime view
+Base defaults come from `assets/settings.yaml`, and user/project overrides come from
+`$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` (set via `--conf` or environment).
 
 ```yaml
 knowledge:

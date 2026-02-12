@@ -8,6 +8,7 @@ Usage:
     omni db search "query"      # Search any database
     omni db stats               # Show database statistics
     omni db count <table>       # Count records in table
+    omni db validate-schema     # Audit: no legacy 'keywords' in skills/router metadata
 
 Databases:
     knowledge.lance  - Knowledge base (Librarian)
@@ -18,10 +19,10 @@ Databases:
 
 from __future__ import annotations
 
-import asyncio
 import json
+from contextlib import suppress
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import typer
 from rich.box import ROUNDED
@@ -29,7 +30,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from omni.foundation.config.dirs import get_database_path, get_database_paths
+from omni.foundation.config import get_database_path, get_database_paths
+from omni.foundation.services.vector_schema import validate_vector_table_contract
+from omni.foundation.utils.asyncio import run_async_blocking
 from omni.foundation.utils.common import setup_import_paths
 
 # Setup paths before importing omni modules
@@ -42,6 +45,23 @@ db_app = typer.Typer(
 )
 
 _console = Console()
+
+DB_TO_DEFAULT_TABLE = {
+    "knowledge": "knowledge_chunks",
+    "skills": "skills",
+    "router": "router",
+    "memory": "memory_chunks",
+}
+
+TABLE_TO_DB = {
+    "knowledge_chunks": "knowledge",
+    "knowledge": "knowledge",
+    "skills": "skills",
+    "skills_data": "skills",
+    "router": "router",
+    "memory": "memory",
+    "memory_chunks": "memory",
+}
 
 
 def _list_databases() -> list[dict[str, Any]]:
@@ -79,6 +99,21 @@ def _get_table_count(db_path: str, table_name: str) -> int:
         return -1
 
 
+def _get_rust_store(db_name: str):
+    """Create a RustVectorStore bound to a specific database path."""
+    from omni.foundation.bridge.rust_vector import RustVectorStore
+
+    db_path = get_database_path(db_name)
+    return RustVectorStore(db_path, 1024, True)
+
+
+def _resolve_db_and_table(database: str | None, table: str) -> tuple[str, str]:
+    """Resolve database + table pair with sensible defaults."""
+    table_key = table.lower()
+    db_name = database.lower() if database else TABLE_TO_DB.get(table_key, table_key)
+    return db_name, table
+
+
 async def _query_knowledge(query: str, limit: int = 5) -> list[dict[str, Any]]:
     """Query the knowledge base using Librarian."""
     from omni.core.knowledge.librarian import Librarian
@@ -108,22 +143,6 @@ async def _query_knowledge(query: str, limit: int = 5) -> list[dict[str, Any]]:
         )
 
     return formatted
-
-
-def _run_async(coro):
-    """Run async code, handling event loop properly."""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # Use nest_asyncio pattern for running in existing loop
-            import nest_asyncio
-
-            nest_asyncio.apply()
-            return loop.run_until_complete(coro)
-    except RuntimeError:
-        pass
-    # No event loop exists
-    return asyncio.run(coro)
 
 
 @db_app.command("list")
@@ -161,7 +180,7 @@ def db_query(
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ):
     """Query the knowledge base."""
-    results = _run_async(_query_knowledge(query, limit))
+    results = run_async_blocking(_query_knowledge(query, limit))
 
     if json_output:
         print(json.dumps(results, indent=2))
@@ -216,6 +235,42 @@ async def _search_db(
     return results
 
 
+async def _get_table_info(database: str, table: str) -> dict[str, Any] | None:
+    """Fetch table info from Rust vector store."""
+    store = _get_rust_store(database)
+    return await store.get_table_info(table)
+
+
+async def _list_versions(database: str, table: str) -> list[dict[str, Any]]:
+    """Fetch table versions from Rust vector store."""
+    store = _get_rust_store(database)
+    return await store.list_versions(table)
+
+
+async def _get_fragment_stats(database: str, table: str) -> list[dict[str, Any]]:
+    """Fetch fragment stats from Rust vector store."""
+    store = _get_rust_store(database)
+    return await store.get_fragment_stats(table)
+
+
+async def _add_columns(database: str, table: str, columns: list[dict[str, Any]]) -> bool:
+    """Add table columns via Rust schema evolution API."""
+    store = _get_rust_store(database)
+    return await store.add_columns(table, columns)
+
+
+async def _alter_columns(database: str, table: str, alterations: list[dict[str, Any]]) -> bool:
+    """Alter table columns via Rust schema evolution API."""
+    store = _get_rust_store(database)
+    return await store.alter_columns(table, alterations)
+
+
+async def _drop_columns(database: str, table: str, columns: list[str]) -> bool:
+    """Drop table columns via Rust schema evolution API."""
+    store = _get_rust_store(database)
+    return await store.drop_columns(table, columns)
+
+
 @db_app.command("search")
 def db_search(
     query: str = typer.Argument(..., help="Search query"),
@@ -233,12 +288,7 @@ def db_search(
         omni db search "git commit" router
     """
     # Map database name to table name
-    db_to_table = {
-        "knowledge": "knowledge_chunks",
-        "skills": "skills",
-        "router": "router",
-        "memory": "memory_chunks",
-    }
+    db_to_table = DB_TO_DEFAULT_TABLE
 
     table_name = db_to_table.get(database.lower())
     if not table_name:
@@ -246,7 +296,7 @@ def db_search(
         _console.print(f"Available databases: {', '.join(db_to_table.keys())}")
         return
 
-    results = _run_async(_search_db(query, database, table_name, limit))
+    results = run_async_blocking(_search_db(query, database, table_name, limit))
 
     if json_output:
         print(json.dumps(results, indent=2))
@@ -307,6 +357,233 @@ def db_search(
             table.add_row(f"{score:.4f}", name, skill, f"{preview}...")
 
         _console.print(table)
+
+
+@db_app.command("table-info")
+def db_table_info(
+    table: str = typer.Argument(..., help="Table name (e.g., skills, knowledge_chunks)"),
+    database: str | None = typer.Option(
+        None, "--database", "-d", help="Database name (knowledge, skills, router, memory)"
+    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+):
+    """Show table metadata (version, rows, schema, fragments)."""
+    db_name, table_name = _resolve_db_and_table(database, table)
+    info = run_async_blocking(_get_table_info(db_name, table_name))
+
+    if json_output:
+        print(
+            json.dumps(
+                {
+                    "database": db_name,
+                    "table": table_name,
+                    "info": info,
+                },
+                indent=2,
+            )
+        )
+        return
+
+    if not info:
+        _console.print(
+            f"[yellow]No table info available for '{table_name}' in '{db_name}'.[/yellow]"
+        )
+        return
+
+    table_view = Table(title=f"Table Info: {table_name} [{db_name}]", box=ROUNDED)
+    table_view.add_column("Field", style="cyan")
+    table_view.add_column("Value", style="white")
+    for key, value in info.items():
+        table_view.add_row(
+            str(key), json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+        )
+    _console.print(table_view)
+
+
+@db_app.command("versions")
+def db_versions(
+    table: str = typer.Argument(..., help="Table name (e.g., skills, knowledge_chunks)"),
+    database: str | None = typer.Option(
+        None, "--database", "-d", help="Database name (knowledge, skills, router, memory)"
+    ),
+    limit: int = typer.Option(20, "--limit", "-n", help="Maximum versions to show"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+):
+    """List table historical versions (snapshot timeline)."""
+    db_name, table_name = _resolve_db_and_table(database, table)
+    versions = run_async_blocking(_list_versions(db_name, table_name))
+    versions = versions[: max(0, limit)]
+
+    if json_output:
+        print(
+            json.dumps(
+                {
+                    "database": db_name,
+                    "table": table_name,
+                    "versions": versions,
+                },
+                indent=2,
+            )
+        )
+        return
+
+    if not versions:
+        _console.print(f"[yellow]No versions found for '{table_name}' in '{db_name}'.[/yellow]")
+        return
+
+    table_view = Table(title=f"Versions: {table_name} [{db_name}]", box=ROUNDED)
+    table_view.add_column("Version", style="yellow")
+    table_view.add_column("Timestamp", style="cyan")
+    table_view.add_column("Meta", style="dim")
+    for row in versions:
+        version_id = row.get("version") or row.get("version_id") or "-"
+        ts = row.get("timestamp") or row.get("commit_timestamp") or "-"
+        meta = {
+            k: v
+            for k, v in row.items()
+            if k not in {"version", "version_id", "timestamp", "commit_timestamp"}
+        }
+        table_view.add_row(str(version_id), str(ts), json.dumps(meta) if meta else "-")
+    _console.print(table_view)
+
+
+@db_app.command("fragments")
+def db_fragments(
+    table: str = typer.Argument(..., help="Table name (e.g., skills, knowledge_chunks)"),
+    database: str | None = typer.Option(
+        None, "--database", "-d", help="Database name (knowledge, skills, router, memory)"
+    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+):
+    """Show fragment-level stats for a table."""
+    db_name, table_name = _resolve_db_and_table(database, table)
+    fragments = run_async_blocking(_get_fragment_stats(db_name, table_name))
+
+    if json_output:
+        print(
+            json.dumps(
+                {
+                    "database": db_name,
+                    "table": table_name,
+                    "fragments": fragments,
+                },
+                indent=2,
+            )
+        )
+        return
+
+    if not fragments:
+        _console.print(
+            f"[yellow]No fragment stats found for '{table_name}' in '{db_name}'.[/yellow]"
+        )
+        return
+
+    table_view = Table(title=f"Fragments: {table_name} [{db_name}]", box=ROUNDED)
+    table_view.add_column("Fragment", style="cyan")
+    table_view.add_column("Rows", style="yellow")
+    table_view.add_column("Files", style="dim")
+    for frag in fragments:
+        fragment_id = frag.get("id", "-")
+        rows = frag.get("num_rows", "-")
+        files = frag.get("num_files", "-")
+        table_view.add_row(str(fragment_id), str(rows), str(files))
+    _console.print(table_view)
+
+
+@db_app.command("add-columns")
+def db_add_columns(
+    table: str = typer.Argument(..., help="Target table name"),
+    columns_json: str = typer.Option(
+        ...,
+        "--columns-json",
+        help='JSON array, e.g. \'[{"name":"tag","data_type":"Utf8","nullable":true}]\'',
+    ),
+    database: str | None = typer.Option(
+        None, "--database", "-d", help="Database name (knowledge, skills, router, memory)"
+    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+):
+    """Add new nullable columns to a table."""
+    try:
+        columns = json.loads(columns_json)
+        if not isinstance(columns, list):
+            raise ValueError("columns_json must be a JSON array")
+    except Exception as e:
+        raise typer.BadParameter(f"Invalid --columns-json: {e}") from e
+
+    db_name, table_name = _resolve_db_and_table(database, table)
+    ok = run_async_blocking(_add_columns(db_name, table_name, columns))
+
+    if json_output:
+        print(json.dumps({"database": db_name, "table": table_name, "ok": bool(ok)}, indent=2))
+        return
+
+    if ok:
+        _console.print(f"[green]Added columns on '{table_name}' ({db_name}).[/green]")
+    else:
+        _console.print(f"[red]Failed to add columns on '{table_name}' ({db_name}).[/red]")
+
+
+@db_app.command("alter-columns")
+def db_alter_columns(
+    table: str = typer.Argument(..., help="Target table name"),
+    alterations_json: str = typer.Option(
+        ...,
+        "--alterations-json",
+        help='JSON array, e.g. \'[{"type":"rename","old_name":"a","new_name":"b"}]\'',
+    ),
+    database: str | None = typer.Option(
+        None, "--database", "-d", help="Database name (knowledge, skills, router, memory)"
+    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+):
+    """Alter table columns (rename / nullability)."""
+    try:
+        alterations = json.loads(alterations_json)
+        if not isinstance(alterations, list):
+            raise ValueError("alterations_json must be a JSON array")
+    except Exception as e:
+        raise typer.BadParameter(f"Invalid --alterations-json: {e}") from e
+
+    db_name, table_name = _resolve_db_and_table(database, table)
+    ok = run_async_blocking(_alter_columns(db_name, table_name, alterations))
+
+    if json_output:
+        print(json.dumps({"database": db_name, "table": table_name, "ok": bool(ok)}, indent=2))
+        return
+
+    if ok:
+        _console.print(f"[green]Altered columns on '{table_name}' ({db_name}).[/green]")
+    else:
+        _console.print(f"[red]Failed to alter columns on '{table_name}' ({db_name}).[/red]")
+
+
+@db_app.command("drop-columns")
+def db_drop_columns(
+    table: str = typer.Argument(..., help="Target table name"),
+    columns: Annotated[list[str], typer.Option("--column", "-c", help="Column name to drop")] = ...,
+    database: str | None = typer.Option(
+        None, "--database", "-d", help="Database name (knowledge, skills, router, memory)"
+    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+):
+    """Drop columns from a table."""
+    db_name, table_name = _resolve_db_and_table(database, table)
+    ok = run_async_blocking(_drop_columns(db_name, table_name, columns))
+
+    if json_output:
+        print(
+            json.dumps(
+                {"database": db_name, "table": table_name, "columns": columns, "ok": bool(ok)},
+                indent=2,
+            )
+        )
+        return
+
+    if ok:
+        _console.print(f"[green]Dropped columns on '{table_name}' ({db_name}).[/green]")
+    else:
+        _console.print(f"[red]Failed to drop columns on '{table_name}' ({db_name}).[/red]")
 
 
 @db_app.command("stats")
@@ -372,10 +649,8 @@ def db_stats(
         except ValueError:
             pass
 
-        try:
+        with suppress(ValueError, TypeError):
             total_size += info.get("size_mb", 0)
-        except (ValueError, TypeError):
-            pass
 
         metrics.add_row(name, records, size, status)
 
@@ -391,6 +666,83 @@ def db_stats(
     _console.print(Panel(grid, title="Database Statistics", border_style="cyan"))
 
 
+@db_app.command("validate-schema")
+def db_validate_schema(
+    database: str = typer.Argument(
+        None,
+        help="Database to validate (skills, router). If omitted, validates both.",
+    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+):
+    """Check that vector tables have no legacy 'keywords' in metadata (contract: routing_keywords only).
+
+    Use after reindex or for periodic audit. Fails with non-zero exit if any legacy rows are found.
+
+    Examples:
+        omni db validate-schema
+        omni db validate-schema skills
+        omni db validate-schema router --json
+    """
+    from omni.foundation.bridge import RustVectorStore
+
+    tables_to_check: list[tuple[str, str]] = []
+    if database:
+        db_lower = database.lower()
+        if db_lower not in ("skills", "router"):
+            _console.print(f"[red]Unknown database: {database}. Use skills or router.[/red]")
+            raise typer.Exit(1)
+        tables_to_check.append((db_lower, db_lower))
+    else:
+        tables_to_check = [("skills", "skills"), ("router", "router")]
+
+    report: dict[str, Any] = {}
+    exit_code = 0
+    for db_name, table_name in tables_to_check:
+        try:
+            db_path = get_database_path(db_name)
+            store = RustVectorStore(db_path, enable_keyword_index=True)
+            entries = run_async_blocking(store.list_all(table_name))
+            val = validate_vector_table_contract(entries)
+            report[table_name] = val
+            if val.get("legacy_keywords_count", 0) > 0:
+                exit_code = 1
+        except Exception as e:
+            report[table_name] = {
+                "total": 0,
+                "legacy_keywords_count": 0,
+                "sample_ids": [],
+                "error": str(e),
+            }
+            exit_code = 1
+
+    if json_output:
+        print(json.dumps(report, indent=2))
+        raise typer.Exit(exit_code)
+
+    table = Table(title="Schema contract validation (no legacy 'keywords')", box=ROUNDED)
+    table.add_column("Table", style="cyan")
+    table.add_column("Total", justify="right", style="dim")
+    table.add_column("Legacy keywords", justify="right", style="red")
+    table.add_column("Status", style="green")
+    for name, info in report.items():
+        total = info.get("total", 0)
+        legacy = info.get("legacy_keywords_count", 0)
+        err = info.get("error")
+        if err:
+            table.add_row(name, "-", "-", f"[red]Error: {err}[/red]")
+        elif legacy > 0:
+            sample = info.get("sample_ids", [])[:3]
+            table.add_row(name, str(total), str(legacy), f"[red]Fail (e.g. {sample})[/red]")
+        else:
+            table.add_row(name, str(total), "0", "[green]OK[/green]")
+    _console.print(table)
+    if exit_code != 0:
+        _console.print(
+            "[yellow]Contract: metadata must use 'routing_keywords' only; run reindex with --clear if needed.[/yellow]"
+        )
+        raise typer.Exit(exit_code)
+
+
 @db_app.command("count")
 def db_count(
     table: str = typer.Argument(..., help="Table name (e.g., knowledge_chunks, skills)"),
@@ -398,16 +750,7 @@ def db_count(
 ):
     """Count records in a specific table."""
     # Determine database path based on table name
-    table_to_db = {
-        "knowledge_chunks": "knowledge",
-        "knowledge": "knowledge",
-        "skills": "skills",
-        "skills_data": "skills",
-        "router": "router",
-        "memory": "memory",
-    }
-
-    db_name = table_to_db.get(table.lower(), table.lower())
+    db_name = TABLE_TO_DB.get(table.lower(), table.lower())
     db_path = get_database_path(db_name)
 
     count = _get_table_count(db_path, table)

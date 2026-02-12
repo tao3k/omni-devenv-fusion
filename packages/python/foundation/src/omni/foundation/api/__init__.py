@@ -6,10 +6,12 @@ Provides standardized decorators for:
 - Dependency injection
 - Schema generation
 - Skill command decorator with MCP annotations
+- Skill command handler (error, logging, result filtering)
 
 Usage:
     from omni.foundation.api import trace_execution, measure_time, retry
     from omni.foundation.api.decorators import skill_command
+    from omni.foundation.api.handlers import SkillCommandHandler
 """
 
 # Lazy exports - avoid importing at module level
@@ -54,4 +56,11 @@ def __dir__():
         "get_script_config",
         "get_tool_annotations",
         "CommandResult",
+        # Skill command handlers (v2.2)
+        "SkillCommandHandler",
+        "ExecutionResult",
+        "LoggerConfig",
+        "ResultConfig",
+        "create_handler",
+        "ErrorStrategy",
     ]

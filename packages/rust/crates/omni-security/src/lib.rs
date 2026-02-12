@@ -1,6 +1,4 @@
-#![allow(clippy::doc_markdown)]
-
-//! omni-security - Security Scanner & Sandbox for Omni DevEnv
+//! omni-security - Security Scanner & Sandbox for Omni `DevEnv`
 //!
 //! ## Modules
 //!
@@ -9,7 +7,7 @@
 //!
 //! ## Features
 //!
-//! - O(n) linear-time regex matching via RegexSet
+//! - O(n) linear-time regex matching via `RegexSet`
 //! - Pre-compiled patterns at startup (Lazy static)
 //! - Zero-copy scanning for large files
 //! - Fail-fast on first detected secret
@@ -21,14 +19,14 @@ mod sandbox;
 
 pub use sandbox::{SandboxConfig, SandboxError, SandboxMode, SandboxResult, SandboxRunner};
 
-use once_cell::sync::Lazy;
 use regex::RegexSet;
 use serde::Serialize;
+use std::sync::LazyLock;
 
 /// Security violation detected during scan
 #[derive(Debug, Clone, Serialize)]
 pub struct SecurityViolation {
-    /// Rule identifier (e.g., "AWS_ACCESS_KEY")
+    /// Rule identifier (e.g., `AWS_ACCESS_KEY`)
     pub rule_id: String,
     /// Human-readable description of the violation
     pub description: String,
@@ -36,16 +34,17 @@ pub struct SecurityViolation {
     pub snippet: String,
 }
 
-#[allow(clippy::expect_used)]
-static SECRET_PATTERNS: Lazy<RegexSet> = Lazy::new(|| {
-    RegexSet::new([
+static SECRET_PATTERNS: LazyLock<RegexSet> = LazyLock::new(|| {
+    match RegexSet::new([
         r"AKIA[0-9A-Z]{16}",                    // AWS Access Key ID
         r"(?i)sk_(test|live)_[0-9a-zA-Z]{24}",  // Stripe Secret Key (test or live)
         r"xox[baprs]-([0-9a-zA-Z\-]{10,48})",   // Slack Token (allows hyphens in token)
         r"-----BEGIN [A-Z ]+ PRIVATE KEY-----", // PEM Private Key
         r#"(?i)(api_key|access_token|secret)\s*[:=]\s*["'][A-Za-z0-9_=-]{16,}["']"#, // Generic API Key
-    ])
-    .expect("invalid regex pattern in security scanner")
+    ]) {
+        Ok(set) => set,
+        Err(err) => panic!("invalid regex pattern in security scanner: {err}"),
+    }
 });
 
 static PATTERN_NAMES: &[&str] = &[
@@ -56,9 +55,9 @@ static PATTERN_NAMES: &[&str] = &[
     "Generic High-Entropy Secret",
 ];
 
-/// SecretScanner - High-performance secret detection using RegexSet
+/// `SecretScanner` - High-performance secret detection using `RegexSet`
 ///
-/// Uses RegexSet for O(n) scanning regardless of pattern count.
+/// Uses `RegexSet` for O(n) scanning regardless of pattern count.
 /// Patterns are compiled once at startup via Lazy static.
 pub struct SecretScanner;
 
@@ -91,7 +90,7 @@ impl SecretScanner {
         let matches = SECRET_PATTERNS.matches(content);
         let mut violations = Vec::new();
 
-        for idx in matches.iter() {
+        for idx in &matches {
             let description = PATTERN_NAMES
                 .get(idx)
                 .copied()
@@ -117,7 +116,7 @@ impl SecretScanner {
 // Permission Gatekeeper - Access Control for Skills
 // =============================================================================
 
-/// PermissionGatekeeper - Zero Trust Access Control
+/// `PermissionGatekeeper` - Zero Trust Access Control
 ///
 /// Validates skill tool calls against declared permissions.
 ///
@@ -130,12 +129,11 @@ pub struct PermissionGatekeeper;
 impl PermissionGatekeeper {
     /// Check if a tool execution is allowed by the given permissions.
     ///
-    /// Args:
-    ///     tool_name: Full tool name (e.g., "filesystem.read_file")
-    ///     permissions: List of permission patterns (e.g., ["filesystem:*"])
+    /// `tool_name`: Full tool name (e.g., `filesystem.read_file`).
+    /// `permissions`: Permission patterns (e.g., [`filesystem:*`]).
     ///
-    /// Returns:
-    ///     True if allowed, False otherwise.
+    /// Returns `true` when at least one permission pattern matches the tool.
+    #[must_use]
     pub fn check(tool_name: &str, permissions: &[String]) -> bool {
         for pattern in permissions {
             if Self::matches_pattern(tool_name, pattern) {
@@ -163,8 +161,8 @@ impl PermissionGatekeeper {
         }
 
         // Normalize separators for comparison
-        let normalized_tool = tool.replace(":", ".");
-        let normalized_pattern = pattern.replace(":", ".");
+        let normalized_tool = tool.replace(':', ".");
+        let normalized_pattern = pattern.replace(':', ".");
 
         normalized_tool == normalized_pattern
     }

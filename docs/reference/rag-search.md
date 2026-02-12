@@ -10,6 +10,22 @@ RAG (Retrieval-Augmented Generation) Search provides intelligent tool/command di
 - **Search Cache**: LRU caching with TTL to reduce latency
 - **Hybrid Search**: Combines semantic and keyword matching for improved recall
 
+Knowledge-layer retrieval follows the same explicit split:
+
+- `vector_search(vector, limit)` for semantic-only retrieval
+- `text_search(query_text, query_vector, limit)` for hybrid retrieval
+
+Normalization invariants applied by the Python retrieval namespace:
+
+- Threshold filtering: drop rows below `score_threshold`
+- Deterministic dedupe: keep the highest score per logical record
+- Stable ranking: always sort by descending score after normalization
+
+Dedupe key policy:
+
+1. Prefer `id` when present
+2. Fallback to `content` for rows without durable ids
+
 ## Components
 
 ### SearchCache

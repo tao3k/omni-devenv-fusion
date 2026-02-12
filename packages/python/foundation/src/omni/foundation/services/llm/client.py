@@ -1,18 +1,19 @@
 # inference/client.py
 """
-Inference Client - LLM API client.
+Inference Client - Unified LLM API client via LiteLLM
 
 Modularized for testability.
 Configuration-driven from settings.yaml (inference section).
+Supports 100+ LLM providers (Anthropic, OpenAI, MiniMax, etc.) via litellm.
 """
 
 import asyncio
 import json
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
 import structlog
-from anthropic import AsyncAnthropic
 
 from omni.foundation.api.api_key import get_anthropic_api_key
 from omni.foundation.config.settings import get_setting
@@ -21,7 +22,7 @@ log = structlog.get_logger("mcp-core.inference")
 
 
 class InferenceClient:
-    """Unified LLM inference client for MCP servers."""
+    """Unified LLM inference client for MCP servers via LiteLLM."""
 
     def __init__(
         self,
@@ -30,42 +31,35 @@ class InferenceClient:
         model: str = None,
         timeout: int = None,
         max_tokens: int = None,
+        provider: str = None,
     ):
-        """Initialize InferenceClient.
+        """Initialize InferenceClient via LiteLLM.
 
         Configuration is read from settings.yaml (inference section).
-        Parameters passed here override settings.
 
         Args:
-            api_key: API key (defaults to configured env var in settings.yaml)
+            api_key: API key (defaults to configured env var)
             base_url: API base URL
             model: Default model name
             timeout: Request timeout in seconds
             max_tokens: Max tokens per response
+            provider: Provider name (anthropic, openai, etc.)
         """
-        # Read directly from settings.yaml
+        import litellm
+
+        self._litellm = litellm
+
         self.api_key = api_key or get_anthropic_api_key()
         self.base_url = base_url or get_setting("inference.base_url")
         self.model = model or get_setting("inference.model")
         self.timeout = timeout or get_setting("inference.timeout")
         self.max_tokens = max_tokens or get_setting("inference.max_tokens")
+        self.provider = provider or get_setting("inference.provider", "anthropic")
 
         if not self.api_key:
             log.warning(
                 "inference.no_api_key",
                 configured_env=get_setting("inference.api_key_env"),
-            )
-
-        # MiniMax requires Authorization: Bearer header (auth_token) instead of x-api-key
-        if self.base_url and "minimax" in self.base_url.lower():
-            self.client = AsyncAnthropic(
-                auth_token=self.api_key,
-                base_url=self.base_url,
-            )
-        else:
-            self.client = AsyncAnthropic(
-                api_key=self.api_key,
-                base_url=self.base_url,
             )
 
     def _build_system_prompt(
@@ -86,7 +80,7 @@ class InferenceClient:
         messages: list[dict] = None,
         tools: list[dict] = None,
     ) -> dict[str, Any]:
-        """Make a non-streaming LLM call with optional tool support."""
+        """Make a non-streaming LLM call via LiteLLM."""
         actual_model = model or self.model
         actual_max_tokens = max_tokens or self.max_tokens
         actual_timeout = timeout or self.timeout
@@ -96,129 +90,94 @@ class InferenceClient:
         log.debug(
             "inference.request",
             model=actual_model,
+            provider=self.provider,
             prompt_length=len(system_prompt),
             query_length=len(user_query),
             has_tools=tools is not None,
         )
 
         try:
-            api_kwargs = {
-                "model": actual_model,
+            # Build model string for litellm
+            # MiniMax uses 'minimax/MiniMax-M2.1' format
+            if self.provider == "minimax":
+                model_id = f"minimax/{actual_model}"
+            else:
+                model_id = f"{self.provider}/{actual_model}"
+
+            # Prepare kwargs for litellm
+            litellm_kwargs = {
+                "model": model_id,
                 "max_tokens": actual_max_tokens,
-                "system": system_prompt,
+                "timeout": actual_timeout,
+                "system": system_prompt if system_prompt else None,
                 "messages": message_list,
             }
 
+            # Add API key
+            if self.api_key:
+                litellm_kwargs["api_key"] = self.api_key
+
+            # Add base_url only for non-minimax providers
+            # LiteLLM handles MiniMax internally with correct endpoint
+            if self.provider != "minimax" and self.base_url:
+                litellm_kwargs["api_base"] = self.base_url
+
+            # Add tools if provided
             if tools:
-                api_kwargs["tools"] = tools
+                litellm_kwargs["tools"] = tools
 
-            response = await asyncio.wait_for(
-                self.client.messages.create(**api_kwargs),
-                timeout=actual_timeout,
-            )
+            # Make the call via litellm
+            response = await self._litellm.acompletion(**litellm_kwargs)
 
+            # Extract content - handle both OpenAI and Anthropic/MiniMax formats
             content = ""
             tool_calls = []
 
-            for block in response.content:
-                if hasattr(block, "type"):
-                    if block.type == "text":
-                        content += block.text if hasattr(block, "text") else ""
-                    elif block.type == "tool_use":
-                        tool_calls.append(
-                            {
-                                "id": block.id,
-                                "name": block.name,
-                                "input": block.input,
-                            }
-                        )
-                        content += f"[TOOL_CALL: {block.name}]\n"
+            # Try OpenAI format first
+            if hasattr(response, "choices") and response.choices:
+                choice = response.choices[0]
+                if hasattr(choice, "message"):
+                    content = getattr(choice.message, "content", "") or ""
+                    # Check for tool calls
+                    if hasattr(choice.message, "tool_calls") and choice.message.tool_calls:
+                        for tc in choice.message.tool_calls:
+                            tool_calls.append(
+                                {
+                                    "id": tc.id,
+                                    "name": tc.function.name,
+                                    "input": json.loads(tc.function.arguments)
+                                    if isinstance(tc.function.arguments, str)
+                                    else tc.function.arguments,
+                                }
+                            )
+
+            # Try Anthropic/MiniMax format (content array)
+            elif hasattr(response, "content") and isinstance(response.content, list):
+                for block in response.content:
+                    if hasattr(block, "type"):
+                        if block.type == "text":
+                            content += getattr(block, "text", "") or ""
+                        elif block.type == "tool_use":
+                            tool_calls.append(
+                                {
+                                    "id": block.id,
+                                    "name": block.name,
+                                    "input": getattr(block, "input", {}),
+                                }
+                            )
 
             # Fallback: Parse tool calls from text content (for MiniMax compatibility)
-            # Looks for patterns like: [TOOL_CALL: skill.command] or tool_use XML tags
             if not tool_calls and content:
-                import re
-
-                # Extract thinking block content for fallback parameter extraction
-                # The thinking block contains the LLM's reasoning and often file paths
-                thinking_match = re.search(r"<thinking>(.*?)</thinking>", content, flags=re.DOTALL)
-                thinking_content = thinking_match.group(1) if thinking_match else ""
-
-                # Remove thinking block content to avoid false positives from [TOOL_CALL: ...] in thinking
                 content_for_parsing = re.sub(
                     r"<thinking>.*?</thinking>", "", content, flags=re.DOTALL
                 )
 
-                # Match [TOOL_CALL: filesystem.read_files]
                 pattern = r"\[TOOL_CALL:\s*([^\]]+)\]"
                 matches = re.findall(pattern, content_for_parsing)
 
                 for i, tool_call_match in enumerate(matches):
                     tool_name = tool_call_match.strip()
                     tool_input = {}
-
-                    # Method 1: Full JSON format: [TOOL_CALL: name]({"paths": [...], ...})
-                    json_parens_pattern = (
-                        rf"\[TOOL_CALL:\s*{re.escape(tool_name)}\]\s*\(\s*(\{{[^}}]*\}})\s*\)"
-                    )
-                    json_match = re.search(json_parens_pattern, content_for_parsing)
-                    if json_match:
-                        args_json = json_match.group(1)
-                        try:
-                            parsed_args = json.loads(args_json)
-                            tool_input = parsed_args
-                        except json.JSONDecodeError:
-                            pass
-
-                    # Method 1b: Shorthand array format: [TOOL_CALL: name](paths=["a", "b"])
-                    # Handles LLM output like: paths=["file1.md", "file2.md"]
-                    if not tool_input:
-                        shorthand_match = re.search(
-                            rf"\[TOOL_CALL:\s*{re.escape(tool_name)}\]\s*\(([^)]+)\)",
-                            content_for_parsing,
-                        )
-                        if shorthand_match:
-                            args_str = shorthand_match.group(1)
-                            # Check if it looks like key=[...] format
-                            array_match = re.match(r"(\w+)=\[([^\]]*)\]", args_str)
-                            if array_match:
-                                key = array_match.group(1)
-                                values_str = array_match.group(2)
-                                # Extract quoted strings from array
-                                values = re.findall(r'"([^"]*)"', values_str)
-                                if values:
-                                    tool_input = {key: values}
-
-                    # Method 2: Simple key=value format (non-array)
-                    if not tool_input:
-                        simple_parens_pattern = (
-                            rf"\[TOOL_CALL:\s*{re.escape(tool_name)}\]\s*\(([^)]+)\)"
-                        )
-                        simple_match = re.search(simple_parens_pattern, content_for_parsing)
-                        if simple_match:
-                            args_str = simple_match.group(1)
-                            # Skip if it looks like an array (contains [)
-                            if "[" not in args_str:
-                                for match in re.finditer(
-                                    r'(\w+)=("(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\'|[^,]+)',
-                                    args_str,
-                                ):
-                                    key = match.group(1)
-                                    value = match.group(2)
-                                    if value.startswith('"') and value.endswith('"'):
-                                        value = value[1:-1]
-                                    elif value.startswith("'") and value.endswith("'"):
-                                        value = value[1:-1]
-                                    tool_input[key] = value.strip()
-
-                    # Method 3: Extract parameters from XML-like tags
-                    param_pattern = r"<parameter\s+name=\"(\w+)\">([^<]+)</parameter>"
-                    params = re.findall(param_pattern, content_for_parsing)
-                    if params:
-                        for k, v in params:
-                            tool_input[k] = v.strip()
-
-                    # Always add tool call (let the tool itself handle missing required args)
                     tool_calls.append(
                         {
                             "id": f"call_{i}",
@@ -227,32 +186,29 @@ class InferenceClient:
                         }
                     )
 
-            result = {
+            # Extract usage
+            usage = {}
+            if hasattr(response, "usage") and response.usage:
+                usage = {
+                    "input_tokens": getattr(response.usage, "prompt_tokens", 0),
+                    "output_tokens": getattr(response.usage, "completion_tokens", 0),
+                }
+
+            return {
                 "success": True,
                 "content": content,
                 "tool_calls": tool_calls,
                 "model": actual_model,
-                "usage": {
-                    "input_tokens": response.usage.input_tokens,
-                    "output_tokens": response.usage.output_tokens,
-                },
+                "usage": usage,
                 "error": "",
             }
-
-            log.debug(
-                "inference.success",
-                model=actual_model,
-                input_tokens=result["usage"]["input_tokens"],
-                output_tokens=result["usage"]["output_tokens"],
-            )
-
-            return result
 
         except TimeoutError:
             log.warning("inference.timeout", model=actual_model)
             return {
                 "success": False,
                 "content": "",
+                "tool_calls": [],
                 "error": f"Request timed out after {actual_timeout}s",
                 "model": actual_model,
                 "usage": {},
@@ -276,7 +232,7 @@ class InferenceClient:
         model: str = None,
         max_tokens: int = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Make a streaming LLM call."""
+        """Make a streaming LLM call via LiteLLM."""
         actual_model = model or self.model
         actual_max_tokens = max_tokens or self.max_tokens
 
@@ -285,65 +241,35 @@ class InferenceClient:
         log.info(
             "inference.stream_request",
             model=actual_model,
+            provider=self.provider,
             prompt_length=len(system_prompt),
         )
 
         try:
-            async with self.client.messages.stream(
-                model=actual_model,
-                max_tokens=actual_max_tokens,
-                system=system_prompt,
-                messages=messages,
-            ) as stream:
-                chunks = []
-                async for event in stream:
-                    if hasattr(event, "type") and event.type == "message_stop":
-                        break
-                    if hasattr(event, "delta") and getattr(event.delta, "text", None):
-                        chunk = event.delta.text
-                        chunks.append(chunk)
-                        yield {"chunk": chunk, "done": False, "content": "".join(chunks)}
+            model_id = f"{self.provider}/{actual_model}"
+            litellm_kwargs = {
+                "model": model_id,
+                "max_tokens": actual_max_tokens,
+                "messages": messages,
+            }
 
-                yield {"chunk": "", "done": True, "content": "".join(chunks)}
+            if self.api_key:
+                litellm_kwargs["api_key"] = self.api_key
+            if self.base_url:
+                litellm_kwargs["api_base"] = self.base_url
+
+            async for chunk in self._litellm.acompletion_stream(**litellm_kwargs):
+                content = ""
+                if hasattr(chunk, "choices") and chunk.choices:
+                    choice = chunk.choices[0]
+                    if hasattr(choice, "delta") and hasattr(choice.delta, "content"):
+                        content = choice.delta.content
+
+                yield {"chunk": content, "done": False}
 
         except Exception as e:
             log.warning("inference.stream_error", model=actual_model, error=str(e))
-            yield {"chunk": "", "done": True, "content": "", "error": str(e)}
-
-    async def complete_with_retry(
-        self,
-        system_prompt: str,
-        user_query: str,
-        max_retries: int = 3,
-        backoff_factor: float = 1.0,
-        **kwargs,
-    ) -> dict[str, Any]:
-        """Make an LLM call with automatic retry on failure."""
-        last_error = ""
-
-        for attempt in range(max_retries):
-            result = await self.complete(system_prompt, user_query, **kwargs)
-
-            if result["success"]:
-                return result
-
-            last_error = result["error"]
-            log.warning(
-                "inference.retry",
-                attempt=attempt + 1,
-                max_retries=max_retries,
-                error=last_error,
-            )
-
-            if attempt < max_retries - 1:
-                await asyncio.sleep(backoff_factor * (2**attempt))
-
-        return {
-            "success": False,
-            "content": "",
-            "error": f"Failed after {max_retries} attempts: {last_error}",
-            "usage": {},
-        }
+            yield {"chunk": "", "done": True, "error": str(e)}
 
 
 __all__ = [

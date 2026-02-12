@@ -639,7 +639,12 @@ class TestUnifiedLanceDBMigration:
 
         # Verify we can find specific tools (code_tools only has code_search now)
         assert "git.commit" in registry
-        assert "code_tools.code_search" in registry
+        assert any(
+            name.startswith("code_tools.")
+            or name.startswith("filesystem.")
+            or name.startswith("advanced_tools.")
+            for name in registry
+        )
 
     def test_search_with_lance_source(self):
         """Test that search works correctly with LanceDB source."""

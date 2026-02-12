@@ -50,6 +50,7 @@ class TestUniversalScriptSkill:
         assert skill.path == skill_path
         assert skill.metadata.name == "test"
         assert skill.is_loaded is False
+        assert not hasattr(skill, "commands")
 
     def test_init_with_metadata(self, tmp_path: Path):
         """Test initialization with explicit metadata."""

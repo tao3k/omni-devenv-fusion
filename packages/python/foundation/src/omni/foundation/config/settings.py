@@ -2,8 +2,8 @@
 Project Settings - Configuration Manager (Refactored)
 
 Architecture:
-- Layer 0 (Base): assets/settings.yaml (System Defaults)
-- Layer 1 (User): $PRJ_CONFIG_HOME/settings.yaml (User Overrides)
+- Layer 0 (Base): <git-root>/assets/settings.yaml (System Defaults)
+- Layer 1 (User): $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml (User Overrides)
 - Control: CLI flag `--conf` sets $PRJ_CONFIG_HOME dynamically.
 
 The final configuration is a deep merge of User Overrides onto System Defaults.
@@ -15,8 +15,6 @@ import os
 import sys
 import threading
 from typing import Any
-
-from omni.foundation.runtime.gitops import get_project_root
 
 # Layer 0: Physical Directory Management
 from .dirs import PRJ_CONFIG, PRJ_DIRS
@@ -36,8 +34,8 @@ class Settings:
 
     Logic:
     1. Parse `--conf` flag -> updates PRJ_CONFIG_HOME.
-    2. Load `assets/settings.yaml` (Defaults).
-    3. Load `PRJ_CONFIG("settings.yaml")` (User).
+    2. Load `<git-root>/assets/settings.yaml` (Defaults).
+    3. Load `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` (User).
     4. Merge User > Defaults.
     """
 
@@ -84,29 +82,35 @@ class Settings:
 
     def _load(self) -> None:
         """Execute the Dual-Layer Loading Strategy."""
+        # Always refresh PRJ_DIRS cache before resolving config paths.
+        # This guarantees path consistency when tests or callers modify
+        # PRJ_CONFIG_HOME dynamically between Settings reloads.
+        PRJ_DIRS.clear_cache()
 
-        # 1. CLI Override: Handle --conf flag
-        # If user provides --conf, we MUST point PRJ_CONFIG to that location.
+        # 1. CLI override fallback: if --conf is explicitly provided in argv,
+        # it takes precedence for this process.
+        # Primary ownership still lives in CLI bootstrap (app.py), but this
+        # keeps Settings deterministic in direct/test invocation paths.
         cli_conf_dir = self._parse_cli_conf()
         if cli_conf_dir:
             # Dynamically update the Environment Layer
             os.environ["PRJ_CONFIG_HOME"] = cli_conf_dir
-            # IMPORTANT: Clear PRJ_DIRS cache so it picks up the new env var
+            # Clear again after --conf mutation to ensure fresh path resolution.
             PRJ_DIRS.clear_cache()
 
-        # 2. Load Base Defaults (from assets/settings.yaml)
+        # 2. Load Base Defaults (from <git-root>/assets/settings.yaml)
         # This serves as the "Interface Definition" or "Factory Defaults"
         defaults = {}
-        project_root = get_project_root()
+        project_root = PRJ_DIRS.config_home.parent
         assets_settings = project_root / "assets" / "settings.yaml"
 
         if assets_settings.exists():
             defaults = self._read_yaml(assets_settings)
 
-        # 3. Load User Config (from PRJ_CONFIG location)
+        # 3. Load User Config (from $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml)
         # This is where the user's specific customizations live
         user_config = {}
-        user_settings_path = PRJ_CONFIG("settings.yaml")
+        user_settings_path = PRJ_CONFIG("omni-dev-fusion", "settings.yaml")
 
         if user_settings_path.exists():
             user_config = self._read_yaml(user_settings_path)
@@ -180,7 +184,8 @@ class Settings:
         """Force reload settings."""
         with self._instance_lock:
             self._loaded = False
-            self._ensure_loaded()
+            self._load()
+            self._loaded = True
 
     def list_sections(self) -> list[str]:
         """List all settings sections."""
@@ -208,15 +213,10 @@ class Settings:
 
     @property
     def conf_dir(self) -> str:
-        """Get the configuration directory (legacy property)."""
-        from .dirs import PRJ_DIRS
+        """Get the active application configuration directory path."""
+        from .dirs import PRJ_CONFIG
 
-        return str(PRJ_DIRS.config_home)
-
-
-# =============================================================================
-# Convenience Functions
-# =============================================================================
+        return str(PRJ_CONFIG("omni-dev-fusion"))
 
 
 def get_setting(key: str, default: Any = None) -> Any:
@@ -229,43 +229,8 @@ def get_settings() -> Settings:
     return Settings()
 
 
-def get_config_path(key: str) -> str:
-    """Get a configuration file path (legacy convenience)."""
-    return Settings().get_path(key)
-
-
-def has_setting(key: str) -> bool:
-    """Check if a setting exists (legacy convenience)."""
-    return Settings().has_setting(key)
-
-
-def list_setting_sections() -> list[str]:
-    """List all settings sections (legacy convenience)."""
-    return Settings().list_sections()
-
-
-def get_conf_directory() -> str:
-    """Get the configuration directory (legacy convenience)."""
-    return Settings().conf_dir
-
-
-def set_configuration_directory(path: str) -> None:
-    """Set the configuration directory (legacy - modifies env var)."""
-    import os
-
-    os.environ["PRJ_CONFIG_HOME"] = path
-    from .dirs import PRJ_DIRS
-
-    PRJ_DIRS.clear_cache()
-
-
 __all__ = [
     "Settings",
-    "get_conf_directory",
-    "get_config_path",
     "get_setting",
     "get_settings",
-    "has_setting",
-    "list_setting_sections",
-    "set_configuration_directory",
 ]

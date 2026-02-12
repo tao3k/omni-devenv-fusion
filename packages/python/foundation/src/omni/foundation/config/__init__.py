@@ -1,26 +1,54 @@
 # config
 """
-Configuration Module
+Foundation Configuration Module.
 
-Modularized subpackage.
+Modularized subpackage providing centralized configuration management.
 
 Modules:
-- dirs.py: Physical directory management (Layer 0)
-- paths.py: Semantic path resolution (Layer 1)
-- settings.py: Settings class and functions
+- prj: Project directory utilities (PRJ_DIRS, PRJ_DATA, etc.)
+- database: Database path management
+- harvested: Harvested knowledge utilities
+- zk: Zettelkasten notebook utilities
+- settings: Settings class and functions
+- paths: Semantic path resolution
+
+SSOT (Single Source of Truth):
+    references.yaml - Path and directory configurations
+    settings.yaml - Feature and behavior settings
 
 Usage:
+    from omni.foundation.config import PRJ_DIRS, get_vector_db_path
+    from omni.foundation.config.prj import PRJ_DATA, get_cache_dir
+    from omni.foundation.config.zk import get_zk_notebook_dir
     from omni.foundation.config.settings import get_setting
-    from omni.foundation.config import get_setting  # Backward compatibility
 """
 
-from .dirs import (
+from .prj import (
     PRJ_CACHE,
+    PRJ_CHECKPOINT,
     PRJ_CONFIG,
     PRJ_DATA,
     PRJ_DIRS,
+    PRJ_PATH,
     PRJ_RUNTIME,
+    get_cache_dir,
     get_config_dir,
+    get_data_dir,
+    get_prj_dir,
+    get_runtime_dir,
+    get_skills_dir,
+)
+from .database import (
+    get_checkpoint_db_path,
+    get_checkpoint_table_name,
+    get_database_path,
+    get_database_paths,
+    get_memory_db_path,
+    get_vector_db_path,
+)
+from .harvested import (
+    get_harvest_dir,
+    get_harvest_file,
 )
 from .paths import (
     ConfigPaths,
@@ -31,57 +59,45 @@ from .settings import (
     get_setting,
     get_settings,
 )
-
-
-# Create backward-compatible stubs
-def get_conf_directory() -> str:
-    """Get the configuration directory (legacy wrapper)."""
-    return str(PRJ_DIRS.config_home)
-
-
-def set_configuration_directory(path: str) -> None:
-    """Set the configuration directory (legacy wrapper)."""
-    import os
-
-    os.environ["PRJ_CONFIG_HOME"] = path
-
-
-def get_config_path(key: str) -> str:
-    """Get a configuration file path (legacy wrapper)."""
-    settings = Settings()
-    return settings.get(key, "")
-
-
-def has_setting(key: str) -> bool:
-    """Check if a setting exists (legacy wrapper)."""
-    return Settings().get(key) is not None
-
-
-def list_setting_sections() -> list[str]:
-    """List all settings sections (legacy wrapper)."""
-    settings = Settings()
-    return settings.list_sections()
+from .zk import (
+    get_zk_config_path,
+    get_zk_notebook_dir,
+)
 
 
 __all__ = [
-    # From dirs (Layer 0)
-    "PRJ_DIRS",
-    "PRJ_CONFIG",
-    "PRJ_RUNTIME",
-    "PRJ_DATA",
+    # Project directories (from prj.py)
     "PRJ_CACHE",
+    "PRJ_CHECKPOINT",
+    "PRJ_CONFIG",
+    "PRJ_DATA",
+    "PRJ_DIRS",
+    "PRJ_PATH",
+    "PRJ_RUNTIME",
+    "get_cache_dir",
     "get_config_dir",
-    # From settings
+    "get_data_dir",
+    "get_prj_dir",
+    "get_runtime_dir",
+    "get_skills_dir",
+    # Database utilities (from database.py)
+    "get_checkpoint_db_path",
+    "get_checkpoint_table_name",
+    "get_database_path",
+    "get_database_paths",
+    "get_memory_db_path",
+    "get_vector_db_path",
+    # Harvested knowledge (from harvested.py)
+    "get_harvest_dir",
+    "get_harvest_file",
+    # Zettelkasten (from zk.py)
+    "get_zk_config_path",
+    "get_zk_notebook_dir",
+    # Settings
     "Settings",
     "get_setting",
     "get_settings",
-    # From paths (Layer 1)
+    # Paths
     "ConfigPaths",
     "get_config_paths",
-    # Compatibility
-    "get_conf_directory",
-    "set_configuration_directory",
-    "get_config_path",
-    "has_setting",
-    "list_setting_sections",
 ]

@@ -22,6 +22,7 @@ import pytest
 from typer.testing import CliRunner
 
 from omni.agent.cli.app import app
+from omni.agent.cli.commands import sync as sync_module
 
 
 class TestSkillSync:
@@ -47,7 +48,7 @@ class TestSkillSync:
 
                 with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
                     mock_store_instance = MagicMock()
-                    mock_store_instance.list_all_tools = AsyncMock(return_value=[])
+                    mock_store_instance.list_all_tools = MagicMock(return_value=[])
                     mock_store.return_value = mock_store_instance
 
                     result = runner.invoke(app, ["skill", "sync"])
@@ -83,7 +84,7 @@ class TestSkillSync:
                 with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
                     mock_store_instance = MagicMock()
                     # LanceDB is empty initially
-                    mock_store_instance.list_all_tools = AsyncMock(return_value=[])
+                    mock_store_instance.list_all_tools = MagicMock(return_value=[])
                     # Auto-populate fills LanceDB
                     mock_store_instance.index_skill_tools = AsyncMock(return_value=1)
                     mock_store.return_value = mock_store_instance
@@ -126,7 +127,7 @@ class TestSkillSync:
                 with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store_cls:
                     mock_store_instance = MagicMock()
                     # LanceDB has both tools (one will be deleted)
-                    mock_store_instance.list_all_tools = AsyncMock(
+                    mock_store_instance.list_all_tools = MagicMock(
                         return_value=[
                             {
                                 "tool_name": "remaining_tool",
@@ -170,7 +171,7 @@ class TestSkillSync:
 
                 with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
                     mock_store_instance = MagicMock()
-                    mock_store_instance.list_all_tools = AsyncMock(return_value=[])
+                    mock_store_instance.list_all_tools = MagicMock(return_value=[])
                     mock_store.return_value = mock_store_instance
 
                     result = runner.invoke(app, ["skill", "sync", "--json"])
@@ -258,6 +259,28 @@ class TestSkillSyncOutput:
 
         assert "+3 added" in summary
         assert "-2 deleted" in summary
+
+
+class TestSyncReferencesPathResolution:
+    """Tests for canonical references.yaml path resolution."""
+
+    def test_resolve_references_prefers_env_override(self, monkeypatch, tmp_path: Path):
+        custom = tmp_path / "custom-references.yaml"
+        custom.write_text("{}", encoding="utf-8")
+        monkeypatch.setenv("OMNI_REFERENCES_YAML", str(custom))
+        resolved = sync_module._resolve_references_config_path()
+        assert resolved == str(custom)
+
+    def test_resolve_references_uses_active_conf_when_present(self, monkeypatch, tmp_path: Path):
+        monkeypatch.delenv("OMNI_REFERENCES_YAML", raising=False)
+        monkeypatch.setenv("PRJ_CONFIG_HOME", str(tmp_path))
+        app_dir = tmp_path / "omni-dev-fusion"
+        app_dir.mkdir(parents=True, exist_ok=True)
+        refs = app_dir / "references.yaml"
+        refs.write_text("{}", encoding="utf-8")
+
+        resolved = sync_module._resolve_references_config_path()
+        assert resolved == str(refs)
 
     def test_summary_no_changes(self):
         """Test summary string when no changes."""

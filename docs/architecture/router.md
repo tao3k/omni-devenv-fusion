@@ -129,6 +129,60 @@ skills = await router.suggest_skills("/project/path")
 | `hive`    | `HiveRouter`    | Decision logic            |
 | `sniffer` | `IntentSniffer` | Context detection         |
 
+### Runtime Configuration
+
+`OmniRouter` reads routing search/profile settings from merged `settings.yaml`.
+The user-facing override mechanism is `--conf <dir>`, which changes where `settings.yaml` is loaded from.
+
+```yaml
+router:
+  search:
+    active_profile: "balanced"
+    auto_profile_select: true
+    profiles:
+      balanced:
+        high_threshold: 0.75
+        medium_threshold: 0.5
+        high_base: 0.90
+        high_scale: 0.05
+        high_cap: 0.99
+        medium_base: 0.60
+        medium_scale: 0.30
+        medium_cap: 0.89
+        low_floor: 0.10
+    adaptive_threshold_step: 0.15
+    adaptive_max_attempts: 3
+    schema_file: "schemas/router.search.schema.json"
+```
+
+- `active_profile`: selected confidence profile name.
+- `auto_profile_select`: allows runtime auto-selection when no explicit profile is provided.
+- `profiles.<name>`: confidence calibration parameters for each profile.
+- `adaptive_threshold_step`: retry-time threshold decay for adaptive search.
+- `adaptive_max_attempts`: max adaptive retries before returning best-available matches.
+
+Important:
+
+- Confidence and final-score calibration is owned by Rust binding/runtime.
+- Python forwards configured profile values to Rust and consumes canonical fields
+  (`confidence`, `final_score`) without local recalibration.
+
+The schema is available programmatically:
+
+```python
+from omni.core.router import router_search_json_schema
+
+schema = router_search_json_schema()
+```
+
+Write schema to the active config directory (resolved from `--conf`):
+
+```python
+from omni.core.router import write_router_search_json_schema
+
+path = write_router_search_json_schema()
+```
+
 ---
 
 ## HybridSearch (Rust-Native)
@@ -143,10 +197,11 @@ The **Rust-native hybrid search engine** that delegates all heavy computation to
 class HybridSearch:
     """Rust-native hybrid search (thin Python shell).
 
-    All search logic is in Rust:
+    All ranking and confidence logic is in Rust:
     - Vector similarity (LanceDB)
     - Keyword rescue (Tantivy BM25)
-    - Score fusion (0.4*vector + 0.6*keyword)
+    - Weighted RRF score fusion
+    - Confidence/final-score calibration
     """
 
     def __init__(self):

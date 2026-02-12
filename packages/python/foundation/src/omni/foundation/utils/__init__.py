@@ -9,16 +9,12 @@ Provides common utility functions:
 
 Usage:
     from omni.foundation.utils.templating import render_template
-    from omni.foundation.utils.skills import SKILLS_DIR
+    from omni.foundation.config.skills import SKILLS_DIR
     from omni.foundation.utils.common import is_binary
 """
 
-# Re-export get_setting from config.settings for backward compatibility
-from ..config.settings import get_setting
-
-# Re-export SKILLS_DIR from config.skills for backward compatibility
-from ..config.skills import SKILLS_DIR
 from .common import agent_src, common_src, project_root, setup_import_paths
+from .asyncio import run_async_blocking
 from .fs import find_files_by_extension, find_markdown_files
 from .skills import (
     current_skill_dir,
@@ -31,15 +27,14 @@ from .skills import (
 from .templating import render_string
 
 __all__ = [
-    "SKILLS_DIR",
     "agent_src",
     "common_src",
     "current_skill_dir",
     "find_files_by_extension",
     "find_markdown_files",
-    "get_setting",
     "project_root",
     "render_string",
+    "run_async_blocking",
     "setup_import_paths",
     "skill_asset",
     "skill_command",

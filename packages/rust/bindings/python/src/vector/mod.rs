@@ -26,12 +26,19 @@ pub use tool_record::PyToolRecord;
 
 // Re-export helper functions for use in PyVectorStore methods
 use analytics::{get_all_file_hashes_async, get_analytics_table_async};
-use doc_ops::{add_documents_async, add_single_async, delete_async, delete_by_file_path_async};
-use search_ops::{
-    create_index_async, load_tool_registry_async, scan_skill_tools_raw, search_async,
-    search_filtered_async, search_hybrid_async, search_tools_async,
+use doc_ops::{
+    add_documents_async, add_single_async, delete_async, delete_by_file_path_async,
+    merge_insert_documents_async, replace_documents_async,
 };
-use store::{create_vector_store, store_count, store_drop_table, store_new};
+use search_ops::{
+    create_index_async, load_tool_registry_async, scan_skill_tools_raw, search_hybrid_async,
+    search_optimized_async, search_tools_async,
+};
+use store::{
+    create_vector_store, store_add_columns, store_alter_columns, store_count, store_drop_columns,
+    store_drop_table, store_get_fragment_stats, store_get_table_info, store_list_versions,
+    store_new,
+};
 
 // ============================================================================
 // PyVectorStore - Main vector store class
@@ -75,6 +82,63 @@ impl PyVectorStore {
         )
     }
 
+    fn get_table_info(&self, table_name: String) -> PyResult<String> {
+        store_get_table_info(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            table_name,
+        )
+    }
+
+    fn list_versions(&self, table_name: String) -> PyResult<String> {
+        store_list_versions(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            table_name,
+        )
+    }
+
+    fn get_fragment_stats(&self, table_name: String) -> PyResult<String> {
+        store_get_fragment_stats(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            table_name,
+        )
+    }
+
+    fn add_columns(&self, table_name: String, payload_json: String) -> PyResult<()> {
+        store_add_columns(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            table_name,
+            payload_json,
+        )
+    }
+
+    fn alter_columns(&self, table_name: String, payload_json: String) -> PyResult<()> {
+        store_alter_columns(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            table_name,
+            payload_json,
+        )
+    }
+
+    fn drop_columns(&self, table_name: String, columns: Vec<String>) -> PyResult<()> {
+        store_drop_columns(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            table_name,
+            columns,
+        )
+    }
+
     // -------------------------------------------------------------------------
     // Document Operations
     // -------------------------------------------------------------------------
@@ -96,6 +160,48 @@ impl PyVectorStore {
             vectors,
             contents,
             metadatas,
+        )
+    }
+
+    fn replace_documents(
+        &self,
+        table_name: String,
+        ids: Vec<String>,
+        vectors: Vec<Vec<f32>>,
+        contents: Vec<String>,
+        metadatas: Vec<String>,
+    ) -> PyResult<()> {
+        replace_documents_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+            ids,
+            vectors,
+            contents,
+            metadatas,
+        )
+    }
+
+    fn merge_insert_documents(
+        &self,
+        table_name: String,
+        ids: Vec<String>,
+        vectors: Vec<Vec<f32>>,
+        contents: Vec<String>,
+        metadatas: Vec<String>,
+        match_on: Option<String>,
+    ) -> PyResult<String> {
+        merge_insert_documents_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &table_name,
+            ids,
+            vectors,
+            contents,
+            metadatas,
+            match_on.unwrap_or_else(|| "id".to_string()),
         )
     }
 
@@ -145,32 +251,21 @@ impl PyVectorStore {
     // Search Operations
     // -------------------------------------------------------------------------
 
-    fn search(&self, table_name: String, query: Vec<f32>, limit: usize) -> PyResult<Vec<String>> {
-        search_async(
-            &self.path,
-            self.dimension,
-            self.enable_keyword_index,
-            &table_name,
-            query,
-            limit,
-        )
-    }
-
-    fn search_filtered(
+    fn search_optimized(
         &self,
         table_name: String,
         query: Vec<f32>,
         limit: usize,
-        where_filter: Option<String>,
+        options_json: Option<String>,
     ) -> PyResult<Vec<String>> {
-        search_filtered_async(
+        search_optimized_async(
             &self.path,
             self.dimension,
             self.enable_keyword_index,
             &table_name,
             query,
             limit,
-            where_filter,
+            options_json,
         )
     }
 
@@ -202,6 +297,24 @@ impl PyVectorStore {
         )
     }
 
+    /// Return canonical hybrid-search profile owned by Rust runtime.
+    fn get_search_profile(&self) -> PyResult<Py<PyAny>> {
+        Python::attach(|py| {
+            let field_boosting = pyo3::types::PyDict::new(py);
+            field_boosting.set_item("name_token_boost", 0.5)?;
+            field_boosting.set_item("exact_phrase_boost", 1.5)?;
+
+            let profile = pyo3::types::PyDict::new(py);
+            profile.set_item("semantic_weight", 1.0)?;
+            profile.set_item("keyword_weight", 1.5)?;
+            profile.set_item("rrf_k", 10)?;
+            profile.set_item("implementation", "rust-native-weighted-rrf")?;
+            profile.set_item("strategy", "weighted_rrf_field_boosting")?;
+            profile.set_item("field_boosting", field_boosting)?;
+            Ok(profile.into_pyobject(py)?.into())
+        })
+    }
+
     // -------------------------------------------------------------------------
     // Tool Indexing Operations
     // -------------------------------------------------------------------------
@@ -216,6 +329,26 @@ impl PyVectorStore {
             self.enable_keyword_index,
             &base_path,
             &table_name,
+        )
+    }
+
+    fn index_skill_tools_dual(
+        &self,
+        base_path: String,
+        skills_table: Option<String>,
+        router_table: Option<String>,
+    ) -> PyResult<(usize, usize)> {
+        use tool_ops::index_skill_tools_dual_async;
+
+        let skills_table = skills_table.unwrap_or_else(|| "skills".to_string());
+        let router_table = router_table.unwrap_or_else(|| "router".to_string());
+        index_skill_tools_dual_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            &base_path,
+            &skills_table,
+            &router_table,
         )
     }
 
@@ -318,7 +451,15 @@ impl PyVectorStore {
     // Tool Operations
     // -------------------------------------------------------------------------
 
-    #[pyo3(signature = (table_name, query_vector, query_text=None, limit=5, threshold=0.0))]
+    #[pyo3(signature = (
+        table_name,
+        query_vector,
+        query_text=None,
+        limit=5,
+        threshold=0.0,
+        confidence_profile_json=None,
+        rerank=true
+    ))]
     fn search_tools(
         &self,
         table_name: Option<String>,
@@ -326,6 +467,8 @@ impl PyVectorStore {
         query_text: Option<String>,
         limit: usize,
         threshold: f32,
+        confidence_profile_json: Option<String>,
+        rerank: bool,
     ) -> PyResult<Vec<Py<PyAny>>> {
         let table_name = table_name.unwrap_or_else(|| "skills".to_string());
         search_tools_async(
@@ -337,16 +480,24 @@ impl PyVectorStore {
             query_text,
             limit,
             threshold,
+            confidence_profile_json,
+            rerank,
         )
     }
 
-    fn load_tool_registry(&self, table_name: Option<String>) -> PyResult<Vec<Py<PyAny>>> {
+    #[pyo3(signature = (table_name, confidence_profile_json=None))]
+    fn load_tool_registry(
+        &self,
+        table_name: Option<String>,
+        confidence_profile_json: Option<String>,
+    ) -> PyResult<Vec<Py<PyAny>>> {
         let table_name = table_name.unwrap_or_else(|| "skills".to_string());
         load_tool_registry_async(
             &self.path,
             self.dimension,
             self.enable_keyword_index,
             &table_name,
+            confidence_profile_json,
         )
     }
 }

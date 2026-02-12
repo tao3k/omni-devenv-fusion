@@ -1,45 +1,100 @@
-"""Test fixtures - re-export from submodules for backwards compatibility."""
+"""Pytest fixtures exported by omni.test_kit."""
 
 from omni.test_kit.fixtures.core import (
-    test_tracer,
-    project_root,
-    skills_root,
-    config_dir,
     cache_dir,
     clean_settings,
+    config_dir,
     mock_agent_context,
+    project_root,
+    skills_root,
+    test_tracer,
 )
-
+from omni.test_kit.fixtures.execution import SkillResult, SkillTester, skill_tester
+from omni.test_kit.fixtures.files import temp_yaml_file
 from omni.test_kit.fixtures.git import (
-    temp_git_repo,
     git_repo,
     git_test_env,
     gitops_verifier,
+    temp_git_repo,
 )
-
+from omni.test_kit.fixtures.rag import (
+    RagTestHelper,
+    mock_llm_empty_response,
+    mock_llm_for_extraction,
+    mock_llm_invalid_json,
+    rag_config_fixture,
+    rag_graph_extractor,
+    rag_knowledge_graph_disabled,
+    rag_knowledge_graph_enabled,
+    rag_paragraph_chunker,
+    rag_semantic_chunker,
+    rag_sentence_chunker,
+    rag_sliding_window_chunker,
+    rag_test_helper,
+    sample_text_for_chunking,
+    sample_text_for_entity_extraction,
+)
 from omni.test_kit.fixtures.scanner import (
-    SkillTestBuilder,
     SkillTestSuite,
-    skill_test_suite,
-    skill_directory,
     multi_skill_directory,
-    skill_tester,
-    SkillResult,
-    SkillTester,
     parametrize_skills,
+    skill_directory,
+    skill_test_suite,
 )
+from omni.test_kit.fixtures.skill_builder import SkillTestBuilder
 
+# Live-Wire core fixtures
+from omni.test_kit.fixtures.test_live_wire_core import (
+    live_wire_mock_server,
+    registered_live_wire_server,
+)
+from omni.test_kit.fixtures.vector import (
+    ROUTE_TEST_SCHEMA_V1,
+    hybrid_payload_factory,
+    make_db_search_hybrid_result_list,
+    make_db_search_vector_result_list,
+    make_hybrid_payload,
+    make_route_test_payload,
+    make_router_result_payload,
+    make_tool_search_payload,
+    make_vector_payload,
+    parametrize_input_schema_variants,
+    parametrize_route_intent_queries,
+    tool_search_payload_factory,
+    vector_payload_factory,
+    with_removed_key,
+)
 from omni.test_kit.fixtures.watcher import (
+    WatcherTestHelper,
     mock_watcher_indexer,
     mock_watcher_indexer_with_count,
-    temp_skill_dir,
     sample_skill_script,
     sample_skill_with_tools,
-    WatcherTestHelper,
+    temp_skill_dir,
     watcher_test_helper,
 )
+from omni.test_kit.fixtures.zk import (
+    ZkContentBuilder,
+    ZkTestHelper,
+    zk_content_builder,
+    zk_content_combined,
+    zk_content_complex,
+    zk_content_duplicates,
+    zk_content_empty,
+    zk_content_no_markup,
+    zk_content_with_tags,
+    zk_content_with_wikilinks,
+    zk_entity_extractor,
+    zk_extraction_simple,
+    zk_extraction_typed,
+    zk_extractor,
+    zk_stats_extractor,
+    zk_tag_extractor,
+    zk_test_helper,
+    zk_wikilink_extractor,
+)
 
-__all__ = [
+__all__ = [  # noqa: RUF022
     # Core
     "test_tracer",
     "project_root",
@@ -71,4 +126,59 @@ __all__ = [
     "sample_skill_with_tools",
     "WatcherTestHelper",
     "watcher_test_helper",
+    # RAG
+    "rag_config_fixture",
+    "rag_knowledge_graph_disabled",
+    "rag_knowledge_graph_enabled",
+    "mock_llm_for_extraction",
+    "mock_llm_empty_response",
+    "mock_llm_invalid_json",
+    "rag_graph_extractor",
+    "rag_sentence_chunker",
+    "rag_paragraph_chunker",
+    "rag_sliding_window_chunker",
+    "rag_semantic_chunker",
+    "sample_text_for_chunking",
+    "sample_text_for_entity_extraction",
+    "rag_test_helper",
+    "RagTestHelper",
+    # ZK
+    "zk_content_with_tags",
+    "zk_content_with_wikilinks",
+    "zk_content_combined",
+    "zk_content_empty",
+    "zk_content_no_markup",
+    "zk_content_duplicates",
+    "zk_content_complex",
+    "zk_extraction_simple",
+    "zk_extraction_typed",
+    "zk_extractor",
+    "zk_tag_extractor",
+    "zk_entity_extractor",
+    "zk_wikilink_extractor",
+    "zk_stats_extractor",
+    "zk_test_helper",
+    "ZkTestHelper",
+    "zk_content_builder",
+    "ZkContentBuilder",
+    # Files
+    "temp_yaml_file",
+    # Live-Wire core
+    "live_wire_mock_server",
+    "registered_live_wire_server",
+    # Vector payload fixtures
+    "ROUTE_TEST_SCHEMA_V1",
+    "make_db_search_hybrid_result_list",
+    "make_db_search_vector_result_list",
+    "make_hybrid_payload",
+    "make_route_test_payload",
+    "make_router_result_payload",
+    "make_tool_search_payload",
+    "make_vector_payload",
+    "tool_search_payload_factory",
+    "vector_payload_factory",
+    "hybrid_payload_factory",
+    "parametrize_input_schema_variants",
+    "parametrize_route_intent_queries",
+    "with_removed_key",
 ]

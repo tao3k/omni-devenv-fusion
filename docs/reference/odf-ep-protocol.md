@@ -508,4 +508,4 @@ def test_validate(input: str, expected: bool):
 
 - [Documentation Standards](./documentation-standards.md) - Documentation guidelines
 - [MCP Best Practices](./mcp-best-practices.md) - MCP server development
-- [Architecture Overview](../../docs/explanation/trinity-architecture.md) - Design decisions
+- [Architecture Overview](../../docs/explanation/system-layering.md) - Design decisions

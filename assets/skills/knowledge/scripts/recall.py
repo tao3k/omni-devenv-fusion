@@ -83,7 +83,7 @@ async def recall(
     query: str,
     limit: int = 5,
     keywords: list[str] | None = None,
-    collection: str = "knowledge",
+    collection: str = "knowledge_chunks",
 ) -> str:
     """
     Recall knowledge using hybrid semantic + keyword search.
@@ -302,7 +302,7 @@ async def ingest(
         JSON with status, collection, document_count, and vector_dimension.
     """,
 )
-async def stats(collection: str = "knowledge") -> str:
+async def stats(collection: str = "knowledge_chunks") -> str:
     """
     Get knowledge base statistics.
 
@@ -365,7 +365,7 @@ async def stats(collection: str = "knowledge") -> str:
         JSON with status and message.
     """,
 )
-async def clear(collection: str = "knowledge") -> str:
+async def clear(collection: str = "knowledge_chunks") -> str:
     """
     Clear all knowledge from a collection.
 

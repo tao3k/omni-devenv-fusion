@@ -1,5 +1,7 @@
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, AsyncMock
+from __future__ import annotations
+
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 import pytest
 from omni.langgraph.graph import OmniGraph, GraphState
 
@@ -38,7 +40,7 @@ class LangGraphTester:
         """Mock skill execution result."""
         self.skill_runner.run.return_value = result
 
-    async def run_step(self, node_name: str, state: GraphState) -> Dict[str, Any]:
+    async def run_step(self, node_name: str, state: GraphState) -> dict[str, Any]:
         """Run a single node with the given state."""
         # This requires accessing internal methods of OmniGraph, which is fine for testing
         if node_name == "plan":

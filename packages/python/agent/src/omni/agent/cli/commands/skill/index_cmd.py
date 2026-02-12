@@ -8,12 +8,13 @@ Data is stored in LanceDB (.cache/omni-vector/).
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 
 import typer
 from rich.panel import Panel
+
+from omni.foundation.utils.asyncio import run_async_blocking
 
 from .base import SKILLS_DIR, err_console, skill_app
 
@@ -28,14 +29,14 @@ def _reindex_with_embeddings() -> int:
     print("Dropping existing index table...")
     try:
         store = RustVectorStore(enable_keyword_index=True)
-        asyncio.run(store.drop_table("skills"))
+        run_async_blocking(store.drop_table("skills"))
     except Exception:
         pass  # Table may not exist
 
     # Re-create store and use Rust's built-in indexing (fast, no LLM)
     print("Indexing skills...")
     store = RustVectorStore(enable_keyword_index=True)
-    count = asyncio.run(store.index_skill_tools(skills_path))
+    count = run_async_blocking(store.index_skill_tools(skills_path))
     return count
 
 
@@ -174,7 +175,7 @@ def skill_sync(
 
         store = RustVectorStore()
         try:
-            existing_tools = asyncio.run(store.list_all_tools())
+            existing_tools = store.list_all_tools()
             # Transform to IndexToolEntry format: tool_name -> name
             existing_entries = []
             for tool in existing_tools:
@@ -216,7 +217,7 @@ def skill_sync(
                     )
                 )
                 # Index tools to LanceDB using Rust bindings
-                asyncio.run(store.index_skill_tools(skills_path))
+                run_async_blocking(store.index_skill_tools(skills_path))
                 # Reset the diff result since we just populated
                 has_changes = False
                 unchanged_count = len(scanned_data)
@@ -234,7 +235,7 @@ def skill_sync(
                         )
                     )
                     # Index all tools to LanceDB (handles add, update, delete)
-                    asyncio.run(store.index_skill_tools(skills_path))
+                    run_async_blocking(store.index_skill_tools(skills_path))
                     # Reset tracking since we've applied all changes
                     has_changes = False
                     unchanged_count = len(scanned_data)
@@ -310,7 +311,7 @@ def skill_index_stats(
         from omni.foundation.bridge import RustVectorStore
 
         store = RustVectorStore()
-        tools = asyncio.run(store.list_all_tools())
+        tools = store.list_all_tools()
 
         # Group by skill
         skills_count = len(set(t.get("skill_name", "unknown") for t in tools))

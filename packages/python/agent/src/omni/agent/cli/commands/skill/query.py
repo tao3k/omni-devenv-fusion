@@ -3,7 +3,7 @@
 Query commands for skill CLI.
 
 Contains: list, info, query commands.
-(discover/search deprecated in thin client model)
+(discover/search unavailable in thin client model)
 """
 
 from __future__ import annotations
@@ -112,7 +112,7 @@ def skill_list(
         try:
             store = RustVectorStore()
             skills_dir = SKILLS_DIR()
-            skills = asyncio.run(store.get_skill_index(str(skills_dir)))
+            skills = store.get_skill_index_sync(str(skills_dir))
 
             output = []
             for skill in skills:
@@ -286,7 +286,7 @@ def skill_info(name: str = typer.Argument(..., help="Skill name")):
 
     import yaml
 
-    from omni.foundation.bridge.scanner import PythonSkillScanner
+    from omni.foundation.bridge import RustVectorStore
     from omni.foundation.config.skills import SKILLS_DIR
 
     # Suppress logging for cleaner CLI output
@@ -303,21 +303,19 @@ def skill_info(name: str = typer.Argument(..., help="Skill name")):
     # Get commands from index (works even if skill is not loaded)
     commands = []
     try:
-        scanner = PythonSkillScanner()
-        index_entries = scanner.scan_directory()
-        for entry in index_entries:
-            if entry.skill_name == name:
-                # Extract tool names from metadata
-                metadata = entry.metadata or {}
-                if "tools" in metadata:
-                    # Strip skill name prefix to avoid duplication (e.g., "git.git_commit" -> "git_commit")
-                    prefix = f"{name}."
-                    for t in metadata["tools"]:
-                        cmd_name = t.get("name", "")
-                        if cmd_name.startswith(prefix):
-                            cmd_name = cmd_name[len(prefix) :]
-                        commands.append(cmd_name)
-                break
+        store = RustVectorStore()
+        skill_index = store.get_skill_index_sync(str(skills_dir))
+        for skill in skill_index:
+            if skill.get("name") != name:
+                continue
+            prefix = f"{name}."
+            for tool in skill.get("tools", []):
+                cmd_name = tool.get("name", "")
+                if cmd_name.startswith(prefix):
+                    cmd_name = cmd_name[len(prefix) :]
+                if cmd_name:
+                    commands.append(cmd_name)
+            break
     except Exception:
         pass  # Silently fail - commands will show 0
 
@@ -354,16 +352,16 @@ def skill_info(name: str = typer.Argument(..., help="Skill name")):
     err_console.print(Panel(Markdown(markdown_content), title=f"ℹ️ {name}", expand=False))
 
 
-# Deprecated commands - removed in thin client model
+# Remote discovery/search are intentionally unavailable in thin client mode.
 @skill_app.command("discover")
 def skill_discover(query: str = typer.Argument(..., help="Search query")):
-    """Discover skills from remote index. [DEPRECATED]"""
+    """Discover skills from remote index (unavailable in thin client mode)."""
     err_console.print(
         Panel(
             "Remote skill discovery is not available in thin client mode.\n"
             "Skills are loaded from assets/skills/ automatically.",
-            title="⚠️ Deprecated",
-            style="yellow",
+            title="Unavailable",
+            style="blue",
         )
     )
 
@@ -373,13 +371,13 @@ def skill_search(
     query: str = typer.Argument(..., help="Semantic search query"),
     limit: int = typer.Option(5, "--limit", "-n", help="Maximum number of results"),
 ):
-    """Search skills. [DEPRECATED]"""
+    """Search skills (unavailable in thin client mode)."""
     err_console.print(
         Panel(
             "Semantic skill search is not available in thin client mode.\n"
             "Use 'omni skill list' to see all available skills.",
-            title="⚠️ Deprecated",
-            style="yellow",
+            title="Unavailable",
+            style="blue",
         )
     )
 

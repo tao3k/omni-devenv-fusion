@@ -14,7 +14,8 @@ from unittest.mock import AsyncMock, MagicMock
 def create_mock_search(mock_matches):
     """Helper to create a mock async search function that returns specified matches."""
 
-    async def mock_search(query, limit=5, min_score=0.0):
+    async def mock_search(query, limit=5, min_score=0.0, rerank=None):
+        del query, limit, min_score, rerank
         return mock_matches
 
     return mock_search
@@ -31,6 +32,8 @@ class TestCommandNameParsing:
         mock_matches = [
             {
                 "score": 0.8,
+                "final_score": 0.8,
+                "confidence": "high",
                 "skill_name": "git",
                 "tool_name": "git.commit",  # Full format from Rust
                 "file_path": "assets/skills/git/scripts/commit.py",
@@ -55,6 +58,8 @@ class TestCommandNameParsing:
         mock_matches = [
             {
                 "score": 0.75,
+                "final_score": 0.75,
+                "confidence": "medium",
                 "skill_name": "memory",
                 "tool_name": "save",  # No skill prefix
                 "file_path": "assets/skills/memory/scripts/save.py",
@@ -79,6 +84,8 @@ class TestCommandNameParsing:
         mock_matches = [
             {
                 "score": 0.9,
+                "final_score": 0.9,
+                "confidence": "high",
                 "skill_name": "git",
                 "tool_name": "git",  # Skill-level metadata, not a command
                 "file_path": "assets/skills/git/SKILL.md",  # Has file_path but is skill-level entry
@@ -102,18 +109,24 @@ class TestCommandNameParsing:
         mock_matches = [
             {
                 "score": 0.85,
+                "final_score": 0.85,
+                "confidence": "high",
                 "skill_name": "git",
                 "tool_name": "git.commit",
                 "file_path": "assets/skills/git/scripts/commit.py",
             },
             {
                 "score": 0.8,
+                "final_score": 0.8,
+                "confidence": "high",
                 "skill_name": "git",
                 "tool_name": "git.status",
                 "file_path": "assets/skills/git/scripts/status.py",
             },
             {
                 "score": 0.75,
+                "final_score": 0.75,
+                "confidence": "medium",
                 "skill_name": "git",
                 "tool_name": "git.push",
                 "file_path": "assets/skills/git/scripts/push.py",
@@ -139,12 +152,16 @@ class TestCommandNameParsing:
         mock_matches = [
             {
                 "score": 0.9,
+                "final_score": 0.9,
+                "confidence": "high",
                 "skill_name": "git",
                 "tool_name": "git.commit",
                 "file_path": "assets/skills/git/scripts/commit.py",
             },
             {
                 "score": 0.85,
+                "final_score": 0.85,
+                "confidence": "high",
                 "skill_name": "memory",
                 "tool_name": "memory.save",
                 "file_path": "assets/skills/memory/scripts/save.py",
@@ -179,6 +196,8 @@ class TestNoDuplicateSkillPrefix:
         mock_matches = [
             {
                 "score": 0.9,
+                "final_score": 0.9,
+                "confidence": "high",
                 "skill_name": "git",
                 "tool_name": "git.commit",
                 "file_path": "assets/skills/git/scripts/commit.py",
@@ -208,6 +227,8 @@ class TestNoDuplicateSkillPrefix:
         mock_matches = [
             {
                 "score": 0.82,
+                "final_score": 0.82,
+                "confidence": "high",
                 "skill_name": "git",
                 "tool_name": "git.commit",
                 "command": "commit",  # Alternative field name
@@ -216,6 +237,8 @@ class TestNoDuplicateSkillPrefix:
             },
             {
                 "score": 0.78,
+                "final_score": 0.78,
+                "confidence": "medium",
                 "skill_name": "git",
                 "tool_name": "git.smart_commit",
                 "command": "smart_commit",

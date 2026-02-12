@@ -6,7 +6,8 @@ and work seamlessly with pytest.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 
@@ -79,7 +80,7 @@ def assert_not_in(item: Any, container: Any, msg: str = "") -> None:
 
 
 def assert_raises(
-    expected_exception: type[Exception], callable: Callable = None, *args, **kwargs
+    expected_exception: type[Exception], callable: Callable | None = None, *args, **kwargs
 ) -> Any:
     """Assert that an exception is raised.
 
@@ -222,9 +223,8 @@ def assert_response_blocked(response: Any, msg: str = "") -> None:
         )
 
 
-def assert_has_error(response: Any, expected_code: str = None, msg: str = "") -> None:
+def assert_has_error(response: Any, expected_code: str | None = None, msg: str = "") -> None:
     """Assert that response has an error and optionally check error code."""
-    from omni.core.responses import ResponseStatus
 
     if not hasattr(response, "error"):
         pytest.fail(f"{msg}\nResponse has no error field" if msg else "Response has no error field")
@@ -232,13 +232,16 @@ def assert_has_error(response: Any, expected_code: str = None, msg: str = "") ->
     if not response.error:
         pytest.fail(f"{msg}\nResponse error is empty" if msg else "Response error is empty")
 
-    if expected_code is not None and hasattr(response, "error_code"):
-        if response.error_code != expected_code:
-            pytest.fail(
-                f"{msg}\nExpected error code {expected_code!r}, got {response.error_code!r}"
-                if msg
-                else f"Expected error code {expected_code!r}, got {response.error_code!r}"
-            )
+    if (
+        expected_code is not None
+        and hasattr(response, "error_code")
+        and response.error_code != expected_code
+    ):
+        pytest.fail(
+            f"{msg}\nExpected error code {expected_code!r}, got {response.error_code!r}"
+            if msg
+            else f"Expected error code {expected_code!r}, got {response.error_code!r}"
+        )
 
 
 def assert_response_data(response: Any, expected_data: Any = None, msg: str = "") -> None:
@@ -255,7 +258,7 @@ def assert_response_data(response: Any, expected_data: Any = None, msg: str = ""
 
 
 def assert_response_metadata(
-    response: Any, expected_key: str = None, expected_value: Any = None, msg: str = ""
+    response: Any, expected_key: str | None = None, expected_value: Any = None, msg: str = ""
 ) -> None:
     """Assert that response has expected metadata."""
     if not hasattr(response, "metadata"):
@@ -284,15 +287,18 @@ def assert_response_metadata(
 # =============================================================================
 
 
-def assert_skill_loaded(skill_info: Any, expected_name: str = None, msg: str = "") -> None:
+def assert_skill_loaded(skill_info: Any, expected_name: str | None = None, msg: str = "") -> None:
     """Assert that a skill was loaded correctly."""
-    if expected_name is not None and hasattr(skill_info, "name"):
-        if skill_info.name != expected_name:
-            pytest.fail(
-                f"{msg}\nExpected skill name {expected_name!r}, got {skill_info.name!r}"
-                if msg
-                else f"Expected skill name {expected_name!r}, got {skill_info.name!r}"
-            )
+    if (
+        expected_name is not None
+        and hasattr(skill_info, "name")
+        and skill_info.name != expected_name
+    ):
+        pytest.fail(
+            f"{msg}\nExpected skill name {expected_name!r}, got {skill_info.name!r}"
+            if msg
+            else f"Expected skill name {expected_name!r}, got {skill_info.name!r}"
+        )
 
 
 def assert_skill_has_permission(skill_info: Any, permission: str, msg: str = "") -> None:
@@ -318,3 +324,69 @@ def assert_skill_has_command(skill_commands: dict, command_name: str, msg: str =
             if msg
             else f"Skill missing command {command_name!r}"
         )
+
+
+# =============================================================================
+# Router Assertions
+# =============================================================================
+
+
+def assert_route_result_shape(result: Any, msg: str = "") -> None:
+    """Assert a route result exposes required fields and canonical tool id shape."""
+    required_fields = ("skill_name", "command_name", "score", "confidence")
+    for field in required_fields:
+        if not hasattr(result, field):
+            pytest.fail(
+                f"{msg}\nMissing route field: {field!r}"
+                if msg
+                else f"Missing route field: {field!r}"
+            )
+
+    skill_name = getattr(result, "skill_name", None)
+    command_name = getattr(result, "command_name", None)
+    if not skill_name or not command_name:
+        pytest.fail(msg or "Route result requires non-empty skill_name and command_name")
+
+    full_id = f"{skill_name}.{command_name}"
+    if "." not in full_id:
+        pytest.fail(msg or f"Expected canonical tool id with dot, got {full_id!r}")
+
+    score = getattr(result, "score", None)
+    if score is None or float(score) <= 0:
+        pytest.fail(msg or f"Expected positive route score, got {score!r}")
+
+
+def assert_tool_family_match(
+    tool_names: list[str],
+    *,
+    substrings: list[str] | None = None,
+    exact: list[str] | None = None,
+    msg: str = "",
+) -> None:
+    """Assert at least one tool name matches expected family patterns."""
+    substrings = substrings or []
+    exact = exact or []
+
+    matched = False
+    for name in tool_names:
+        if name in exact or any(token in name for token in substrings):
+            matched = True
+            break
+
+    if not matched:
+        expectation = f"substrings={substrings}, exact={exact}"
+        pytest.fail(
+            f"{msg}\nNo tool matched {expectation}. got={tool_names}"
+            if msg
+            else f"No tool matched {expectation}. got={tool_names}"
+        )
+
+
+def assert_route_results_list(results: Any, *, allow_empty: bool = True, msg: str = "") -> None:
+    """Assert list shape for route results and optionally validate each entry."""
+    if not isinstance(results, list):
+        pytest.fail(msg or f"Expected list route results, got {type(results).__name__}")
+    if not allow_empty and not results:
+        pytest.fail(msg or "Expected non-empty route results list")
+    for result in results:
+        assert_route_result_shape(result, msg=msg)

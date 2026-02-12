@@ -51,6 +51,8 @@ class SkillContext:
     def register_skill(self, skill: Any) -> None:
         """Register a loaded skill (UniversalScriptSkill).
 
+        For hot reload: clears old skill's commands before adding new ones.
+
         Args:
             skill: A UniversalScriptSkill instance
         """
@@ -72,6 +74,21 @@ class SkillContext:
                 skill._mtime = 0
 
             self._skills[skill.name] = skill
+
+            # [FIX] Clear old skill's commands before adding new ones (for hot reload)
+            # This ensures deleted files don't leave stale commands
+            old_commands_to_remove = [
+                cmd for cmd in self._commands if cmd.startswith(f"{skill_name}.")
+            ]
+            for cmd in old_commands_to_remove:
+                del self._commands[cmd]
+                logger.debug(f"[SkillContext] Removed stale command: {cmd}")
+
+            old_native_to_remove = [
+                cmd for cmd in self._native if cmd.startswith(f"{skill_name}.") or cmd == skill_name
+            ]
+            for cmd in old_native_to_remove:
+                del self._native[cmd]
 
             # Register decorated commands from the skill
             if hasattr(skill, "_tools_loader") and skill._tools_loader is not None:
@@ -294,19 +311,6 @@ class SkillContext:
         return len(self._skills)
 
 
-class SkillRegistry:
-    """Skill registry for compatibility."""
-
-    def __init__(self):
-        self._skills: dict[str, Any] = {}
-
-    def register(self, name: str, skill: Any) -> None:
-        self._skills[name] = skill
-
-    def get(self, name: str) -> Any | None:
-        return self._skills.get(name)
-
-
 class SkillDiscovery:
     """Skill discovery service."""
 
@@ -346,22 +350,12 @@ def get_skill_context(skills_dir: Path) -> SkillContext:
     return _context
 
 
-def get_skill_manager(skills_dir: Path) -> SkillContext:
-    """Backward compatibility alias for get_skill_context."""
-    return get_skill_context(skills_dir)
-
-
 def reset_context() -> None:
     """Reset the global skill context (for testing)."""
     global _context
     if _context is not None:
         _context.clear()
     _context = None
-
-
-def get_registry() -> SkillRegistry:
-    """Get the skill registry (for compatibility)."""
-    return SkillRegistry()
 
 
 async def run_command(command: str, **kwargs) -> Any:
@@ -411,11 +405,7 @@ __all__ = [
     "SkillContext",
     "SkillManager",  # Alias
     "get_skill_context",
-    "get_skill_manager",
     "reset_context",
-    # Registry
-    "SkillRegistry",
-    "get_registry",
     # Execution
     "run_command",
 ]

@@ -1,6 +1,6 @@
 # LLM Guide: Writing LangGraph Workflows
 
-> Omni-Dev-Fusion Trinity Architecture - Workflow Implementation Guide
+> Omni-Dev-Fusion System Layering - Workflow Implementation Guide
 
 ## Overview
 

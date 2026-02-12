@@ -275,7 +275,3 @@ class ResilientReAct:
             "tool_calls_count": self.tool_calls_count,
             "unique_tool_calls": len(self._tool_hash_history),
         }
-
-
-# Backward compatibility alias
-ReActWorkflow = ResilientReAct

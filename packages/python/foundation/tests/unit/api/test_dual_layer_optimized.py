@@ -22,11 +22,13 @@ class TestDualLayerConfig:
         # Empty user config
         user_conf = tmp_path / ".config"
         user_conf.mkdir()
+        app_conf = user_conf / "omni-dev-fusion"
+        app_conf.mkdir()
 
         # Mock environment and project root
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(user_conf)}),
-            patch("omni.foundation.config.settings.get_project_root", return_value=tmp_path),
+            patch("omni.foundation.runtime.gitops.get_project_root", return_value=tmp_path),
         ):
             # Re-initialize settings (clean_settings fixture handles cleanup)
             # We need to manually trigger load because clean_settings gives us an already initialized empty one?
@@ -54,11 +56,13 @@ class TestDualLayerConfig:
         # User config with override
         user_conf = tmp_path / ".config"
         user_conf.mkdir()
-        (user_conf / "settings.yaml").write_text("core:\n  mode: turbo")
+        app_conf = user_conf / "omni-dev-fusion"
+        app_conf.mkdir()
+        (app_conf / "settings.yaml").write_text("core:\n  mode: turbo")
 
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(user_conf)}),
-            patch("omni.foundation.config.settings.get_project_root", return_value=tmp_path),
+            patch("omni.foundation.runtime.gitops.get_project_root", return_value=tmp_path),
         ):
             from omni.foundation.config.settings import Settings
 
@@ -79,11 +83,13 @@ class TestDualLayerConfig:
 
         user_conf = tmp_path / ".config"
         user_conf.mkdir()
-        (user_conf / "settings.yaml").write_text("api:\n  timeout: 60")
+        app_conf = user_conf / "omni-dev-fusion"
+        app_conf.mkdir()
+        (app_conf / "settings.yaml").write_text("api:\n  timeout: 60")
 
         with (
             patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(user_conf)}),
-            patch("omni.foundation.config.settings.get_project_root", return_value=tmp_path),
+            patch("omni.foundation.runtime.gitops.get_project_root", return_value=tmp_path),
         ):
             from omni.foundation.config.settings import Settings
 
@@ -102,13 +108,14 @@ class TestDualLayerConfig:
 
         custom_conf = tmp_path / "custom_conf"
         custom_conf.mkdir()
-        (custom_conf / "settings.yaml").write_text("core:\n  mode: from-cli")
+        (custom_conf / "omni-dev-fusion").mkdir(parents=True)
+        (custom_conf / "omni-dev-fusion" / "settings.yaml").write_text("core:\n  mode: from-cli")
 
         test_args = ["app.py", "--conf", str(custom_conf)]
 
         with (
             patch.object(sys, "argv", test_args),
-            patch("omni.foundation.config.settings.get_project_root", return_value=tmp_path),
+            patch("omni.foundation.runtime.gitops.get_project_root", return_value=tmp_path),
         ):
             from omni.foundation.config.settings import Settings
 
@@ -120,3 +127,34 @@ class TestDualLayerConfig:
             assert settings.get("core.timeout") == 30
             # Note: Settings logic sets PRJ_CONFIG_HOME env var when --conf is used
             assert os.environ.get("PRJ_CONFIG_HOME") == str(custom_conf)
+
+    def test_cli_conf_takes_precedence_over_env(self, clean_settings, tmp_path):
+        """Explicit --conf in argv should win over existing PRJ_CONFIG_HOME."""
+        assets_dir = tmp_path / "assets"
+        assets_dir.mkdir()
+        (assets_dir / "settings.yaml").write_text("core:\n  timeout: 30\n  mode: default")
+
+        env_conf = tmp_path / "env_conf"
+        env_conf.mkdir()
+        (env_conf / "omni-dev-fusion").mkdir(parents=True)
+        (env_conf / "omni-dev-fusion" / "settings.yaml").write_text("core:\n  mode: from-env")
+
+        cli_conf = tmp_path / "cli_conf"
+        cli_conf.mkdir()
+        (cli_conf / "omni-dev-fusion").mkdir(parents=True)
+        (cli_conf / "omni-dev-fusion" / "settings.yaml").write_text("core:\n  mode: from-cli")
+
+        test_args = ["app.py", "--conf", str(cli_conf)]
+
+        with (
+            patch.dict(os.environ, {"PRJ_CONFIG_HOME": str(env_conf)}),
+            patch.object(sys, "argv", test_args),
+            patch("omni.foundation.runtime.gitops.get_project_root", return_value=tmp_path),
+        ):
+            from omni.foundation.config.settings import Settings
+
+            Settings._instance = None
+            Settings._loaded = False
+            settings = Settings()
+
+            assert settings.get("core.mode") == "from-cli"

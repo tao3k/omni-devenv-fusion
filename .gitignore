@@ -1,3 +1,4 @@
+.zk/notebook.db
 # Devenv
 .devenv*
 devenv.local.nix

@@ -8,7 +8,7 @@ Modularized for testability.
 Modules:
 - base.py: ProjectMemory class and utilities
 - core: Core interfaces, types, and utilities
-- stores: Storage implementations (LanceDB, file-based)
+- stores: Storage implementations (LanceDB)
 
 Usage:
     from omni.foundation.services.memory import ProjectMemory
@@ -20,7 +20,6 @@ Usage:
 
 from .base import (
     MEMORY_DIR,
-    STORAGE_MODE_FILE,
     STORAGE_MODE_LANCE,
     ProjectMemory,
     StorageMode,
@@ -31,7 +30,6 @@ from .base import (
 
 __all__ = [
     "MEMORY_DIR",
-    "STORAGE_MODE_FILE",
     "STORAGE_MODE_LANCE",
     "ProjectMemory",
     "StorageMode",

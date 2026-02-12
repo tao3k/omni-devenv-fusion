@@ -6,80 +6,84 @@
 
 This guide explains how memory systems work in Omni-Dev-Fusion Fusion and how LLMs can leverage episodic memory.
 
-## Memory Architecture
+## Memory Architecture (Hippocampus)
 
-The system implements a three-level memory hierarchy:
+The system implements a biological memory hierarchy managed by the Hippocampus:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Memory Hierarchy                              │
+│                    Hippocampus Memory Hierarchy                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Level 1: Scratchpad (Short-term)                       │   │
-│  │  - Current task's detailed tool outputs                 │   │
-│  │  - FIFO, 4k-8k tokens max                              │   │
+│  │  Layer 1: Working Context (Short-term)                  │   │
+│  │  - Current mission's task graph and tool logs           │   │
+│  │  - Volatile, expires after mission complete             │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                            │                                    │
 │                            ▼                                    │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Level 2: Episodic Summary (Medium-term)                │   │
-│  │  - Generated when Task completes                        │   │
-│  │  - Stored in SQLite/JSONL                              │   │
-│  │  - Injected into future System Prompts                  │   │
+│  │  Layer 2: Episodic Experiences (Hippocampus)            │   │
+│  │  - Successful execution traces (HippocampusTrace)       │   │
+│  │  - Vector-indexed for semantic recall                   │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                            │                                    │
 │                            ▼                                    │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Level 3: Knowledge Graph (Long-term)                   │   │
-│  │  - Vectorized Episode Summaries                         │   │
-│  │  - Retrieved by Wisdom Injection                        │   │
+│  │  Layer 3: Crystallized Skills (Evolution)               │   │
+│  │  - Proven workflows converted into permanent Skills     │   │
+│  │  - OSS 2.0 compliant packages in harvested/             │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Cognitive Trinity
+## Cognitive Omega
 
-Memory completes the Cognitive Trinity:
+Memory (Hippocampus) completes the Omega functional loop:
 
-| Component     | Capability                     | Data Source                    |
-| ------------- | ------------------------------ | ------------------------------ |
-| **Skills**    | "I know how to do"             | `assets/skills/*/scripts/*.py` |
-| **Knowledge** | "I know what that is"          | `docs/`, `assets/specs/`       |
-| **Memory**    | "I remember doing that before" | VectorDB (LanceDB)             |
+| Component       | Capability                            | System     |
+| :-------------- | :------------------------------------ | :--------- |
+| **Cortex**      | "I decide what to do"                 | Reasoning  |
+| **Cerebellum**  | "I know how the code is structured"   | Perception |
+| **Hippocampus** | "I remember how I solved this before" | Memory     |
+| **Evolution**   | "I learn and create new skills"       | Growth     |
 
-## Using Memory
+## Using Hippocampus
 
-### 1. Adding Experiences
+### 1. Recalling Experiences
 
-Record successful patterns:
-
-```python
-@omni("memory.add_experience", {
-    "user_query": "git commit fails with lock",
-    "tool_calls": ["git.commit"],
-    "outcome": "failure",
-    "error_msg": "index.lock exists",
-    "reflection": "Solution: rm .git/index.lock"
-})
-```
-
-### 2. Recalling Memories
-
-Retrieve relevant past experiences:
+Before starting a complex task, the Cortex automatically queries the Hippocampus:
 
 ```python
-@omni("memory.recall", {
-    "query": "git commit lock"
+@omni("hippocampus.recall_experience", {
+    "query": "git commit fails with lock"
 })
 ```
 
 Output:
 
+```json
+{
+  "experiences": [
+    {
+      "goal": "fix git lock issue",
+      "steps": ["rm .git/index.lock", "git commit"],
+      "outcome": "success"
+    }
+  ]
+}
 ```
-[failure] Solution: rm .git/index.lock
-[success] Used git_stage_all for bulk staging
+
+### 2. Committing to Long-term Memory
+
+After a successful mission, the Evolution system commits the trace to the Hippocampus:
+
+```python
+@omni("hippocampus.commit_trace", {
+    "trace_id": "mission_abc123",
+    "summary": "Resolved auth bug using AST replacement"
+})
 ```
 
 ### 3. Consulting Knowledge Base

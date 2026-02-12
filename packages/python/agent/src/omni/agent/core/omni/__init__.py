@@ -26,7 +26,7 @@ Omega (Unified Hub):
 
 from .config import OmniLoopConfig
 from .loop import OmniLoop
-from .react import ReActWorkflow
+from .react import ResilientReAct
 from .omega import (
     OmegaRunner,
     OMEGA_TOPICS,
@@ -40,7 +40,7 @@ from .omega import (
 __all__ = [
     "OmniLoop",
     "OmniLoopConfig",
-    "ReActWorkflow",
+    "ResilientReAct",
     # Omega
     "OmegaRunner",
     "OMEGA_TOPICS",  # Event topic constants matching omni-events

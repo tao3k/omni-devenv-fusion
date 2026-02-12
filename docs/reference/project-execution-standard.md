@@ -167,8 +167,20 @@ async fn test_filter_by_metadata_domain() {
         &["py_1", "rust_1"],
         &[HashMap::from([("domain", "python")]), HashMap::from([("domain", "rust")])],
     ).await.unwrap();
+    let query_vec = vec![0.0_f32; 1536];
 
-    let results = store.search("code", 5, Some(json!({"domain": "python"}))).await.unwrap();
+    let results = store
+        .search_optimized(
+            "skills",
+            query_vec,
+            5,
+            SearchOptions {
+                where_filter: Some("{\"domain\":\"python\"}".to_string()),
+                ..SearchOptions::default()
+            },
+        )
+        .await
+        .unwrap();
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].id, "py_1");
 }

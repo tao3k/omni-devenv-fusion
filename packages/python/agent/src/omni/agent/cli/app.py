@@ -20,12 +20,14 @@ from typing import Any
 
 from omni.foundation.config.dirs import PRJ_DIRS, PRJ_RUNTIME
 from omni.foundation.config.logging import configure_logging
+from omni.foundation.runtime.gitops import get_project_root
 
 # Foundation Imports (Layer 0-2)
-from omni.foundation.config.settings import get_settings, set_configuration_directory
+from omni.foundation.config.settings import get_settings
 
 # Command Imports
 from .commands import (
+    register_completions_command,
     register_db_command,
     register_knowledge_command,
     register_mcp_command,
@@ -55,7 +57,7 @@ def _get_git_commit() -> str:
             ["git", "rev-parse", "HEAD"],
             capture_output=True,
             text=True,
-            cwd=Path(__file__).parent.parent.parent.parent,
+            cwd=get_project_root(),
         )
         return result.stdout.strip()[:8] if result.returncode == 0 else "unknown"
     except Exception:
@@ -152,13 +154,10 @@ def _bootstrap_configuration(
         # 1. Set the global environment pointer
         os.environ["PRJ_CONFIG_HOME"] = str(path_obj)
 
-        # 2. Update Foundation layer
-        set_configuration_directory(str(path_obj))
-
-        # 3. Clear Directory Cache (Crucial!)
+        # 2. Clear Directory Cache (Crucial!)
         PRJ_DIRS.clear_cache()
 
-        # 4. Reload Settings
+        # 3. Reload Settings
         get_settings().reload()
 
         typer.secho(f"Configuration loaded from: {path_obj}", fg=typer.colors.BRIGHT_BLACK)
@@ -233,6 +232,7 @@ def main(
 
 
 # Register subcommands
+register_completions_command(app)
 register_db_command(app)
 register_skill_command(app)
 register_mcp_command(app)
@@ -276,6 +276,17 @@ def entry_point():
 
     # Bootstrap configuration (logging) BEFORE any command runs
     _bootstrap_configuration(conf, verbose)
+
+    # Auto-reindex vector indexes when embedding signature changes.
+    # Skip when user is already invoking reindex command explicitly.
+    if not (argv and argv[0] == "reindex"):
+        try:
+            from .commands.reindex import ensure_embedding_index_compatibility
+
+            ensure_embedding_index_compatibility(auto_fix=True)
+        except Exception:
+            # Best effort guardrail; never block CLI startup.
+            pass
 
     # Restore argv and invoke app
     sys.argv = ["omni"] + argv

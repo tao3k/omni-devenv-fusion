@@ -30,7 +30,7 @@ mkdir -p "$DEST_DIR"
 # - .claude/: Claude settings
 # - .env*: Environment files
 
-rsync -av --delete \
+rsync -av --delete --delete-excluded \
   --exclude='.git' \
   --exclude='__pycache__' \
   --exclude='*.pyc' \
@@ -62,6 +62,12 @@ rsync -av --delete \
   --exclude='.pre-commit-config.yaml' \
   --exclude='process-compose.log' \
   --exclude='.python-version' \
+  --exclude='packages/**/.cache' \
+  --exclude='packages/**/tests/**' \
+  --exclude='packages/**/*test*' \
+  --exclude='packages/**/test_*' \
+  --exclude='packages/**/*_test.*' \
+  --exclude='packages/ncl' \
   \
   "$SRC_DIR/docs" \
   "$SRC_DIR/packages" \

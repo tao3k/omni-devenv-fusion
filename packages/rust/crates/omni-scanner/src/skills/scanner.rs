@@ -82,7 +82,9 @@ fn parse_rules_toml(skill_path: &Path) -> Vec<SnifferRule> {
         }
     }
 
-    log::debug!("Parsed {} sniffer rules from {:?}", rules.len(), rules_path);
+    if log::log_enabled!(log::Level::Debug) {
+        log::debug!("Parsed {} sniffer rules from {:?}", rules.len(), rules_path);
+    }
 
     rules
 }
@@ -159,24 +161,14 @@ struct SkillMetadataBlock {
 /// // Scan all skills
 /// let all_metadatas = scanner.scan_all(PathBuf::from("assets/skills")).unwrap();
 /// ```
-#[derive(Debug)]
-pub struct SkillScanner {
-    /// Reserved for future configuration options
-    #[allow(dead_code)]
-    config: (),
-}
-
-#[derive(Debug, Default)]
-#[allow(dead_code)]
-struct ScanConfig {
-    base_path: PathBuf,
-}
+#[derive(Debug, Clone)]
+pub struct SkillScanner;
 
 impl SkillScanner {
     /// Create a new skill scanner with default settings.
     #[must_use]
     pub fn new() -> Self {
-        Self { config: () }
+        Self
     }
 
     /// Get the default skill structure (from settings.yaml).
@@ -269,7 +261,7 @@ impl SkillScanner {
         Ok(Some(metadata))
     }
 
-    /// Scan all skills in a base directory.
+    /// Scan all skills in a base directory with parallel processing.
     ///
     /// Returns a vector of skill metadata for all skills with valid SKILL.md.
     /// Skills without SKILL.md are silently skipped.
@@ -283,26 +275,68 @@ impl SkillScanner {
         base_path: &Path,
         structure: Option<&SkillStructure>,
     ) -> Result<Vec<SkillMetadata>, Box<dyn std::error::Error>> {
-        let mut metadatas = Vec::new();
+        use rayon::prelude::*;
+        use std::sync::Arc;
 
         if !base_path.exists() {
             log::warn!("Skills base directory not found: {:?}", base_path);
-            return Ok(metadatas);
+            return Ok(Vec::new());
         }
 
-        for entry in fs::read_dir(base_path)? {
-            let entry = entry?;
-            let path = entry.path();
+        // Collect all skill directories first
+        let skill_dirs: Vec<PathBuf> = fs::read_dir(base_path)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .map(|e| e.path())
+            .collect();
 
-            if path.is_dir() {
-                if let Some(metadata) = self.scan_skill(&path, structure)? {
-                    metadatas.push(metadata);
-                }
-            }
-        }
+        // Arc wrap structure for thread-safe sharing
+        let validate_struct = structure.map(|s| Arc::new(s.clone()));
+
+        // Process in parallel using rayon
+        let metadatas: Vec<SkillMetadata> = skill_dirs
+            .par_iter()
+            .filter_map(|skill_path| self.scan_skill_inner(skill_path, validate_struct.as_deref()))
+            .collect();
 
         log::info!("Scanned {} skills from {:?}", metadatas.len(), base_path);
         Ok(metadatas)
+    }
+
+    /// Internal helper for parallel skill scanning.
+    #[inline]
+    fn scan_skill_inner(
+        &self,
+        skill_path: &Path,
+        structure: Option<&SkillStructure>,
+    ) -> Option<SkillMetadata> {
+        let skill_md_path = skill_path.join("SKILL.md");
+        if !skill_md_path.exists() {
+            return None;
+        }
+
+        // Validate structure if provided
+        if let Some(structure) = structure {
+            if !Self::validate_structure(skill_path, structure) {
+                log::warn!(
+                    "Skill at {:?} does not match required structure",
+                    skill_path
+                );
+            }
+        }
+
+        // Read and parse the file
+        let content = fs::read_to_string(&skill_md_path).ok()?;
+        let metadata = self.parse_skill_md(&content, skill_path).ok()?;
+
+        log::info!(
+            "Scanned skill metadata: {} (v{}) - {} keywords",
+            metadata.skill_name,
+            metadata.version,
+            metadata.routing_keywords.len()
+        );
+
+        Some(metadata)
     }
 
     /// Build a full SkillIndexEntry from metadata and tools.

@@ -381,6 +381,7 @@ class TransactionShield:
             code, stdout, stderr = await self._run_git("sh", "-c", verification_script)
             if code != 0:
                 transaction.error = f"Verification failed: {stderr}"
+                transaction.status = TransactionStatus.FAILED
                 logger.error(
                     "transaction.verification_failed",
                     task_id=task_id,
@@ -388,7 +389,17 @@ class TransactionShield:
                 )
                 return False
 
-        # TODO: Integrate with Immune System for security scan
+        # Run Immune static security scan on changed Python files
+        immune_ok, immune_error = await self._run_immune_scan(transaction)
+        if not immune_ok:
+            transaction.error = immune_error
+            transaction.status = TransactionStatus.FAILED
+            logger.error(
+                "transaction.immune_scan_failed",
+                task_id=task_id,
+                error=immune_error,
+            )
+            return False
 
         transaction.status = TransactionStatus.VERIFIED
         transaction.verified_at = datetime.now()
@@ -399,6 +410,54 @@ class TransactionShield:
         )
 
         return True
+
+    async def _run_immune_scan(self, transaction: Transaction) -> tuple[bool, str | None]:
+        """Run Immune static scan for changed Python files in the transaction."""
+        from omni.foundation.bridge.rust_immune import scan_code_security
+
+        changed_py_files = [
+            path
+            for path in transaction.changes.keys()
+            if path != "_commit" and str(path).endswith(".py")
+        ]
+        if not changed_py_files:
+            return True, None
+
+        violation_summaries: list[str] = []
+
+        for rel_path in changed_py_files:
+            abs_path = self.repo_root / rel_path
+            if not abs_path.exists():
+                continue
+
+            try:
+                source = abs_path.read_text("utf-8")
+            except UnicodeDecodeError:
+                # Non-UTF8 files are skipped from Python source security scan.
+                continue
+            except Exception as exc:
+                return False, f"Immune scan failed: {rel_path}: [READ-ERR] {exc}"
+
+            is_safe, violations = scan_code_security(source)
+            if is_safe:
+                continue
+
+            for violation in violations:
+                rule = violation.get("rule_id", "UNKNOWN")
+                line = violation.get("line", "?")
+                desc = violation.get("description", "")
+                violation_summaries.append(f"{rel_path}:{line} [{rule}] {desc}")
+
+        if violation_summaries:
+            preview = "; ".join(violation_summaries[:3])
+            return False, f"Immune scan failed: {preview}"
+
+        logger.info(
+            "transaction.immune_scan_passed",
+            task_id=transaction.task_id,
+            files_scanned=len(changed_py_files),
+        )
+        return True, None
 
     async def merge_transaction(
         self,

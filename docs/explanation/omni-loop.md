@@ -446,7 +446,7 @@ loop.state.get_stats()
 
 ## Related Documentation
 
-- [Trinity Architecture](./trinity-architecture.md) - System architecture overview
+- [Trinity Architecture](./system-layering.md) - System architecture overview
 - [Context Orchestrator](../reference/mcp-orchestrator.md) - Layered context building
 - [Skill Discovery](../llm/skill-discovery.md) - Dynamic skill loading
 - [Librarian](../reference/librarian.md) - RAG knowledge retrieval

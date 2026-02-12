@@ -1,329 +1,411 @@
 """
 omni.foundation.embedding - Unified Embedding Service
 
-Provides text embedding capabilities using LLM.
+Provides text embedding using local sentence-transformers models.
+Supports two modes:
+1. Local mode: Load model directly (default)
+2. Client mode: Connect to remote embedding HTTP server
 
-Architecture:
-- **Primary**: LLM-based embedding (MiniMax-M2.1 via InferenceClient)
-- **Fallback 1**: FastEmbed (local BAAI/bge-small-en-v1.5)
-- **Fallback 2**: Hash-based vectors (deterministic)
+Auto-detection:
+- First MCP: starts HTTP server immediately, loads model after MCP is connected
+- Other MCPs: detect port in use, automatically connect as clients
 
-Configuration:
-- Provider: embedding.provider in settings.yaml
-- Dimension: embedding.dimension in settings.yaml (default: 1024)
-
-The LLM-based approach uses structured prompting to generate 16 core semantic
-values, which are then interpolated to the configured dimension (1024) for
-storage in LanceDB. This ensures embedding quality matches the chat model.
+Configuration (settings.yaml):
+- embedding.provider: "" (auto), "client", "fallback"
+- embedding.model: HuggingFace model name
+- embedding.dimension: Vector dimension
+- embedding.http_port: HTTP server port (default: 18501)
 """
 
 from __future__ import annotations
 
-import asyncio
+import os
+import sys
+import threading
+from errno import EADDRINUSE
+
+# Workaround for Python 3.13 + torch.distributed compatibility issue
+if sys.version_info >= (3, 13):
+    if "TORCH_DISTRIBUTED_DETECTION" not in os.environ:
+        os.environ["TORCH_DISTRIBUTED_DETECTION"] = "1"
+
 from typing import Any
 
 import structlog
 
+from omni.foundation.config.prj import PRJ_DATA
 from omni.foundation.config.settings import get_setting
 
 logger = structlog.get_logger(__name__)
 
 
 class EmbeddingService:
-    """Singleton service for generating text embeddings using LLM.
+    """Singleton service for generating text embeddings.
 
-    Configuration is read from settings.yaml (embedding.dimension).
+    Auto-detection behavior:
+    - First process: starts HTTP server immediately, loads model after start_model_loading()
+    - Other processes: detect server, connect as client
     """
 
     _instance: "EmbeddingService | None" = None
     _model: Any = None
-    _dimension: int = 0  # Set from settings.yaml in _initialize
-    _backend: str = "llm"
+    _dimension: int = 1024
+    _backend: str = "local"
+    _initialized: bool = False
+    _client_mode: bool = False
+    _client_url: str | None = None
+    _http_server_started: bool = False
+    _model_loading: bool = False
+    _model_loaded: bool = False
+    _port_conflict_logged: bool = False
+    _load_lock: threading.Lock
 
     def __new__(cls) -> "EmbeddingService":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._initialize()
+            cls._instance._load_lock = threading.Lock()
         return cls._instance
 
-    def _initialize(self) -> None:
-        """Initialize embedding service using settings.yaml configuration."""
-        provider = get_setting("embedding.provider", "llm")
-        self._dimension = get_setting("embedding.dimension", 1024)
+    def _is_port_in_use(self, port: int, timeout: float = 0.5) -> bool:
+        """Check if a port is already in use."""
+        import socket
 
-        logger.info(
-            "Embedding configuration",
-            provider=provider,
-            dimension=self._dimension,
-        )
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            try:
+                s.connect(("127.0.0.1", port))
+                return True
+            except (socket.timeout, ConnectionRefusedError):
+                return False
+            except Exception:
+                return False
 
-        if provider == "llm":
-            if self._try_init_llm():
-                return
+    def _check_http_server_healthy(self, url: str, timeout: float = 2.0) -> bool:
+        """Synchronously check if HTTP server is healthy and responsive."""
+        import json
+        import urllib.error
+        import urllib.request
 
-        # Fallback to FastEmbed (local)
-        if self._try_init_fastembed():
+        try:
+            with urllib.request.urlopen(f"{url}/health", timeout=timeout) as response:
+                if response.status != 200:
+                    return False
+                payload = response.read().decode("utf-8")
+                data = json.loads(payload) if payload else {}
+                status = str(data.get("status", "")).lower()
+                return status in {"healthy", "ok"}
+        except (urllib.error.URLError, TimeoutError, ValueError):
+            return False
+
+    def _is_address_in_use_error(self, exc: Exception) -> bool:
+        """Return True when exception indicates HTTP port is already bound."""
+        if isinstance(exc, OSError) and getattr(exc, "errno", None) in {
+            EADDRINUSE,
+            48,  # macOS
+            98,  # Linux
+            10048,  # Windows
+        }:
+            return True
+        return "address already in use" in str(exc).lower()
+
+    def initialize(self) -> None:
+        """Initialize embedding service with auto-detection.
+
+        Flow:
+        1. Check explicit provider override (client/fallback/local)
+        2. Auto-detect: Check if HTTP port is in use
+        3. Health check: Verify server is responsive
+        4. Connect or start server accordingly
+        """
+        if self._initialized:
             return
 
-        # Fallback to hash-based
-        self._backend = "fallback"
-        self._dimension = self._dimension  # Keep configured dimension
-        logger.warning("No embedding available, using hash-based fallback")
+        provider = get_setting("embedding.provider", "").lower()
+        http_port = get_setting("embedding.http_port", 18501)
+        http_url = f"http://127.0.0.1:{http_port}"
 
-    def _try_init_llm(self) -> bool:
-        """Initialize embedding using LLM client.
+        # Handle explicit overrides
+        if provider == "client":
+            self._client_mode = True
+            self._client_url = get_setting("embedding.client_url", http_url)
+            self._backend = "http"
+            self._dimension = get_setting("embedding.dimension", 1024)
+            self._initialized = True
+            logger.info("Embedding: force client mode", client_url=self._client_url)
+            return
 
-        Uses the same InferenceClient configuration as Omni Loop.
+        if provider == "fallback":
+            self._backend = "fallback"
+            self._dimension = get_setting("embedding.dimension", 1024)
+            self._initialized = True
+            logger.info("Embedding: force fallback mode")
+            return
+
+        port_in_use = self._is_port_in_use(http_port)
+        logger.info("Embedding: auto-detecting", port=http_port, port_in_use=port_in_use)
+
+        if port_in_use:
+            # Port is in use - perform health check to verify server is responsive
+            server_healthy = self._check_http_server_healthy(http_url)
+
+            if server_healthy:
+                # Server is healthy, connect as client
+                self._client_mode = True
+                self._client_url = http_url
+                self._backend = "http"
+                self._dimension = get_setting("embedding.dimension", 1024)
+                self._initialized = True
+                logger.info(
+                    "✓ Embedding: auto-detected healthy HTTP server, using client mode",
+                    server_url=self._client_url,
+                )
+            else:
+                # Port in use but server not healthy - start our own
+                logger.info("Embedding: port in use but server unhealthy, retrying HTTP startup")
+                self._start_http_server_immediate(http_port)
+        else:
+            # No server running, start HTTP server immediately
+            logger.info("Embedding: no existing server, starting HTTP server...")
+            self._start_http_server_immediate(http_port)
+
+    def _start_http_server_immediate(self, http_port: int) -> None:
+        """Start HTTP server immediately (no model loading yet)."""
+        self._initialized = True
+        self._http_server_started = True
+
+        def _run_server():
+            """Run HTTP server in background thread."""
+            from omni.foundation.embedding_server import EmbeddingHTTPServer
+            from omni.foundation.utils.asyncio import run_async_blocking
+
+            async def _main():
+                server = EmbeddingHTTPServer(port=http_port)
+                await server.start()
+                # HTTP server is running, now wait for model loading signal
+                # Keep server running forever
+                import asyncio
+
+                while True:
+                    await asyncio.sleep(3600)
+
+            try:
+                run_async_blocking(_main())
+            except Exception as e:
+                if self._is_address_in_use_error(e):
+                    # Benign race: another process bound the port between detection and bind.
+                    if not self._port_conflict_logged:
+                        logger.info(
+                            "Embedding HTTP server already running; switching to client mode",
+                            port=http_port,
+                        )
+                        self._port_conflict_logged = True
+                    self._client_mode = True
+                    self._client_url = f"http://127.0.0.1:{http_port}"
+                    self._backend = "http"
+                    self._dimension = get_setting("embedding.dimension", 1024)
+                    self._http_server_started = False
+                else:
+                    logger.warning(f"Embedding HTTP server error: {e}")
+
+        thread = threading.Thread(target=_run_server, daemon=True)
+        thread.start()
+        logger.info(f"Embedding HTTP server started on port {http_port}")
+
+    def start_model_loading(self) -> None:
+        """Start loading the model in background.
+
+        Call this after MCP connection is fully established.
+        This triggers model loading without blocking the MCP server.
         """
-        try:
-            from omni.foundation.services.llm.client import InferenceClient
+        # Skip if in client mode (using HTTP server)
+        if self._client_mode:
+            logger.debug("Embedding: skipping model load in client mode")
+            return
 
-            self._model = InferenceClient()
-            self._backend = "llm"
-            # LLM dimension depends on model (MiniMax-M2.1 supports up to 64K context)
-            logger.info(
-                "Embedding initialized with LLM",
-                model=self._model.model,
-                base_url=self._model.base_url,
-            )
-            return True
-        except Exception as e:
-            logger.warning(f"LLM embedding initialization failed: {e}")
-            return False
+        # Use lock to prevent race conditions
+        with self._load_lock:
+            if self._model_loaded or self._model_loading:
+                return
 
-    def _try_init_fastembed(self) -> bool:
-        """Try to initialize FastEmbed local model."""
-        try:
-            from fastembed import TextEmbedding
+            self._model_loading = True
+            logger.info("Embedding: starting model loading in background...")
 
-            model_name = "BAAI/bge-small-en-v1.5"
-            self._model = TextEmbedding(model_name=model_name)
-            self._dimension = 384
-            self._backend = "fastembed"
-            logger.info(f"FastEmbed initialized with {model_name}")
-            return True
-        except ImportError:
-            logger.debug("FastEmbed not available")
-            return False
-        except Exception as e:
-            logger.warning(f"FastEmbed initialization failed: {e}")
-            return False
+        def _load_model_bg():
+            """Load model in background thread."""
+            try:
+                self._load_local_model()
+                logger.info("Embedding: model loading complete")
+            except Exception as e:
+                logger.warning(f"Embedding model loading error: {e}")
+                with self._load_lock:
+                    self._model_loading = False
+
+        thread = threading.Thread(target=_load_model_bg, daemon=True)
+        thread.start()
+
+    def _load_local_model(self) -> None:
+        """Load the sentence-transformers model.
+
+        Thread-safe with proper locking to prevent concurrent loads.
+        """
+        # Fast path: already loaded
+        if self._model_loaded:
+            return
+
+        # Acquire lock to prevent concurrent loading
+        with self._load_lock:
+            # Double-check after acquiring lock
+            if self._model_loaded:
+                return
+
+            # Mark as loading
+            self._model_loading = True
+
+            # Set HuggingFace cache
+            self._cache_dir = str(PRJ_DATA("models"))
+            os.environ["HF_HOME"] = self._cache_dir
+            os.environ["HF_DATASETS_CACHE"] = str(PRJ_DATA("datasets"))
+            os.makedirs(self._cache_dir, exist_ok=True)
+
+            model_name = get_setting("embedding.model", "Qwen/Qwen3-Embedding-4B")
+
+            logger.info("Loading embedding model", model=model_name, cache_dir=self._cache_dir)
+
+            try:
+                from sentence_transformers import SentenceTransformer
+
+                self._model = SentenceTransformer(model_name)
+                self._backend = "local"
+                self._dimension = self._model.get_sentence_embedding_dimension() or 1024
+                self._model_loaded = True
+                logger.info("Embedding model loaded", model=model_name, dimension=self._dimension)
+
+            except Exception as e:
+                logger.error(f"Failed to load embedding model {model_name}: {e}")
+                self._backend = "fallback"
+                self._dimension = get_setting("embedding.dimension", 1024)
+                self._model_loaded = True
+            finally:
+                self._model_loading = False
+
+    def _auto_detect_and_init(self) -> None:
+        """Auto-detect MCP server and initialize if not already done.
+
+        This is called on first embed() to check if MCP server is running.
+        Uses health check to verify server is responsive.
+        """
+        if self._initialized:
+            return
+
+        http_port = get_setting("embedding.http_port", 18501)
+        http_url = f"http://127.0.0.1:{http_port}"
+        port_in_use = self._is_port_in_use(http_port)
+
+        if port_in_use:
+            # Port is in use - verify server is healthy
+            server_healthy = self._check_http_server_healthy(http_url)
+
+            if server_healthy:
+                # MCP server is healthy, use client mode
+                self._client_mode = True
+                self._client_url = http_url
+                self._backend = "http"
+                self._dimension = get_setting("embedding.dimension", 1024)
+                self._initialized = True
+                logger.info(
+                    "✓ Embedding: auto-detected healthy MCP server, using client mode",
+                    server_url=self._client_url,
+                )
+            else:
+                # Port in use but unhealthy, fall back to local
+                logger.warning("⚠ Embedding: port in use but server unhealthy, using local mode")
+                self.initialize()
+        else:
+            # No MCP server, initialize normally (will use local model or fallback)
+            self.initialize()
 
     def embed(self, text: str) -> list[list[float]]:
-        """Generate embedding for text using LLM."""
-        if self._backend == "llm":
-            return self._embed_with_llm(text)
-        elif self._backend == "fastembed":
-            return self._embed_with_fastembed(text)
-        else:
-            return [self._simple_embed(text)]
+        """Generate embedding for text."""
+        # Auto-detect MCP server if not already initialized
+        if not self._initialized:
+            self._auto_detect_and_init()
 
-    async def _embed_with_llm_async(self, text: str) -> list[list[float]]:
-        """Generate embedding using LLM (async version).
+        if self._client_mode:
+            return self._embed_http_with_fallback([text])
 
-        Returns a semantic vector of configured dimension (from settings.yaml).
-        LLM generates 16 core semantic values via structured prompting,
-        which are then interpolated to the target dimension (default: 1024).
+        # Load model if needed (thread-safe with lock)
+        if not self._model_loaded:
+            self._load_local_model()
+        return self._embed_local([text])
 
-        **Configuration**: embedding.dimension from settings.yaml
-        **Provider**: Same InferenceClient as Omni Loop (MiniMax-M2.1)
-        **Timeout**: 10 seconds (faster fallback on timeout)
+    def _embed_local(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings using local model."""
+        if self._backend != "local" or self._model is None:
+            return self._embed_fallback(texts)
 
-        **Process**:
-            1. Prompt LLM to generate 16 comma-separated values (-1 to 1)
-            2. Parse and validate core values
-            3. Expand to 16 core values to configured dimension via pattern repetition
-            4. Return as list of vectors for LanceDB storage
-        """
-        # Timeout for embedding (30s to allow MiniMax API to respond)
-        EMBED_TIMEOUT = 30
+        embeddings = self._model.encode(texts, normalize_embeddings=True)
+        return embeddings.tolist()
 
-        # Prompt LLM to generate 16 core semantic values
-        system_prompt = """You are a semantic embedding generator.
-Output ONLY 16 comma-separated numbers between -1 and 1.
-Example: 0.5,0.3,-0.2,0.8,0.1,0.9,-0.5,0.2,0.7,-0.1,0.4,0.6,-0.3,0.8,0.0,0.5"""
-
-        prompt = f"Text: {text[:200]}\nOutput 16 numbers:"
-
-        try:
-            response = await asyncio.wait_for(
-                self._model.complete(
-                    system_prompt=system_prompt,
-                    user_query=prompt,
-                    max_tokens=50,
-                ),
-                timeout=EMBED_TIMEOUT,
-            )
-        except asyncio.TimeoutError:
-            logger.warning(
-                f"Embedding LLM call timed out after {EMBED_TIMEOUT}s, using hash fallback"
-            )
-            return [self._simple_embed(text, self._dimension)]
-
-        # Response is a dict - use key access
-        if not response.get("success"):
-            logger.warning(
-                f"Embedding LLM call failed: {response.get('error')}, using hash fallback"
-            )
-            return [self._simple_embed(text, self._dimension)]
-
-        content = response.get("content", "")
-
-        # Parse comma-separated values
-        values = [float(x.strip()) for x in content.split(",") if x.strip()]
-        if len(values) >= 1:
-            # Ensure exactly 16 core values
-            if len(values) < 16:
-                core = (values * 16)[:16]
-            else:
-                core = values[:16]
-
-            # Expand 16 core values to configured dimension (e.g., 1024)
-            # Using pattern repetition
-            target_dim = self._dimension
-            vector = (core * (target_dim // 16 + 1))[:target_dim]
-            return [vector]
-
-        # Fallback: deterministic hash-based vector
-        return [self._simple_embed(text, self._dimension)]
-
-    def _embed_with_llm(self, text: str) -> list[list[float]]:
-        """Generate embedding using LLM (sync wrapper)."""
-        try:
-            return self._run_async(self._embed_with_llm_async(text))
-        except Exception as e:
-            logger.error(f"LLM embed failed: {e}")
-            return [self._simple_embed(text, 1024)]
-
-    def _run_async(self, coro):
-        """Run async code, handling event loop properly."""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Already in event loop - use nest_asyncio pattern
-                import nest_asyncio
-
-                nest_asyncio.apply()
-                return loop.run_until_complete(coro)
-        except RuntimeError:
-            pass
-        # No event loop exists
-        return asyncio.run(coro)
-
-    def _embed_with_fastembed(self, text: str) -> list[list[float]]:
-        """Generate embedding using FastEmbed."""
-        try:
-            embeddings = list(self._model.embed([text]))
-            return [embeddings[0].tolist()]
-        except Exception as e:
-            logger.error(f"FastEmbed embed failed: {e}")
-            return [self._simple_embed(text, 384)]
-
-    def _simple_embed(self, text: str, dimension: int = 1024) -> list[float]:
-        """Deterministic hash-based embedding for fallback."""
+    def _embed_fallback(self, texts: list[str]) -> list[list[float]]:
+        """Generate hash-based pseudo-embeddings."""
         import hashlib
 
-        hash_bytes = hashlib.sha256(text.encode()).digest()
-        vector = [float(b) / 255.0 for b in hash_bytes]
-        repeats = (dimension + len(vector) - 1) // len(vector)
-        return (vector * repeats)[:dimension]
+        result = []
+        dim = self._dimension
+
+        for text in texts:
+            hash_val = hashlib.sha256(text.encode()).hexdigest()
+            vector = [
+                float(int(hash_val[i : i + 8], 16) % 1000) / 1000.0
+                for i in range(0, min(len(hash_val), dim * 8), 8)
+            ]
+            while len(vector) < dim:
+                vector.append(0.0)
+            result.append(vector[:dim])
+        return result
+
+    def _embed_http(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings via HTTP client."""
+        from omni.foundation.embedding_client import get_embedding_client
+
+        client = get_embedding_client(self._client_url)
+        return client.sync_embed_batch(texts)
+
+    def _embed_http_with_fallback(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings via HTTP, with graceful fallback on failure."""
+        try:
+            return self._embed_http(texts)
+        except Exception as exc:
+            logger.warning(
+                "Embedding HTTP unavailable; switching to fallback embedding",
+                error=str(exc),
+                client_url=self._client_url,
+            )
+            self._client_mode = False
+            self._backend = "fallback"
+            self._dimension = get_setting("embedding.dimension", self._dimension or 1024)
+            return self._embed_fallback(texts)
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings for multiple texts.
-
-        Uses parallel LLM calls for better performance (batch mode).
-        Falls back to sequential if parallel fails.
-        """
+        """Generate embeddings for multiple texts."""
         if not texts:
             return []
 
-        if self._backend == "llm":
-            return self._embed_batch_llm_parallel(texts)
-        elif self._backend == "fastembed":
-            return self._embed_batch_fastembed(texts)
-        else:
-            return [self._simple_embed(text, self._dimension) for text in texts]
+        # Auto-detect MCP server if not already initialized
+        if not self._initialized:
+            self._auto_detect_and_init()
 
-    def _embed_batch_llm_parallel(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings using parallel LLM calls (faster for batches)."""
-        logger.info(f"_embed_batch_llm_parallel: starting with {len(texts)} texts")
-        # Process in parallel chunks to avoid overwhelming the API
-        BATCH_SIZE = 5  # Reduced batch size for better reliability
+        if self._client_mode:
+            return self._embed_http_with_fallback(texts)
 
-        async def embed_chunk(chunk: list[str]) -> list[list[float]]:
-            """Embed a chunk of texts in parallel."""
-            tasks = [self._embed_with_llm_async(text) for text in chunk]
-            try:
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-            except Exception as e:
-                logger.error(f"Chunk gather failed: {e}, using sequential fallback")
-                # Fallback to sequential processing for this chunk
-                results = []
-                for text in chunk:
-                    try:
-                        r = await asyncio.wait_for(
-                            self._embed_with_llm_async(text),
-                            timeout=20.0,  # Individual timeout
-                        )
-                        results.append(r)
-                    except Exception as e2:
-                        logger.warning(f"Sequential embed failed: {e2}, using hash fallback")
-                        results.append([self._simple_embed(text, self._dimension)])
-            # Handle exceptions by returning hash-based vectors
-            final = []
-            for idx, (text, r) in enumerate(zip(chunk, results)):
-                if isinstance(r, Exception):
-                    logger.warning(f"Chunk embed failed for item {idx}: {r}")
-                    final.append(self._simple_embed(text, self._dimension))
-                elif isinstance(r, list) and len(r) > 0:
-                    final.append(r[0])
-                else:
-                    final.append(self._simple_embed(text, self._dimension))
-            return final
-
-        async def embed_all() -> list[list[float]]:
-            all_results = []
-            # Process in chunks
-            for i in range(0, len(texts), BATCH_SIZE):
-                chunk = texts[i : i + BATCH_SIZE]
-                chunk_results = await embed_chunk(chunk)
-                all_results.extend(chunk_results)
-                logger.debug(
-                    f"Embedding batch progress: {min(i + BATCH_SIZE, len(texts))}/{len(texts)}"
-                )
-            return all_results
-
-        try:
-            # Overall timeout for entire batch (60s per item with 10s buffer)
-            total_timeout = min(60.0 * len(texts), 300.0)  # Max 5 minutes
-            return self._run_async(asyncio.wait_for(embed_all(), timeout=total_timeout))
-        except asyncio.TimeoutError:
-            logger.error(f"Batch embed timed out after {total_timeout}s, using hash fallback")
-            return [self._simple_embed(text, self._dimension) for text in texts]
-        except Exception as e:
-            logger.error(f"Parallel batch embed failed: {e}, falling back to sequential")
-            return self._embed_batch_llm(texts)
-
-    def _embed_batch_llm(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings for multiple texts using LLM."""
-        results = []
-        for text in texts:
-            result = self._embed_with_llm(text)
-            results.extend(result)
-        return results
-
-    def _embed_batch_fastembed(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings for multiple texts using FastEmbed."""
-        try:
-            embeddings = list(self._model.embed(texts))
-            return [e.tolist() for e in embeddings]
-        except Exception as e:
-            logger.error(f"FastEmbed batch embed failed: {e}")
-            return [self._simple_embed(text, 384) for text in texts]
+        # Load model if needed (thread-safe with lock)
+        if not self._model_loaded:
+            self._load_local_model()
+        return self._embed_local(texts)
 
     @property
     def backend(self) -> str:
-        """Return the current embedding backend."""
+        """Return the embedding backend."""
         return self._backend
 
     @property
@@ -331,78 +413,49 @@ Example: 0.5,0.3,-0.2,0.8,0.1,0.9,-0.5,0.2,0.7,-0.1,0.4,0.6,-0.3,0.8,0.0,0.5"""
         """Return the embedding dimension."""
         return self._dimension
 
+    @property
+    def is_loaded(self) -> bool:
+        """Check if model is loaded."""
+        return self._model_loaded
+
+    @property
+    def is_loading(self) -> bool:
+        """Check if model is currently loading."""
+        return self._model_loading
+
+
+# Singleton accessor
+_service: "EmbeddingService | None" = None
+
 
 def get_embedding_service() -> EmbeddingService:
     """Get the singleton EmbeddingService instance."""
-    return EmbeddingService()
+    global _service
+    if _service is None:
+        _service = EmbeddingService()
+    return _service
 
 
+# Convenience functions
 def embed_text(text: str) -> list[float]:
-    """Convenience function to embed a single text."""
+    """Generate embedding for a single text."""
     return get_embedding_service().embed(text)[0]
 
 
 def embed_batch(texts: list[str]) -> list[list[float]]:
-    """Convenience function to embed multiple texts."""
+    """Generate embeddings for multiple texts."""
     return get_embedding_service().embed_batch(texts)
-
-
-def batch_embed(
-    texts: list[str], embed_func=None, dimension: int | None = None
-) -> list[list[float]]:
-    """Batch embed multiple texts.
-
-    Args:
-        texts: List of texts to embed.
-        embed_func: Optional custom embedding function.
-        dimension: Optional dimension override.
-
-    Returns:
-        List of embedding vectors.
-    """
-    if embed_func is not None:
-        # Use custom function (may return fixed-dimension vectors)
-        return [embed_func(t) for t in texts]
-    return embed_batch(texts)
-
-
-def embed_query(text: str) -> list[float] | None:
-    """Embed a query text, returning None for empty input."""
-    if not text or not text.strip():
-        return None
-    return embed_text(text)
-
-
-def _simple_embed(text: str, dimension: int | None = None) -> list[float]:
-    """Simple synchronous embedding with optional dimension override.
-
-    Uses hash-based fallback for dimension overrides that don't match service config.
-    This allows tests to verify different dimensions work correctly.
-
-    Args:
-        text: Text to embed.
-        dimension: Override dimension (uses service default 1024 if None).
-
-    Returns:
-        Embedding vector as list of floats.
-    """
-    import hashlib
-
-    # Use provided dimension or default to 1024
-    dim = dimension if dimension is not None else 1024
-
-    # For non-matching dimensions, use hash-based fallback
-    service = get_embedding_service()
-    if dimension is not None and dimension != service.dimension:
-        # Hash-based deterministic embedding for test dimensions
-        hash_bytes = hashlib.sha256(text.encode()).digest()
-        vector = [float(b) / 255.0 for b in hash_bytes]
-        repeats = (dim + len(vector) - 1) // len(vector)
-        return (vector * repeats)[:dim]
-
-    return service.embed(text)[0]
 
 
 def get_dimension() -> int:
     """Get the current embedding dimension."""
     return get_embedding_service().dimension
+
+
+__all__ = [
+    "EmbeddingService",
+    "get_embedding_service",
+    "embed_text",
+    "embed_batch",
+    "get_dimension",
+]

@@ -1,0 +1,22 @@
+# RAG Pipeline Test - Retrieval + Generation + Evaluation
+# Full RAG workflow with memory tracking
+
+servers:
+  retriever: builtin
+  generator: builtin
+  evaluator: builtin
+
+parameters:
+  query: "$query"
+  top_k: 5
+
+pipeline:
+  - retriever.search
+  - generator.generate
+  - evaluator.evaluate
+
+runtime:
+  checkpointer:
+    type: memory
+  invoker:
+    include_retrieval: true

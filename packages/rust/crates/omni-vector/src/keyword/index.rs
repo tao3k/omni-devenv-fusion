@@ -201,6 +201,9 @@ impl KeywordIndex {
         keywords: &[String],
         intents: &[String],
     ) -> Result<(), VectorStoreError> {
+        if !crate::skill::is_routable_tool_name(name) {
+            return Ok(());
+        }
         let mut index_writer = self
             .index
             .writer(50_000_000)
@@ -235,6 +238,9 @@ impl KeywordIndex {
             .map_err(VectorStoreError::Tantivy)?;
 
         for (name, description, category, kw_list, intent_list) in docs {
+            if !crate::skill::is_routable_tool_name(&name) {
+                continue;
+            }
             let term = Term::from_field_text(self.tool_name, &name);
             index_writer.delete_term(term);
 
@@ -259,6 +265,9 @@ impl KeywordIndex {
         let mut index_writer = self.index.writer(100_000_000)?;
 
         for tool in tools {
+            if !crate::skill::is_routable_tool_name(&tool.name) {
+                continue;
+            }
             let term = Term::from_field_text(self.tool_name, &tool.name);
             index_writer.delete_term(term);
 
@@ -322,6 +331,9 @@ impl KeywordIndex {
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
+            if !crate::skill::is_routable_tool_name(&tool_name) {
+                continue;
+            }
             let description = doc
                 .get_first(self.description)
                 .and_then(|v| v.as_str())
@@ -343,17 +355,25 @@ impl KeywordIndex {
             let intents = intents_str.split(" | ").map(|s| s.to_string()).collect();
 
             let skill_name = tool_name.split('.').next().unwrap_or("").to_string();
+            let category = doc
+                .get_first(self.category)
+                .and_then(|v| v.as_str())
+                .unwrap_or(&skill_name)
+                .to_string();
 
             results.push(ToolSearchResult {
                 name: tool_name.clone(),
                 description,
                 input_schema: serde_json::json!({}),
                 score,
+                vector_score: None,
+                keyword_score: Some(score),
                 skill_name,
                 tool_name,
                 file_path: String::new(),
                 keywords,
                 intents,
+                category,
             });
         }
 
@@ -394,6 +414,9 @@ impl KeywordIndex {
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
+            if !crate::skill::is_routable_tool_name(&tool_name) {
+                return Ok(None);
+            }
             let description = doc
                 .get_first(self.description)
                 .and_then(|v| v.as_str())
@@ -419,15 +442,18 @@ impl KeywordIndex {
                 description,
                 input_schema: serde_json::json!({}),
                 score: 1.0,
-                skill_name: doc
-                    .get_first(self.category)
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string(),
+                vector_score: None,
+                keyword_score: Some(1.0),
+                skill_name: tool_name.split('.').next().unwrap_or("").to_string(),
                 tool_name,
                 file_path: "".to_string(),
                 keywords,
                 intents,
+                category: doc
+                    .get_first(self.category)
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
             }))
         } else {
             Ok(None)

@@ -8,27 +8,30 @@ requires-python = ">=3.12"
 dependencies = [
     "structlog>=24.0.0",
     "orjson>=3.10.0",
-    # Async support for nested event loops
-    "nest-asyncio>=1.6.0",
     # AI & Embeddings
-    "fastembed>=0.5.0",
-    "openai>=1.0.0",
+    # Unified LLM Interface (100+ providers, includes OpenAI)
+    "litellm>=1.0.0",
+    # Local Embedding (Apple Silicon optimized)
+    "sentence-transformers>=2.2.0",
     # VCS
     "gitpython>=3.1.0",
-    "libvcs>=0.14.0",
     # Text & Data
     "jinja2>=3.1.0",
-    "python-frontmatter>=1.1.0",
     # Database
     "lancedb>=0.17.0",
     # Workflow Engine
     "langgraph>=1.0.5",
-    "langsmith>=0.6.0",
-    "langgraph-checkpoint-sqlite>=3.0.2",
     # Utils
     "pydantic>=2.7.0",
-    "anthropic>=0.75.0",
 ]
+
+[tool.uv]
+package = true
+
+
+# RAG - Multimodal Document Processing (RAG-Anything)
+[tool.uv.dependencies]
+raganything = { git = "https://github.com/HKUDS/RAG-Anything.git" }
 
 [build-system]
 requires = ["hatchling"]
@@ -43,6 +46,7 @@ packages = ["src/omni"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 
+
 [tool.pytest]
-markers = ["slow"]
+markers = ["slow", "architecture"]
 asyncio_mode = "auto"

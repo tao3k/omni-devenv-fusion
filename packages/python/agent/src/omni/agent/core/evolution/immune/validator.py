@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from omni.foundation.bridge.rust_immune import RustImmuneBridge, scan_code_security
+from omni.foundation.bridge.rust_immune import is_code_safe, scan_code_security
 
 logger = logging.getLogger("omni.immune.validator")
 
@@ -41,6 +41,15 @@ class SecurityViolation:
             "line": self.line,
             "snippet": self.snippet,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SecurityViolation":
+        return cls(
+            rule_id=str(data.get("rule_id", "UNKNOWN")),
+            description=str(data.get("description", "")),
+            line=int(data.get("line", 0) or 0),
+            snippet=str(data.get("snippet", "")),
+        )
 
 
 class StaticValidator:
@@ -89,12 +98,13 @@ class StaticValidator:
         Returns:
             Tuple of (is_safe: bool, violations: list of SecurityViolation)
         """
-        is_safe, violations = RustImmuneBridge.scan_code_security(content)
+        is_safe, violations = scan_code_security(content)
 
         if not is_safe:
-            formatted = [SecurityViolation(**v) for v in violations]
-            for v in formatted:
-                logger.warning(f"  [Rust Guard] {v}")
+            formatted = [SecurityViolation.from_dict(v) for v in violations]
+            logger.warning(
+                f"[Rust Guard] {filename}: blocked by {len(formatted)} security violation(s)"
+            )
             return False, formatted
 
         return True, []
@@ -106,7 +116,7 @@ class StaticValidator:
 
         Useful for pre-filtering before more expensive operations.
         """
-        return RustImmuneBridge.is_code_safe(content)
+        return is_code_safe(content)
 
     @staticmethod
     def validate_imports(content: str) -> list[str]:
@@ -115,7 +125,7 @@ class StaticValidator:
 
         Returns list of forbidden imports found.
         """
-        is_safe, violations = RustImmuneBridge.scan_code_security(content)
+        is_safe, violations = scan_code_security(content)
         if is_safe:
             return []
         return [v["rule_id"] for v in violations if "IMPORT" in v["rule_id"]]

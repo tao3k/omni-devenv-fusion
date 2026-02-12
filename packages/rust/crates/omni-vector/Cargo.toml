@@ -56,6 +56,8 @@ log = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+rand = "0.8"
+insta = { version = "1.43.2", features = ["json"] }
 
 [lints]
 workspace = true

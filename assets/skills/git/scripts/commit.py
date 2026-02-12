@@ -38,7 +38,7 @@ def commit(message: str, project_root: Path | None = None) -> str:
     stdout, stderr, rc = _run(["git", "commit", "-m", message], cwd=project_root)
     if rc == 0:
         return "Commit created successfully"
-    return f"Commit failed: {stdout} {stderr}"
+    raise RuntimeError(f"Commit failed: {stdout} {stderr}")
 
 
 @skill_command(
@@ -60,7 +60,7 @@ def commit_with_amend(message: str, project_root: Path | None = None) -> str:
     stdout, stderr, rc = _run(["git", "commit", "--amend", "-m", message], cwd=project_root)
     if rc == 0:
         return "Commit amended successfully"
-    return f"Amend failed: {stdout} {stderr}"
+    raise RuntimeError(f"Amend failed: {stdout} {stderr}")
 
 
 @skill_command(
@@ -82,7 +82,7 @@ def commit_no_verify(message: str, project_root: Path | None = None) -> str:
     stdout, stderr, rc = _run(["git", "commit", "--no-verify", "-m", message], cwd=project_root)
     if rc == 0:
         return "Commit created (no-verify)"
-    return f"Commit failed: {stdout} {stderr}"
+    raise RuntimeError(f"Commit failed: {stdout} {stderr}")
 
 
 def get_last_commit(project_root: Path | None = None) -> str:
@@ -119,4 +119,4 @@ def revert(commit: str, no_commit: bool = False, project_root: Path | None = Non
     stdout, stderr, rc = _run(cmd, cwd=project_root)
     if rc == 0:
         return "Revert initiated successfully"
-    return f"Revert failed: {stdout} {stderr}"
+    raise RuntimeError(f"Revert failed: {stdout} {stderr}")

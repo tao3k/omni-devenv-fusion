@@ -392,9 +392,10 @@ class TestKernelShutdownIntegration:
 
         kernel = get_kernel()
 
-        # Mock the watcher
-        mock_watcher = MagicMock()
-        kernel._watcher = mock_watcher
+        # Mock skill manager watcher path used by current kernel shutdown flow
+        mock_skill_manager = MagicMock()
+        mock_skill_manager.shutdown = AsyncMock()
+        kernel._skill_manager = mock_skill_manager
 
         # Mock skill context
         kernel._skill_context = MagicMock()
@@ -403,8 +404,8 @@ class TestKernelShutdownIntegration:
         # Perform shutdown
         await kernel._on_shutdown()
 
-        # Verify watcher was stopped
-        mock_watcher.stop.assert_called_once()
+        # Verify skill manager shutdown was called
+        mock_skill_manager.shutdown.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_kernel_shutdown_clears_components(self):

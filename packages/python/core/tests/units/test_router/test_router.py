@@ -5,9 +5,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from omni.test_kit.asserts import assert_route_result_shape
 
 from omni.core.router.router import (
-    FallbackRouter,
+    ExplicitCommandRouter,
     RouteResult,
     SemanticRouter,
     UnifiedRouter,
@@ -30,15 +31,16 @@ class TestRouteResult:
         assert result.command_name == "commit"
         assert result.score == 0.85
         assert result.confidence == "high"
+        assert_route_result_shape(result)
 
 
-class TestFallbackRouter:
-    """Test FallbackRouter for explicit command matching."""
+class TestExplicitCommandRouter:
+    """Test ExplicitCommandRouter for explicit command matching."""
 
     @pytest.mark.asyncio
     async def test_match_explicit_command(self):
         """Test matching explicit command pattern."""
-        router = FallbackRouter()
+        router = ExplicitCommandRouter()
 
         result = await router.route("git.status")
 
@@ -47,22 +49,24 @@ class TestFallbackRouter:
         assert result.command_name == "status"
         assert result.score == 1.0
         assert result.confidence == "high"
+        assert_route_result_shape(result)
 
     @pytest.mark.asyncio
     async def test_match_memory_save(self):
         """Test matching memory.save command."""
-        router = FallbackRouter()
+        router = ExplicitCommandRouter()
 
         result = await router.route("memory.save")
 
         assert result is not None
         assert result.skill_name == "memory"
         assert result.command_name == "save"
+        assert_route_result_shape(result)
 
     @pytest.mark.asyncio
     async def test_no_match_natural_language(self):
         """Test that natural language doesn't match."""
-        router = FallbackRouter()
+        router = ExplicitCommandRouter()
 
         result = await router.route("帮我保存代码")
 
@@ -71,7 +75,7 @@ class TestFallbackRouter:
     @pytest.mark.asyncio
     async def test_no_match_empty(self):
         """Test that empty query doesn't match."""
-        router = FallbackRouter()
+        router = ExplicitCommandRouter()
 
         result = await router.route("")
 
@@ -80,7 +84,7 @@ class TestFallbackRouter:
     @pytest.mark.asyncio
     async def test_no_match_single_word(self):
         """Test that single word doesn't match."""
-        router = FallbackRouter()
+        router = ExplicitCommandRouter()
 
         result = await router.route("status")
 
@@ -136,6 +140,7 @@ class TestSemanticRouter:
         assert result.skill_name == "git"
         assert result.command_name == "status"
         assert result.confidence == "high"
+        assert_route_result_shape(result)
 
     @pytest.mark.asyncio
     async def test_route_filters_by_threshold(self):
@@ -222,7 +227,7 @@ class TestSemanticRouter:
 
 
 class TestUnifiedRouter:
-    """Test UnifiedRouter combining semantic and fallback routing."""
+    """Test UnifiedRouter combining semantic and explicit-command routing."""
 
     @pytest.mark.asyncio
     async def test_semantic_routing_first(self):
@@ -236,24 +241,25 @@ class TestUnifiedRouter:
                 confidence="high",
             )
         )
-        fallback = MagicMock()
-        fallback.route = AsyncMock(return_value=None)
+        explicit_router = MagicMock()
+        explicit_router.route = AsyncMock(return_value=None)
 
-        router = UnifiedRouter(semantic, fallback)
+        router = UnifiedRouter(semantic, explicit_router)
         result = await router.route("what's the status")
 
         assert result is not None
         assert result.skill_name == "git"
+        assert_route_result_shape(result)
         semantic.route.assert_called_once()
-        fallback.route.assert_not_called()
+        explicit_router.route.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_fallback_on_semantic_miss(self):
-        """Test fallback when semantic routing fails."""
+    async def test_explicit_router_on_semantic_miss(self):
+        """Test explicit-command routing when semantic routing fails."""
         semantic = MagicMock()
         semantic.route = AsyncMock(return_value=None)
-        fallback = MagicMock()
-        fallback.route = AsyncMock(
+        explicit_router = MagicMock()
+        explicit_router.route = AsyncMock(
             return_value=RouteResult(
                 skill_name="git",
                 command_name="status",
@@ -262,23 +268,24 @@ class TestUnifiedRouter:
             )
         )
 
-        router = UnifiedRouter(semantic, fallback)
+        router = UnifiedRouter(semantic, explicit_router)
         result = await router.route("git.status")
 
         assert result is not None
         assert result.skill_name == "git"
+        assert_route_result_shape(result)
         semantic.route.assert_called_once()
-        fallback.route.assert_called_once()
+        explicit_router.route.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_returns_none_when_both_fail(self):
         """Test that None is returned when both routers fail."""
         semantic = MagicMock()
         semantic.route = AsyncMock(return_value=None)
-        fallback = MagicMock()
-        fallback.route = AsyncMock(return_value=None)
+        explicit_router = MagicMock()
+        explicit_router.route = AsyncMock(return_value=None)
 
-        router = UnifiedRouter(semantic, fallback)
+        router = UnifiedRouter(semantic, explicit_router)
         result = await router.route("some random query that doesn't match anything")
 
         assert result is None
@@ -295,13 +302,13 @@ class TestUnifiedRouter:
                 confidence="medium",
             )
         )
-        fallback = MagicMock()
-        fallback.route = AsyncMock(return_value=None)
+        explicit_router = MagicMock()
+        explicit_router.route = AsyncMock(return_value=None)
 
-        router = UnifiedRouter(semantic, fallback)
-        result = await router.route("test query", 0.7)
+        router = UnifiedRouter(semantic, explicit_router)
+        await router.route("test query", 0.7)
 
         # Should pass threshold through
         semantic.route.assert_called_once_with("test query", 0.7)
-        # Fallback should be called because semantic confidence is medium
-        fallback.route.assert_called_once_with("test query")
+        # Explicit router should be called because semantic confidence is medium
+        explicit_router.route.assert_called_once_with("test query")

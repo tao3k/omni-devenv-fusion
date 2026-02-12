@@ -42,7 +42,7 @@ class SkillIndexLoader:
             from omni.foundation.bridge import RustVectorStore
 
             store = RustVectorStore()
-            tools = asyncio.run(store.list_all_tools())
+            tools = store.list_all_tools()
 
             # Group tools by skill_name
             skills_map: dict[str, dict[str, Any]] = {}

@@ -9,7 +9,6 @@ is "virtual" - it retrieves tool metadata from LanceDB on-demand (holographic pr
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,7 +32,7 @@ class ToolMetadata:
     score: float = 0.0
 
     @classmethod
-    def from_record(cls, record: dict[str, Any], score: float = 0.0) -> "ToolMetadata":
+    def from_record(cls, record: dict[str, Any], score: float = 0.0) -> ToolMetadata:
         """Create from a database record."""
         metadata = record.get("metadata", {})
         if isinstance(metadata, str):
@@ -214,12 +213,19 @@ class HolographicRegistry:
             ToolMetadata if found, None otherwise
         """
         try:
-            # Filtered search via Rust
-            results = self.store.search_filtered(
+            # Filtered search via Rust (new optimized API)
+            # Use JSON metadata filter so Rust can apply post-filtering consistently.
+            results = self.store.search_optimized(
                 table_name=self.table_name,
                 query=[0.0] * self.embedder.dimension,  # Dummy vector for exact match
                 limit=1,
-                where_filter=f"metadata.name = '{name}'",
+                options_json=json.dumps(
+                    {
+                        "where_filter": json.dumps({"name": name}),
+                        # Increase candidate window to make exact-name lookup robust.
+                        "scan_limit": 4096,
+                    }
+                ),
             )
 
             if not results:

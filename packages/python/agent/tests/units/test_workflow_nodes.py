@@ -270,11 +270,11 @@ class TestClarifyNodeIntegration:
             )
         ]
 
-        # Mock at the source where it's imported
-        with patch("omni.agent.core.memory.hippocampus.Hippocampus") as MockHippo:
+        # Mock at the call site used by robust_task.nodes
+        with patch("omni.agent.core.memory.hippocampus.get_hippocampus") as mock_get_hippo:
             mock_instance = MagicMock()
             mock_instance.recall_experience = AsyncMock(return_value=mock_experiences)
-            MockHippo.return_value = mock_instance
+            mock_get_hippo.return_value = mock_instance
 
             from omni.agent.workflows.robust_task.nodes import clarify_node
             from omni.agent.workflows.robust_task.state import RobustTaskState
@@ -310,10 +310,10 @@ class TestClarifyNodeIntegration:
     @pytest.mark.asyncio
     async def test_clarify_node_with_empty_experiences(self):
         """Test clarify_node handles empty experiences gracefully."""
-        with patch("omni.agent.core.memory.hippocampus.Hippocampus") as MockHippo:
+        with patch("omni.agent.core.memory.hippocampus.get_hippocampus") as mock_get_hippo:
             mock_instance = MagicMock()
             mock_instance.recall_experience = AsyncMock(return_value=[])
-            MockHippo.return_value = mock_instance
+            mock_get_hippo.return_value = mock_instance
 
             from omni.agent.workflows.robust_task.nodes import clarify_node
             from omni.agent.workflows.robust_task.state import RobustTaskState
@@ -359,10 +359,10 @@ class TestPlanNodeIntegration:
             )
         ]
 
-        with patch("omni.agent.core.memory.hippocampus.Hippocampus") as MockHippo:
+        with patch("omni.agent.core.memory.hippocampus.get_hippocampus") as mock_get_hippo:
             mock_instance = MagicMock()
             mock_instance.recall_experience = AsyncMock(return_value=mock_experiences)
-            MockHippo.return_value = mock_instance
+            mock_get_hippo.return_value = mock_instance
 
             from omni.agent.workflows.robust_task.nodes import plan_node
             from omni.agent.workflows.robust_task.state import RobustTaskState

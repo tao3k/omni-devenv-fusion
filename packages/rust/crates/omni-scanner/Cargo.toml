@@ -28,6 +28,8 @@ walkdir = { workspace = true }
 sha2 = "0.10"
 hex = "0.4"
 
+# Parallel processing
+rayon = { workspace = true }
 
 # Error handling
 anyhow = { workspace = true }

@@ -1,0 +1,401 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_keyword_backend_quality.rs
+expression: report
+---
+{
+  "k": 5,
+  "lance_fts_details": [
+    {
+      "matched_relevant": [
+        "git.commit",
+        "git.status"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "git_state_management",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "git.status"
+        },
+        {
+          "grade": 2,
+          "tool": "git.commit"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "staged changes repository state",
+      "top1": "git.status"
+    },
+    {
+      "matched_relevant": [
+        "git.commit",
+        "git.rebase"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "history_cleanup",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "git.rebase"
+        },
+        {
+          "grade": 1,
+          "tool": "git.commit"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "squash commits and rewrite history",
+      "top1": "git.rebase"
+    },
+    {
+      "matched_relevant": [
+        "docker.build",
+        "docker.run"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "container_lifecycle",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "docker.build"
+        },
+        {
+          "grade": 2,
+          "tool": "docker.run"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "docker build image and run container",
+      "top1": "docker.build"
+    },
+    {
+      "matched_relevant": [
+        "ci.github_actions",
+        "python.pytest"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "testing_ci_pipeline",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "ci.github_actions"
+        },
+        {
+          "grade": 3,
+          "tool": "python.pytest"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "run tests in github actions pipeline",
+      "top1": "ci.github_actions"
+    },
+    {
+      "matched_relevant": [
+        "security.gitleaks"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "security_audit",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "security.gitleaks"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "scan leaked secrets and token exposure",
+      "top1": "security.gitleaks"
+    },
+    {
+      "matched_relevant": [
+        "python.mypy"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "typing_quality",
+      "r_at_5": "0.5000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "python.mypy"
+        },
+        {
+          "grade": 1,
+          "tool": "python.pytest"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "python static typing type check",
+      "top1": "python.mypy"
+    },
+    {
+      "matched_relevant": [
+        "k8s.rollout_restart"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "deployment_restart",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "k8s.rollout_restart"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "restart rollout deployment",
+      "top1": "k8s.rollout_restart"
+    },
+    {
+      "matched_relevant": [
+        "ci.github_actions",
+        "docker.run",
+        "python.pytest"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.6000",
+      "query": "ambiguous_run_workflow",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "ci.github_actions"
+        },
+        {
+          "grade": 2,
+          "tool": "python.pytest"
+        },
+        {
+          "grade": 1,
+          "tool": "docker.run"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "run workflow and tests",
+      "top1": "ci.github_actions"
+    }
+  ],
+  "queries": 8,
+  "summary": {
+    "lance_fts": {
+      "mean_ndcg_at_5": "0.9897",
+      "mean_p_at_5": "0.3500",
+      "mean_r_at_5": "0.9375",
+      "mrr": "1.0000",
+      "success_at_1": "1.0000"
+    },
+    "tantivy": {
+      "mean_ndcg_at_5": "0.9500",
+      "mean_p_at_5": "0.3750",
+      "mean_r_at_5": "1.0000",
+      "mrr": "1.0000",
+      "success_at_1": "1.0000"
+    }
+  },
+  "tantivy_details": [
+    {
+      "matched_relevant": [
+        "git.commit",
+        "git.status"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "git_state_management",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "git.status"
+        },
+        {
+          "grade": 2,
+          "tool": "git.commit"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "staged changes repository state",
+      "top1": "git.status"
+    },
+    {
+      "matched_relevant": [
+        "git.commit",
+        "git.rebase"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "history_cleanup",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "git.rebase"
+        },
+        {
+          "grade": 1,
+          "tool": "git.commit"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "squash commits and rewrite history",
+      "top1": "git.rebase"
+    },
+    {
+      "matched_relevant": [
+        "docker.build",
+        "docker.run"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "container_lifecycle",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "docker.build"
+        },
+        {
+          "grade": 2,
+          "tool": "docker.run"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "docker build image and run container",
+      "top1": "docker.build"
+    },
+    {
+      "matched_relevant": [
+        "ci.github_actions",
+        "python.pytest"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9197",
+      "p_at_5": "0.4000",
+      "query": "testing_ci_pipeline",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "ci.github_actions"
+        },
+        {
+          "grade": 3,
+          "tool": "python.pytest"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "run tests in github actions pipeline",
+      "top1": "ci.github_actions"
+    },
+    {
+      "matched_relevant": [
+        "security.gitleaks"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "security_audit",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "security.gitleaks"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "scan leaked secrets and token exposure",
+      "top1": "security.gitleaks"
+    },
+    {
+      "matched_relevant": [
+        "python.mypy",
+        "python.pytest"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "typing_quality",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "python.mypy"
+        },
+        {
+          "grade": 1,
+          "tool": "python.pytest"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "python static typing type check",
+      "top1": "python.mypy"
+    },
+    {
+      "matched_relevant": [
+        "k8s.rollout_restart"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "deployment_restart",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "k8s.rollout_restart"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "restart rollout deployment",
+      "top1": "k8s.rollout_restart"
+    },
+    {
+      "matched_relevant": [
+        "ci.github_actions",
+        "docker.run",
+        "python.pytest"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.6806",
+      "p_at_5": "0.6000",
+      "query": "ambiguous_run_workflow",
+      "r_at_5": "1.0000",
+      "relevant": [
+        {
+          "grade": 3,
+          "tool": "ci.github_actions"
+        },
+        {
+          "grade": 2,
+          "tool": "python.pytest"
+        },
+        {
+          "grade": 1,
+          "tool": "docker.run"
+        }
+      ],
+      "success_at_1": "1.0000",
+      "text": "run workflow and tests",
+      "top1": "docker.run"
+    }
+  ]
+}

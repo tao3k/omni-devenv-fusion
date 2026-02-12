@@ -2,7 +2,7 @@ import pytest
 import sys
 import os
 from pathlib import Path
-from omni.core.skills.tools_loader import ScriptLoader
+from omni.core.skills.tools_loader import ToolsLoader
 
 
 def test_recursive_modular_discovery(tmp_path):
@@ -18,7 +18,7 @@ from omni.foundation.api.decorators import skill_command
 def nested_cmd(): return "ok"
 """)
 
-    loader = ScriptLoader(scripts_dir, skill_name="test_skill")
+    loader = ToolsLoader(scripts_dir, skill_name="test_skill")
     loader.load_all()
 
     assert "test_skill.nested_cmd" in loader.commands
@@ -44,7 +44,7 @@ from .helper import get_secret
 def reveal(): return get_secret()
 """)
 
-    loader = ScriptLoader(scripts_dir, skill_name="import_skill")
+    loader = ToolsLoader(scripts_dir, skill_name="import_skill")
     loader.load_all()
 
     assert "import_skill.reveal" in loader.commands
@@ -73,7 +73,7 @@ from omni.foundation.api.decorators import skill_command
 def cmd_b(): return "B"
 """)
 
-    loader = ScriptLoader(scripts_dir, skill_name="collision_skill")
+    loader = ToolsLoader(scripts_dir, skill_name="collision_skill")
     loader.load_all()
 
     assert "collision_skill.cmd_a" in loader.commands
@@ -90,7 +90,7 @@ def test_module_cleanup_on_failure(tmp_path):
     # Write a broken script
     (scripts_dir / "broken.py").write_text("import non_existent_package")
 
-    loader = ScriptLoader(scripts_dir, skill_name="error_skill")
+    loader = ToolsLoader(scripts_dir, skill_name="error_skill")
     loader.load_all()
 
     # Check that no command was registered

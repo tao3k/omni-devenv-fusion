@@ -106,7 +106,7 @@ await store.create_index("skills")
 ### Configuration
 
 ```yaml
-# assets/settings.yaml
+# settings.yaml (merged runtime view)
 vector:
   path: ".cache/omni-vector"
   dimension: 1536 # OpenAI Ada-002

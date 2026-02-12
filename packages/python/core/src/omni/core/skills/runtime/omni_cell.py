@@ -150,7 +150,7 @@ class OmniCellRunner:
 
         try:
             # Run sync Rust bridge call in thread pool with timeout
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             try:
                 raw_json = await asyncio.wait_for(
                     loop.run_in_executor(
@@ -468,7 +468,7 @@ class OmniCellRunner:
         import asyncio
 
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             content = await loop.run_in_executor(None, lambda: self._read_file_sync(path))
             return content
         except Exception as e:

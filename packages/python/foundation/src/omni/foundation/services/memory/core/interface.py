@@ -19,7 +19,6 @@ from typing import Any
 
 StorageMode = str  # Type alias for storage mode
 STORAGE_MODE_LANCE: StorageMode = "lance"
-STORAGE_MODE_FILE: StorageMode = "file"
 
 
 @dataclass
@@ -240,7 +239,7 @@ class MemoryStore(DecisionStore, TaskStore, ContextStore, ActiveContextStore, AB
 
     @abstractmethod
     def migrate_from_file(self, source_dir: Path) -> dict[str, Any]:
-        """Migrate from file-based storage."""
+        """Import records from markdown export directories."""
         ...
 
     @abstractmethod

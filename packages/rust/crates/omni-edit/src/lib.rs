@@ -1,5 +1,3 @@
-#![allow(clippy::doc_markdown)]
-
 //! omni-edit - Structural Code Refactoring for Omni DevEnv
 //!
 //! A high-performance AST-based code modification library using ast-grep.

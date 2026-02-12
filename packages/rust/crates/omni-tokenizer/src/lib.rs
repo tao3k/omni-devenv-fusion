@@ -1,8 +1,6 @@
-#![allow(clippy::doc_markdown)]
-
 //! omni-tokenizer - High-performance token counting and truncation
 //!
-//! Uses tiktoken-rs for BPE tokenization (GPT-4/3.5 compatible).
+//! Uses `tiktoken-rs` for BPE tokenization (GPT-4/3.5 compatible).
 //! Provides 20-100x speedup over Python tiktoken implementations.
 //!
 //! # Example
@@ -29,13 +27,15 @@ pub struct TokenCounter {
 }
 
 impl TokenCounter {
-    /// Create a new TokenCounter instance.
+    /// Create a new `TokenCounter` instance.
+    #[must_use]
     pub fn new() -> Self {
         Self {}
     }
 
     /// Count the number of tokens in a text string.
-    pub fn count_tokens(&self, text: &str) -> usize {
+    #[must_use]
+    pub fn count_tokens(text: &str) -> usize {
         count_tokens(text)
     }
 }
@@ -60,27 +60,26 @@ pub enum TokenizerError {
     Decoding(String),
 }
 
-/// Cached cl100k_base BPE instance - initialized only once.
+/// Cached `cl100k_base` BPE instance, initialized only once.
 /// This avoids the expensive re-initialization on every function call.
-/// Using Option to avoid unstable get_or_try_init.
+/// Uses `OnceLock` to avoid unstable `get_or_try_init`.
 static CL100K_BASE: OnceLock<tiktoken_rs::CoreBPE> = OnceLock::new();
 
-/// Initialize and get cl100k_base BPE instance.
-fn get_cl100k_base() -> Result<&'static tiktoken_rs::CoreBPE, TokenizerError> {
+/// Initialize and get `cl100k_base` BPE instance.
+fn get_cl100k_base() -> &'static tiktoken_rs::CoreBPE {
     // Use get_or_init which is stable
     // The first call will initialize, subsequent calls return the cached value
-    let bpe = CL100K_BASE.get_or_init(|| {
+    CL100K_BASE.get_or_init(|| {
         // unwrap_or_else with a closures that returns the BPE or panics
         // We handle the error at the call site
         tiktoken_rs::cl100k_base()
-            .unwrap_or_else(|e| panic!("Failed to initialize cl100k_base: {}", e))
-    });
-    Ok(bpe)
+            .unwrap_or_else(|e| panic!("Failed to initialize cl100k_base: {e}"))
+    })
 }
 
-/// Count tokens in text using cl100k_base (GPT-4/3.5 standard).
+/// Count tokens in text using `cl100k_base` (GPT-4/3.5 standard).
 ///
-/// This uses the same tokenizer as GPT-4 and ChatGPT.
+/// This uses the same tokenizer as GPT-4 and `ChatGPT`.
 /// The BPE model is cached globally for optimal performance.
 ///
 /// # Arguments
@@ -92,19 +91,20 @@ fn get_cl100k_base() -> Result<&'static tiktoken_rs::CoreBPE, TokenizerError> {
 /// Number of tokens in the text.
 #[must_use]
 pub fn count_tokens(text: &str) -> usize {
-    // Use cached BPE instance for optimal performance
-    get_cl100k_base()
-        .map(|bpe| bpe.encode_with_special_tokens(text).len())
-        .unwrap_or_else(|_| estimate_token_count(text))
+    get_cl100k_base().encode_with_special_tokens(text).len()
 }
 
 /// Count tokens using a specific model.
 ///
 /// Supported models:
-/// - "cl100k_base" - GPT-4 / GPT-3.5 Turbo
-/// - "p50k_base"   - GPT-3 (Codex)
-/// - "p50k_edit"   - Edit models
-/// - "r50k_base"   - GPT-2
+/// - `"cl100k_base"` - GPT-4 / GPT-3.5 Turbo
+/// - `"p50k_base"`   - GPT-3 (Codex)
+/// - `"p50k_edit"`   - Edit models
+/// - `"r50k_base"`   - GPT-2
+///
+/// # Errors
+///
+/// Returns `TokenizerError` when model initialization or encoding fails.
 pub fn count_tokens_with_model(text: &str, model: &str) -> Result<usize, TokenizerError> {
     let bpe = match model {
         "cl100k_base" => tiktoken_rs::cl100k_base(),
@@ -129,11 +129,7 @@ pub fn count_tokens_with_model(text: &str, model: &str) -> Result<usize, Tokeniz
 /// Truncated text that fits within the token limit.
 #[must_use]
 pub fn truncate(text: &str, max_tokens: usize) -> String {
-    // Use cached BPE instance for optimal performance
-    let bpe = match get_cl100k_base() {
-        Ok(bpe) => bpe,
-        Err(_) => return estimate_truncate(text, max_tokens),
-    };
+    let bpe = get_cl100k_base();
 
     let tokens = bpe.encode_with_special_tokens(text);
     let token_count = tokens.len();
@@ -149,6 +145,10 @@ pub fn truncate(text: &str, max_tokens: usize) -> String {
 }
 
 /// Truncate using a specific model.
+///
+/// # Errors
+///
+/// Returns `TokenizerError` when model initialization or decoding fails.
 pub fn truncate_with_model(
     text: &str,
     max_tokens: usize,
@@ -173,13 +173,6 @@ pub fn truncate_with_model(
         .map_err(|e| TokenizerError::Decoding(e.to_string()))
 }
 
-/// Estimate token count using simple whitespace heuristic.
-/// Used as fallback when tiktoken is unavailable.
-fn estimate_token_count(text: &str) -> usize {
-    // Rough approximation: ~4 characters per token on average
-    text.split_whitespace().count() * 2
-}
-
 /// Estimate-based truncation fallback.
 fn estimate_truncate(text: &str, max_tokens: usize) -> String {
     let words: Vec<&str> = text.split_whitespace().collect();
@@ -191,7 +184,6 @@ fn estimate_truncate(text: &str, max_tokens: usize) -> String {
 #[must_use]
 pub fn get_encoding_name(model: &str) -> &'static str {
     match model {
-        "gpt-4" | "gpt-3.5-turbo" | "cl100k_base" => "cl100k_base",
         "gpt-3" | "code-davinci-002" | "p50k_base" => "p50k_base",
         "gpt-2" | "r50k_base" => "r50k_base",
         _ => "cl100k_base",

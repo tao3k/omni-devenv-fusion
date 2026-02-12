@@ -444,7 +444,7 @@ import sys
 sys.path.insert(0, "packages/python/core/src")
 sys.path.insert(0, "packages/python/foundation/src")
 
-from omni.foundation.utils import SKILLS_DIR
+from omni.foundation.config.skills import SKILLS_DIR
 from omni.core.skills.runtime import SkillContext
 
 ctx = SkillContext(SKILLS_DIR())
@@ -502,11 +502,11 @@ print("retrieved:", retrieved is not None)
         assert "retrieved: True" in result.stdout
 
 
-class TestScriptLoaderHotReload:
-    """Tests for ScriptLoader's role in hot reload."""
+class TestToolsLoaderHotReload:
+    """Tests for ToolsLoader's role in hot reload."""
 
     def test_tools_loader_reload_clears_cache(self, tmp_path):
-        """Verify ScriptLoader.load_all() clears old commands."""
+        """Verify ToolsLoader.load_all() clears old commands."""
         skill_path = tmp_path / "loader_test_skill"
         skill_path.mkdir()
         scripts_path = skill_path / "scripts"

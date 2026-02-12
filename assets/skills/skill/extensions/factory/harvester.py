@@ -48,8 +48,7 @@ class SkillHarvester:
 
         # Log found patterns
         for req in candidates:
-            print(f"\n[🌾 Detected] Skill pattern in session {session_id[:8]}...")
-            print(f"            Request: {req[:60]}...")
+            logger.info("Skill pattern detected", session=session_id[:8], request=req[:60])
 
             # If MetaAgent is available, try to generate
             if self._meta_agent is not None:
@@ -59,16 +58,16 @@ class SkillHarvester:
                         max_retries=1,
                     )
                     if result.success:
-                        print(f"\n[🌱 Evolved] {result.skill_name}")
-                        print(f"            Path: {result.path}")
+                        logger.info("Skill evolved", skill_name=result.skill_name, path=result.path)
                     else:
-                        print(f"\n[⚠️ Skipped] {result.error[:60]}")
+                        logger.warning("Skill generation skipped", error=result.error[:60])
                 except Exception as e:
-                    print(f"\n[⚠️ Error] {type(e).__name__}: {str(e)[:60]}")
+                    logger.warning(
+                        "Skill generation error", error=f"{type(e).__name__}: {str(e)[:60]}"
+                    )
             else:
                 # Suggest manual generation
-                print(f'            → Run: omni skill generate "{req[:40]}..."')
-                logger.info("harvester_candidate", requirement=req[:100])
+                logger.info("Skill candidate detected", requirement=req[:40])
 
     def _detect_patterns(self, history: list[dict[str, Any]]) -> list[str]:
         """

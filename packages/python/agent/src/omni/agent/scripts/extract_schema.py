@@ -236,7 +236,10 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 3:
-        print(json.dumps({"error": "Usage: extract_schema.py <file_path> <func_name>"}))
+        print(
+            json.dumps({"error": "Usage: extract_schema.py <file_path> <func_name>"}),
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     schema = extract_function_schema(sys.argv[1], sys.argv[2])

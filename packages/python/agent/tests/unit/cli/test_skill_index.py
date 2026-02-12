@@ -45,15 +45,27 @@ class TestSkillReindex:
     def test_reindex_with_json(self, runner):
         """Test reindex with JSON output."""
         # Mock RustVectorStore.index_skill_tools to return count
-        with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
+        with (
+            patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store,
+            patch(
+                "omni.agent.cli.commands.skill.index_cmd.run_async_blocking"
+            ) as mock_run_async_blocking,
+        ):
             mock_store_instance = MagicMock()
             mock_store_instance.index_skill_tools = AsyncMock(return_value=0)
             mock_store_instance.drop_table = AsyncMock(return_value=True)
             mock_store.return_value = mock_store_instance
 
+            def _consume(coro):
+                coro.close()
+                return 0
+
+            mock_run_async_blocking.side_effect = _consume
+
             result = runner.invoke(app, ["skill", "reindex", "--json"])
 
         assert result.exit_code == 0
+        assert mock_run_async_blocking.call_count >= 2
         assert "storage" in result.output.lower() or "lancedb" in result.output.lower()
 
 
@@ -80,7 +92,7 @@ class TestSkillSync:
                 # Mock RustVectorStore at definition location
                 with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
                     mock_store_instance = MagicMock()
-                    mock_store_instance.list_all_tools = AsyncMock(return_value=[])
+                    mock_store_instance.list_all_tools = MagicMock(return_value=[])
                     mock_store.return_value = mock_store_instance
 
                     result = runner.invoke(app, ["skill", "sync"])
@@ -104,7 +116,7 @@ class TestSkillSync:
 
                 with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
                     mock_store_instance = MagicMock()
-                    mock_store_instance.list_all_tools = AsyncMock(return_value=[])
+                    mock_store_instance.list_all_tools = MagicMock(return_value=[])
                     mock_store.return_value = mock_store_instance
 
                     result = runner.invoke(app, ["skill", "sync", "--json"])
@@ -149,7 +161,7 @@ class TestSkillSync:
                 with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
                     mock_store_instance = MagicMock()
                     # LanceDB is empty initially
-                    mock_store_instance.list_all_tools = AsyncMock(return_value=[])
+                    mock_store_instance.list_all_tools = MagicMock(return_value=[])
                     # Auto-populate fills LanceDB
                     mock_store_instance.index_skill_tools = AsyncMock(return_value=1)
                     mock_store.return_value = mock_store_instance
@@ -180,7 +192,7 @@ class TestSkillIndexStats:
         """Test index-stats shows LanceDB storage."""
         with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
             mock_store_instance = MagicMock()
-            mock_store_instance.list_all_tools = AsyncMock(
+            mock_store_instance.list_all_tools = MagicMock(
                 return_value=[
                     {"skill_name": "git", "tool_name": "commit"},
                     {"skill_name": "git", "tool_name": "status"},
@@ -198,7 +210,7 @@ class TestSkillIndexStats:
         """Test index-stats with empty LanceDB."""
         with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
             mock_store_instance = MagicMock()
-            mock_store_instance.list_all_tools = AsyncMock(return_value=[])
+            mock_store_instance.list_all_tools = MagicMock(return_value=[])
             mock_store.return_value = mock_store_instance
 
             result = runner.invoke(app, ["skill", "index-stats"])
@@ -325,7 +337,7 @@ class TestSyncStability:
 
                 with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
                     mock_store_instance = MagicMock()
-                    mock_store_instance.list_all_tools = AsyncMock(
+                    mock_store_instance.list_all_tools = MagicMock(
                         return_value=[
                             {
                                 "tool_name": "git.status",

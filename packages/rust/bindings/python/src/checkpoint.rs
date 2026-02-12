@@ -29,18 +29,25 @@ fn get_runtime() -> &'static tokio::runtime::Runtime {
 #[pyclass]
 #[derive(Clone, Debug)]
 pub struct PyTimelineEvent {
+    /// Unique checkpoint identifier.
     #[pyo3(get)]
     pub checkpoint_id: String,
+    /// Workflow thread identifier.
     #[pyo3(get)]
     pub thread_id: String,
+    /// Monotonic workflow step number.
     #[pyo3(get)]
     pub step: i32,
+    /// Event timestamp in Unix milliseconds.
     #[pyo3(get)]
     pub timestamp: f64,
+    /// Human-friendly checkpoint preview text.
     #[pyo3(get)]
     pub preview: String,
+    /// Parent checkpoint identifier when this is a branch.
     #[pyo3(get)]
     pub parent_checkpoint_id: Option<String>,
+    /// Optional checkpoint reason tag.
     #[pyo3(get)]
     pub reason: Option<String>,
 }
@@ -88,7 +95,7 @@ impl PyTimelineEvent {
     }
 
     /// Convert to Python Dict for debugging
-    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+    fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
         let dict = pyo3::types::PyDict::new(py);
         dict.set_item("checkpoint_id", &self.checkpoint_id)?;
         dict.set_item("thread_id", &self.thread_id)?;
@@ -182,7 +189,7 @@ impl PyCheckpointStore {
         let rt = get_runtime();
 
         rt.block_on(async {
-            let guard = store.lock().await;
+            let mut guard = store.lock().await;
             guard
                 .get_latest(&table_name, &thread_id)
                 .await
@@ -196,7 +203,7 @@ impl PyCheckpointStore {
         let rt = get_runtime();
 
         rt.block_on(async {
-            let guard = store.lock().await;
+            let mut guard = store.lock().await;
             guard
                 .get_by_id(&table_name, &checkpoint_id)
                 .await
@@ -215,7 +222,7 @@ impl PyCheckpointStore {
         let rt = get_runtime();
 
         rt.block_on(async {
-            let guard = store.lock().await;
+            let mut guard = store.lock().await;
             guard
                 .get_history(&table_name, &thread_id, limit)
                 .await
@@ -229,7 +236,7 @@ impl PyCheckpointStore {
         let rt = get_runtime();
 
         rt.block_on(async {
-            let guard = store.lock().await;
+            let mut guard = store.lock().await;
             guard
                 .delete_thread(&table_name, &thread_id)
                 .await
@@ -243,7 +250,7 @@ impl PyCheckpointStore {
         let rt = get_runtime();
 
         rt.block_on(async {
-            let guard = store.lock().await;
+            let mut guard = store.lock().await;
             guard
                 .count(&table_name, &thread_id)
                 .await
@@ -270,7 +277,7 @@ impl PyCheckpointStore {
             .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
 
         rt.block_on(async {
-            let guard = store.lock().await;
+            let mut guard = store.lock().await;
             let results = guard
                 .search(
                     &table_name,
@@ -323,7 +330,7 @@ impl PyCheckpointStore {
         let rt = get_runtime();
 
         rt.block_on(async {
-            let guard = store.lock().await;
+            let mut guard = store.lock().await;
             let records = guard
                 .get_timeline_records(&table_name, &thread_id, limit)
                 .await
@@ -357,7 +364,7 @@ impl PyCheckpointStore {
         let rt = get_runtime();
 
         rt.block_on(async {
-            let guard = store.lock().await;
+            let mut guard = store.lock().await;
             guard
                 .get_by_id(&table_name, &checkpoint_id)
                 .await

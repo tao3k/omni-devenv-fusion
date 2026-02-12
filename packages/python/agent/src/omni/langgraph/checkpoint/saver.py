@@ -28,15 +28,15 @@ from langgraph.checkpoint.base import BaseCheckpointSaver, CheckpointTuple
 from langgraph.checkpoint.base.id import uuid6
 
 from omni.foundation.config.logging import get_logger
-from omni.langgraph.checkpoint.lance import LanceCheckpointer
+from omni.langgraph.checkpoint.lance import RustLanceCheckpointSaver
 
 logger = get_logger("omni.langgraph.checkpoint.saver")
 
 # Checkpoint version (matches LangGraph 1.0+)
 LATEST_VERSION = 2
 
-# Module-level cache for LanceCheckpointer instances to avoid repeated initialization
-_CHECKPOINTER_CACHE: dict[tuple[str, int], LanceCheckpointer] = {}
+# Module-level cache for checkpointer instances to avoid repeated initialization
+_CHECKPOINTER_CACHE: dict[tuple[str, int], RustLanceCheckpointSaver] = {}
 
 # Global default checkpointer singleton
 _default_checkpointer: "RustCheckpointSaver | None" = None
@@ -84,7 +84,7 @@ class RustCheckpointSaver(BaseCheckpointSaver):
     """
     LangGraph-compatible checkpoint saver using Rust LanceDB backend.
 
-    Wraps LanceCheckpointer to implement the BaseCheckpointSaver interface
+    Wraps RustLanceCheckpointSaver to implement the BaseCheckpointSaver interface
     required by LangGraph for graph checkpoint persistence.
 
     Usage:
@@ -122,12 +122,14 @@ class RustCheckpointSaver(BaseCheckpointSaver):
         # Cache key: (table_name, dimension) - ignore URI, use first instance's URI
         cache_key = (table_name, dimension)
         if cache_key not in _CHECKPOINTER_CACHE:
-            logger.debug(f"Creating new LanceCheckpointer for {table_name} (dim={dimension})")
-            _CHECKPOINTER_CACHE[cache_key] = LanceCheckpointer(
+            logger.debug(
+                f"Creating new RustLanceCheckpointSaver for {table_name} (dim={dimension})"
+            )
+            _CHECKPOINTER_CACHE[cache_key] = RustLanceCheckpointSaver(
                 base_path=uri, table_name=table_name, notify_on_save=False
             )
         else:
-            logger.debug(f"Reusing cached LanceCheckpointer for {table_name}")
+            logger.debug(f"Reusing cached RustLanceCheckpointSaver for {table_name}")
 
         self._checkpointer = _CHECKPOINTER_CACHE[cache_key]
 
@@ -142,7 +144,6 @@ class RustCheckpointSaver(BaseCheckpointSaver):
         if not thread_id:
             return None
 
-        # Use the async method from LanceCheckpointer
         result = await self._checkpointer.aget_tuple(config)
         return result
 
@@ -154,7 +155,6 @@ class RustCheckpointSaver(BaseCheckpointSaver):
         new_versions: dict,
     ) -> dict:
         """Async save a checkpoint."""
-        # Delegate to LanceCheckpointer's aput
         await self._checkpointer.aput(config, checkpoint, metadata, new_versions)
         return config
 
@@ -167,7 +167,6 @@ class RustCheckpointSaver(BaseCheckpointSaver):
         limit: int | None = None,
     ) -> AsyncIterator[CheckpointTuple]:
         """Async list checkpoints for a config."""
-        # Delegate to LanceCheckpointer's alist
         async for tuple in self._checkpointer.alist(
             config, filter=filter, before=before, limit=limit
         ):

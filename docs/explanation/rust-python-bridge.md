@@ -290,8 +290,16 @@ from omni_core_rs import create_vector_store
 
 store = create_vector_store("/cache/vectors", dimension=1536)
 store.add_documents("skills", ids, vectors, contents, metadatas)
-results = store.search("skills", query_vector, limit=5)
+results = store.search_optimized(
+    "skills",
+    query_vector,
+    5,
+    '{"where_filter":"{\\"name\\":\\"git.commit\\"}","batch_size":1024}',
+)
 ```
+
+`PyVectorStore.search` (legacy) has been removed. Use `search_optimized(...)` or `search_tools(...)`.
+Scanner options contract: `docs/reference/vector-search-options-contract.md`.
 
 ## Performance Comparison
 

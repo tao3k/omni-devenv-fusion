@@ -9,14 +9,14 @@ Omni Loop is the **CCA (Cognitive Code Agent) Runtime** that integrates all syst
 
 ### Core Components
 
-| Component      | Purpose                                                     |
-| -------------- | ----------------------------------------------------------- |
-| **ReAct Loop** | Execute tasks via Observe-Decide-Act-Reflect cycle          |
-| **Router**     | Semantic routing to select appropriate skills               |
-| **Librarian**  | RAG-powered knowledge retrieval                             |
-| **Note-Taker** | Session reflection & wisdom distillation                    |
-| **Kernel**     | Tool execution via @skill_command decorated functions       |
-| **Evolution**  | Self-learning: harvest skills & extract rules from sessions |
+| Component         | System (Omega) | Purpose                                                     |
+| :---------------- | :------------- | :---------------------------------------------------------- |
+| **ReAct Loop**    | Cortex         | Execute tasks via Observe-Decide-Act-Reflect cycle          |
+| **Librarian**     | Knowledge      | RAG-powered knowledge retrieval                             |
+| **Hippocampus**   | Memory         | Long-term memory recall and experience commitment           |
+| **Cerebellum**    | Navigation     | Semantic scanning and AST-based routing                     |
+| **Immune System** | Homeostasis    | Conflict detection and isolated execution audit             |
+| **Evolution**     | Evolution      | Self-learning: harvest skills & extract rules from sessions |
 
 ## CCA Cycle
 
@@ -27,13 +27,13 @@ Omni Loop is the **CCA (Cognitive Code Agent) Runtime** that integrates all syst
 │                                                                 │
 │    ┌──────────┐    ┌──────────┐    ┌──────────┐               │
 │    │ Observe  │ ─► │  Orient  │ ─► │  Decide  │               │
-│    │ Context  │    │  Route   │    │  LLM     │               │
+│    │ Context  │    │  (Cortex)│    │  (LLM)   │               │
 │    └──────────┘    └──────────┘    └──────────┘               │
 │         ▲                                     │                │
 │         │                                     ▼                │
 │    ┌──────────┐    ┌──────────┐    ┌──────────┐               │
 │    │ Reflect  │ ◄── │   Act    │ ◄── │  Tool    │               │
-│    │  Wisdom  │    │ Execute  │    │  Call    │               │
+│    │(Evolution)│    │(Executor)│    │  Call    │               │
 │    └──────────┘    └──────────┘    └──────────┘               │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -41,11 +41,11 @@ Omni Loop is the **CCA (Cognitive Code Agent) Runtime** that integrates all syst
 
 ### Cycle Phases
 
-1. **Observe**: Build layered context (skills + knowledge + memory)
-2. **Orient**: Semantic routing to select appropriate skills
+1. **Observe**: Build layered context (Knowledge + Hippocampus Memory)
+2. **Orient**: Cortex decomposition and task prioritization
 3. **Decide**: LLM reasoning with context
-4. **Act**: Execute tools via JIT loader
-5. **Reflect**: Distill wisdom and save to memory
+4. **Act**: Execute tools via Homeostasis-isolated environments
+5. **Reflect**: Evolution distills wisdom and saves to Hippocampus
 
 ## Self-Evolution
 
@@ -187,12 +187,12 @@ Understanding the distinction between `omni run` and `omni run terminal` is fund
 ### Practical Examples
 
 ```bash
-# THE COMMANDER: High-level intent, memory-enabled (自然语言指令)
+# THE COMMANDER: High-level intent, memory-enabled (Natural language instructions)
 uv run omni run "Please use terminal to echo 'Hello Memory'"
 # → Omni Loop reasons, recalls similar fixes, orchestrates solution
 # → Archives entire session to memory for future recall
 
-# THE SOLDIER: Direct tool execution (绕过 Agent)
+# THE SOLDIER: Direct tool execution (Bypass Agent)
 uv run omni skill run "terminal.run_command" '{"cmd": "echo hello"}'
 # → Executes exactly one command, returns output
 # → No context, no memory, no learning (Pruner/Archiver NOT triggered)

@@ -1,0 +1,33 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_data_layer_snapshots.rs
+assertion_line: 29
+expression: normalized
+---
+[
+  {
+    "properties": {
+      "q": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  {
+    "properties": {
+      "q": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  {
+    "properties": {
+      "q": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  {},
+  {}
+]

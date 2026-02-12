@@ -31,9 +31,6 @@ from .lifespan import _notify_tools_changed, server_lifespan
 from .sse import run_sse
 from .stdio import run_stdio
 
-# Re-export for backward compatibility
-from .lifespan import _notify_tools_changed as handle_list_tools
-
 # Performance detection
 try:
     import uvloop
@@ -87,7 +84,6 @@ async def run(
 
 __all__ = [
     "_notify_tools_changed",
-    "handle_list_tools",
     "run",
     "run_sse",
     "run_stdio",

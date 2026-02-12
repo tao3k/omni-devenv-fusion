@@ -6,6 +6,28 @@ on:
       - main
 
 jobs:
+  architecture-gate:
+    runs-on: ubuntu-latest
+    env:
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: ./.github/actions/common-setup
+        with:
+          SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+
+      - name: Run architecture guardrails
+        run: |
+          secretspec run --provider env --profile default -- devenv shell -- \
+            pytest -q -m architecture \
+              packages/python/foundation/tests/unit/tracer \
+              packages/python/foundation/tests/unit/rag
+
   lint:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -77,9 +99,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            perf_p95_ms: "700"
+            perf_ratio_max: "4.0"
+          - os: macos-latest
+            perf_p95_ms: "900"
+            perf_ratio_max: "4.5"
     env:
       MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      OMNI_VECTOR_PERF_P95_MS: ${{ matrix.perf_p95_ms }}
+      OMNI_VECTOR_PERF_RATIO_MAX: ${{ matrix.perf_ratio_max }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -91,5 +121,18 @@ jobs:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
+      - name: Rust gate - cargo check
+        run: secretspec run --provider env --profile default -- devenv shell -- cargo check --workspace --all-targets
+
+      - name: Rust gate - snapshot contracts
+        run: secretspec run --provider env --profile default -- devenv shell -- cargo test -p omni-vector --test test_fusion_snapshots
+
+      - name: Rust gate - search perf guard
+        run: secretspec run --provider env --profile default -- devenv shell -- cargo test -p omni-vector --test test_search_perf_guard
+
+      - name: Docs advisory - vector search options contract
+        continue-on-error: true
+        run: secretspec run --provider env --profile default -- devenv shell -- uv run python scripts/generate_vector_search_options_contract.py --check
+
       - name: Run tests
-        run: secretspec run --provider env --profile default -- devenv shell -- just test
+        run: secretspec run --provider env --profile default -- devenv shell -- just test-quick

@@ -99,7 +99,7 @@ def should_recall(state: GraphState) -> Literal["recall", "end"]:
 
 async def recall_node(
     state: GraphState,
-    checkpointer: Any,  # LanceCheckpointer
+    checkpointer: Any,  # RustLanceCheckpointSaver
     top_k: int = 3,
     min_similarity: float | None = None,  # Max distance threshold (None = no filter)
 ) -> dict[str, Any]:
@@ -111,7 +111,7 @@ async def recall_node(
 
     Args:
         state: Current graph state
-        checkpointer: LanceCheckpointer instance
+        checkpointer: RustLanceCheckpointSaver instance
         top_k: Number of similar experiences to retrieve
         min_similarity: Maximum distance threshold (lower = more similar)
 
@@ -283,16 +283,16 @@ def _format_recall_results(
 # =============================================================================
 
 if __name__ == "__main__":
-    import asyncio
     import tempfile
 
-    from omni.langgraph.checkpoint.lance import LanceCheckpointer
+    from omni.foundation.utils import run_async_blocking
+    from omni.langgraph.checkpoint.lance import RustLanceCheckpointSaver
 
     async def test_recall_node():
         """Test the recall node with a mock checkpointer."""
         # Create a real checkpointer with test data
         with tempfile.TemporaryDirectory() as tmpdir:
-            cp = LanceCheckpointer(uri=f"{tmpdir}/test.lance")
+            cp = RustLanceCheckpointSaver(base_path=f"{tmpdir}/test.lance")
 
             # Add some test checkpoints
             for i, (plan, vec) in enumerate(
@@ -320,4 +320,4 @@ if __name__ == "__main__":
             print("\nTest passed!")
 
     # Run test
-    asyncio.run(test_recall_node())
+    run_async_blocking(test_recall_node())

@@ -320,7 +320,6 @@ pub fn py_extract_skeleton(content: String, language: String) -> PyResult<String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pyo3::types::PyList;
 
     #[test]
     fn test_extract_items_python() {

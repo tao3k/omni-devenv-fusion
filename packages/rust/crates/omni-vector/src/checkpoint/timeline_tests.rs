@@ -29,7 +29,7 @@ async fn test_get_timeline_records_empty() {
     let temp_dir = TempDir::new().unwrap();
     let path = temp_dir.path().to_str().unwrap();
 
-    let store: CheckpointStore = CheckpointStore::new(path, Some(768)).await.unwrap();
+    let mut store: CheckpointStore = CheckpointStore::new(path, Some(768)).await.unwrap();
     let timeline: Vec<TimelineRecord> = store
         .get_timeline_records("test_table", "nonexistent_thread", 10)
         .await
@@ -43,7 +43,7 @@ async fn test_get_timeline_records_with_data() {
     let temp_dir = TempDir::new().unwrap();
     let path = temp_dir.path().to_str().unwrap();
 
-    let store: CheckpointStore = CheckpointStore::new(path, Some(768)).await.unwrap();
+    let mut store: CheckpointStore = CheckpointStore::new(path, Some(768)).await.unwrap();
     let table_name = "test_timeline_table";
 
     // Create test checkpoints
@@ -124,7 +124,7 @@ async fn test_get_timeline_records_limit() {
     let temp_dir = TempDir::new().unwrap();
     let path = temp_dir.path().to_str().unwrap();
 
-    let store: CheckpointStore = CheckpointStore::new(path, Some(768)).await.unwrap();
+    let mut store: CheckpointStore = CheckpointStore::new(path, Some(768)).await.unwrap();
     let table_name = "test_limit_table";
 
     // Create 5 checkpoints
@@ -161,7 +161,7 @@ async fn test_get_timeline_records_thread_isolation() {
     let temp_dir = TempDir::new().unwrap();
     let path = temp_dir.path().to_str().unwrap();
 
-    let store: CheckpointStore = CheckpointStore::new(path, Some(768)).await.unwrap();
+    let mut store: CheckpointStore = CheckpointStore::new(path, Some(768)).await.unwrap();
     let table_name = "test_isolation_table";
 
     // Create checkpoints for two different threads

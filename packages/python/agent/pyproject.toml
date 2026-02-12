@@ -13,6 +13,7 @@ dependencies = [
     "starlette>=0.40.0",
     "uvicorn>=0.30.0",
     "typer>=0.15.0",
+    "aiohttp>=3.11.0",
     # Logging (pervasive)
     "structlog>=25.5.0",
     # Stress testing
@@ -37,6 +38,7 @@ omni = "omni.agent.cli.app:entry_point"
 [tool.uv.sources]
 omni-core = { workspace = true }
 omni-mcp = { workspace = true }
+
 
 [dependency-groups]
 dev = [

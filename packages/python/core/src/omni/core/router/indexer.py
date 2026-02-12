@@ -3,7 +3,6 @@ indexer.py - The Cortex Builder
 
 Builds semantic index from skills' metadata and commands.
 Uses RustVectorStore for high-performance vector operations.
-Has in-memory fallback for testing/debugging.
 
 Python 3.12+ Features:
 - itertools.batched() for batch processing (Section 7.2)
@@ -16,10 +15,10 @@ import asyncio
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from itertools import batched
 from typing import Any
 
 from pydantic import BaseModel
@@ -33,6 +32,7 @@ except ImportError:
 
 from omni.foundation.bridge import RustVectorStore, SearchResult
 from omni.foundation.config.logging import get_logger
+from omni.foundation.services.vector_schema import parse_tool_search_payload
 
 logger = get_logger("omni.core.router.indexer")
 
@@ -42,7 +42,7 @@ _EMBEDDING_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="embe
 
 @dataclass
 class IndexedEntry:
-    """An in-memory indexed entry for fallback search."""
+    """An in-memory indexed entry used for test-only ':memory:' mode."""
 
     content: str
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -50,15 +50,11 @@ class IndexedEntry:
 
 
 class InMemoryIndex:
-    """Simple in-memory index for fallback when RustVectorStore is unavailable."""
+    """Simple in-memory index used only when storage_path == ':memory:'."""
 
     def __init__(self, dimension: int = 384):
         self._entries: list[IndexedEntry] = []
         self._dimension = dimension
-
-    def add(self, content: str, metadata: dict[str, Any]) -> None:
-        """Add an entry to the index."""
-        self._entries.append(IndexedEntry(content=content, metadata=metadata))
 
     def add_batch(self, entries: list[tuple[str, dict[str, Any]]]) -> None:
         """Add a batch of entries."""
@@ -70,22 +66,17 @@ class InMemoryIndex:
         self._entries.clear()
 
     def search(self, query: str, embedding_service: Any, limit: int = 5) -> list[SearchResult]:
-        """Search using keyword matching (fallback when embeddings unavailable)."""
+        """Keyword-style search for deterministic ':memory:' tests."""
         if not self._entries:
             return []
 
         query_words = set(query.lower().split())
         results = []
-
         for i, entry in enumerate(self._entries):
-            # Simple keyword matching
             content_lower = entry.content.lower()
             match_count = sum(1 for word in query_words if word in content_lower)
-
             if match_count > 0:
-                # Calculate score based on keyword matches
                 score = min(0.9, match_count / max(len(query_words), 1))
-
                 results.append(
                     SearchResult(
                         score=score,
@@ -94,7 +85,6 @@ class InMemoryIndex:
                     )
                 )
 
-        # Sort by score and limit
         results.sort(key=lambda r: r.score, reverse=True)
         return results[:limit]
 
@@ -117,7 +107,7 @@ class SkillIndexer:
 
     Builds semantic index from all loaded skills.
     Indexes both skill descriptions and individual commands.
-    Uses RustVectorStore for production, InMemoryIndex for fallback.
+    Uses RustVectorStore for persisted paths, and in-memory index for ':memory:' tests.
 
     Smart Indexing:
     - Calculates hash of skills configuration
@@ -168,25 +158,26 @@ class SkillIndexer:
         return get_embedding_service()
 
     def initialize(self) -> None:
-        """Initialize the vector store with fallback to in-memory index."""
+        """Initialize the Rust vector store."""
         if self._store is not None or self._memory_index is not None:
             return
 
-        # For in-memory mode, use Python in-memory index directly
         if self._storage_path == ":memory:":
             self._memory_index = InMemoryIndex(dimension=self._dimension)
-            logger.info("Cortex using in-memory index (keyword-based search)")
+            logger.info("Cortex initialized in ':memory:' mode")
             return
 
         try:
             from omni.foundation.bridge.rust_vector import get_vector_store
 
-            self._store = get_vector_store(self._storage_path, self._dimension)
+            self._store = get_vector_store(
+                self._storage_path,
+                self._dimension,
+                enable_keyword_index=True,
+            )
             logger.info(f"Cortex initialized at {self._storage_path}")
         except RuntimeError as e:
-            logger.warning(f"RustVectorStore unavailable: {e}. Using in-memory fallback.")
-            self._memory_index = InMemoryIndex(dimension=self._dimension)
-            logger.info("Cortex using in-memory index (keyword-based search)")
+            logger.error(f"RustVectorStore unavailable: {e}")
 
     async def index_skills(self, skills: list[dict[str, Any]]) -> int:
         """Index skills using batch operations for single commit.
@@ -199,7 +190,7 @@ class SkillIndexer:
         self.initialize()
 
         if self._store is None and self._memory_index is None:
-            logger.warning("Cannot index: no vector store or in-memory index available")
+            logger.warning("Cannot index: vector store is unavailable")
             return 0
 
         # Smart Indexing: Calculate hash of current skills configuration
@@ -243,14 +234,13 @@ class SkillIndexer:
                 meta_path = Path(self._storage_path).with_suffix(".meta.json")
                 if meta_path.exists():
                     try:
-                        with open(meta_path, "r") as f:
-                            saved_meta = json.load(f)
-                            if saved_meta.get("hash") == current_hash:
-                                self._indexed_count = saved_meta.get("count", 0)
-                                logger.info(
-                                    f"Cortex index up-to-date ({self._indexed_count} entries), skipping build"
-                                )
-                                return self._indexed_count
+                        saved_meta = json.loads(meta_path.read_text())
+                        if saved_meta.get("hash") == current_hash:
+                            self._indexed_count = saved_meta.get("count", 0)
+                            logger.info(
+                                f"Cortex index up-to-date ({self._indexed_count} entries), skipping build"
+                            )
+                            return self._indexed_count
                     except Exception:
                         pass  # Ignore read errors, proceed to index
         except Exception as e:
@@ -282,13 +272,16 @@ class SkillIndexer:
 
             # Command entries
             for cmd in skill.get("commands", []):
-                cmd_name = cmd.get("name", "")
+                cmd_name_raw = cmd.get("name", "")
+                cmd_name = str(cmd_name_raw).strip()
+                if cmd_name.startswith(f"{skill_name}."):
+                    cmd_name = cmd_name[len(skill_name) + 1 :]
                 cmd_desc = cmd.get("description", "") or cmd_name
-                cmd_keywords = cmd.get("keywords", [])
+                cmd_keywords = cmd.get("routing_keywords", [])
                 cmd_intents = skill.get("intents", [])  # Commands inherit skill intents
 
                 # [SEO] Build a highly descriptive search block for both Vector and Keyword engines
-                # Combining name, description, intents, and keywords into a single semantic unit
+                # Combining name, description, intents, and routing_keywords into a single unit
                 doc_content = f"COMMAND: {skill_name}.{cmd_name}\n"
                 doc_content += f"DESCRIPTION: {cmd_desc}\n"
                 if cmd_intents:
@@ -304,7 +297,7 @@ class SkillIndexer:
                     "skill_name": skill_name,
                     "tool_name": cmd_id,
                     "command": cmd_name,
-                    "keywords": cmd_keywords,
+                    "routing_keywords": cmd_keywords,
                     "intents": cmd_intents,
                     "weight": 2.0,
                     "id": cmd_id,
@@ -321,12 +314,10 @@ class SkillIndexer:
         if not docs:
             return 0
 
-        # In-memory index: fast path
         if self._memory_index is not None:
             self._memory_index.clear()
             self._memory_index.add_batch([(d["content"], d["metadata"]) for d in docs])
             self._indexed_count = len(docs)
-            logger.info(f"Cortex in-memory index: {len(docs)} entries")
             return self._indexed_count
 
         # RustVectorStore: batch commit
@@ -336,14 +327,15 @@ class SkillIndexer:
         try:
             contents = [d["content"] for d in docs]
 
-            embeddings = await asyncio.get_event_loop().run_in_executor(
+            loop = asyncio.get_running_loop()
+            embeddings = await loop.run_in_executor(
                 _EMBEDDING_EXECUTOR, lambda: list(self._embedding_service.embed_batch(contents))
             )
 
             # Batch write to LanceDB (single commit)
             import json as _json
 
-            await self._store.add_documents(
+            await self._store.replace_documents(
                 table_name="skills",
                 ids=[d["id"] for d in docs],
                 vectors=embeddings,
@@ -357,15 +349,15 @@ class SkillIndexer:
             if self._storage_path != ":memory:" and current_hash:
                 try:
                     meta_path = Path(self._storage_path).with_suffix(".meta.json")
-                    with open(meta_path, "w") as f:
-                        json.dump(
+                    meta_path.write_text(
+                        json.dumps(
                             {
                                 "hash": current_hash,
                                 "count": self._indexed_count,
                                 "timestamp": time.time(),
-                            },
-                            f,
+                            }
                         )
+                    )
                 except Exception as e:
                     logger.warning(f"Failed to save index metadata: {e}")
 
@@ -389,17 +381,66 @@ class SkillIndexer:
             List of search results
         """
         if self._store is not None:
-            # Use RustVectorStore
+            # Use explicit Rust search_tools path (embed + hybrid retrieval).
             try:
-                results = await self._store.search(query, limit=limit)
-                if threshold > 0:
-                    results = [r for r in results if r.score >= threshold]
+                loop = asyncio.get_running_loop()
+                query_embedding = await loop.run_in_executor(
+                    _EMBEDDING_EXECUTOR,
+                    self._embedding_service.embed,
+                    query,
+                )
+                query_vector = (
+                    query_embedding[0]
+                    if query_embedding and isinstance(query_embedding[0], list)
+                    else query_embedding
+                )
+
+                tool_results = await self._store.search_tools(
+                    table_name="skills",
+                    query_vector=query_vector,
+                    query_text=query,
+                    limit=limit,
+                    threshold=threshold,
+                )
+
+                results: list[SearchResult] = []
+                for data in tool_results:
+                    try:
+                        parsed = parse_tool_search_payload(dict(data))
+                    except Exception as exc:
+                        logger.debug("Skipping invalid tool search payload: %s", exc)
+                        continue
+
+                    score = float(parsed.score)
+                    if threshold > 0 and score < threshold:
+                        continue
+                    command = (
+                        ".".join(parsed.tool_name.split(".")[1:])
+                        if "." in parsed.tool_name
+                        else parsed.tool_name
+                    )
+                    payload = {
+                        "command": command,
+                        "tool_name": parsed.tool_name,
+                        "skill_name": parsed.skill_name,
+                        "description": parsed.description,
+                        "routing_keywords": list(parsed.routing_keywords),
+                        "file_path": parsed.file_path,
+                        "input_schema": dict(parsed.input_schema),
+                        "schema": parsed.schema_version,
+                    }
+                    results.append(
+                        SearchResult(
+                            score=score,
+                            payload=payload,
+                            id=parsed.tool_name,
+                        )
+                    )
                 return results
             except Exception as e:
                 logger.error(f"Search failed: {e}")
                 return []
-        elif self._memory_index is not None:
-            # Use in-memory index with keyword search
+        if self._memory_index is not None:
             try:
                 results = self._memory_index.search(query, self._embedding_service, limit=limit)
                 if threshold > 0:
@@ -408,17 +449,14 @@ class SkillIndexer:
             except Exception as e:
                 logger.error(f"In-memory search failed: {e}")
                 return []
-        else:
-            return []
+        return []
 
     async def get_stats(self) -> dict[str, Any]:
         """Get index statistics."""
         count = self._indexed_count
         if self._store is not None:
-            try:
+            with suppress(Exception):
                 count = await self._store.count("skills")
-            except Exception:
-                pass
         elif self._memory_index is not None:
             count = len(self._memory_index)
 
@@ -429,4 +467,4 @@ class SkillIndexer:
         }
 
 
-__all__ = ["IndexedEntry", "InMemoryIndex", "IndexedSkill", "SkillIndexer"]
+__all__ = ["InMemoryIndex", "IndexedEntry", "IndexedSkill", "SkillIndexer"]

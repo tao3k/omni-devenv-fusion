@@ -67,6 +67,24 @@ class TestIntentSniffer:
         assert sniffer._rules == []
         assert sniffer._cached_suggestions == {}
 
+    @patch("omni.core.router.sniffer.get_setting", return_value=0.65)
+    def test_init_reads_threshold_from_settings(self, _mock_get_setting):
+        """Dynamic sniffer threshold should be loaded from settings."""
+        sniffer = IntentSniffer()
+        assert sniffer.score_threshold == 0.65
+
+    @patch("omni.core.router.sniffer.get_setting", return_value=2.0)
+    def test_init_clamps_threshold_from_settings(self, _mock_get_setting):
+        """Settings threshold should be clamped to [0, 1]."""
+        sniffer = IntentSniffer()
+        assert sniffer.score_threshold == 1.0
+
+    @patch("omni.core.router.sniffer.get_setting", return_value="bad-value")
+    def test_init_falls_back_when_threshold_is_invalid(self, _mock_get_setting):
+        """Invalid settings threshold should fall back to default."""
+        sniffer = IntentSniffer()
+        assert sniffer.score_threshold == 0.5
+
     def test_register_rule(self):
         """Test registering a rule."""
         sniffer = IntentSniffer()

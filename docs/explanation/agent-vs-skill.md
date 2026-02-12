@@ -6,7 +6,7 @@ description: Deep dive into why Reviewer is an Agent, not a Skill
 # Agent vs Skill: Architectural Decision
 
 > **Status**: ⚠️ PARTIALLY LEGACY - Core concepts still relevant, terminology may have evolved
-> **See Also**: `trinity-architecture.md` for current skill architecture
+> **See Also**: `system-layering.md` for current skill architecture
 
 ---
 

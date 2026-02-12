@@ -84,8 +84,9 @@ class FileIngestor:
             recursive=True,
         )
 
-        # Convert to Path objects
-        return [Path(f) for f in rust_files]
+        # Convert to Path objects - Rust returns paths relative to root,
+        # so we need to join with directory to get absolute paths
+        return [directory / f for f in rust_files]
 
     def _discover_via_git(self, project_root: Path) -> list[Path]:
         """Discover files using git ls-files (respects .gitignore)."""

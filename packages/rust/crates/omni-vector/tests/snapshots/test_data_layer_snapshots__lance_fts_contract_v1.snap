@@ -1,0 +1,18 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_data_layer_snapshots.rs
+expression: view
+---
+{
+  "commit_hits": [
+    {
+      "skill": "git",
+      "tool": "git.commit"
+    }
+  ],
+  "history_hits": [
+    {
+      "skill": "git",
+      "tool": "git.rebase"
+    }
+  ]
+}

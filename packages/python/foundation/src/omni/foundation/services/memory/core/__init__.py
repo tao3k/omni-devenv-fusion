@@ -11,7 +11,6 @@ Submodules:
 """
 
 from omni.foundation.services.memory.core.interface import (
-    STORAGE_MODE_FILE,
     STORAGE_MODE_LANCE,
     StorageMode,
 )
@@ -24,7 +23,6 @@ from omni.foundation.services.memory.core.utils import format_decision, parse_de
 
 __all__ = [
     "MEMORY_DIR",
-    "STORAGE_MODE_FILE",
     "STORAGE_MODE_LANCE",
     "ProjectMemory",
     "StorageMode",

@@ -1,3 +1,6 @@
 [submodule "assets/knowledge"]
 	path = assets/knowledge
 	url = https://github.com/tao3k/omni-knowledge.git
+[submodule "packages/ncl"]
+	path = packages/ncl
+	url = https://github.com/tao3k/omnibus-ncl.git

@@ -1,5 +1,14 @@
-//! CheckpointStore - LanceDB-based checkpoint storage for LangGraph
-
+/// CheckpointStore - LanceDB-based checkpoint storage for LangGraph
+///
+/// This module includes automatic corruption detection and recovery for LanceDB datasets.
+/// When a dataset is corrupted (e.g., missing files), the store will automatically
+/// detect the issue, remove the corrupted data, and recreate an empty dataset.
+///
+/// Common corruption scenarios and handling:
+/// 1. Process crash during checkpoint write: LanceDB partial transaction → auto-recovery
+/// 2. Disk space exhaustion: Incomplete write → detected via _versions check
+/// 3. Orphan checkpoints from interrupted tasks: cleanup by gc_orphan_checkpoints()
+/// 4. Concurrent write conflicts: version mismatch → retry with recovery
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -48,6 +57,282 @@ impl CheckpointStore {
     /// Get the table path for a checkpoint table.
     fn table_path(&self, table_name: &str) -> PathBuf {
         self.base_path.join(format!("{table_name}.lance"))
+    }
+
+    /// Check if a dataset is corrupted (missing files, etc.).
+    ///
+    /// Detects common corruption patterns from interrupted operations:
+    /// - Missing _versions directory (partial transaction)
+    /// - Empty data directories
+    /// - Corrupt manifest files
+    fn is_dataset_corrupted(&self, table_name: &str) -> bool {
+        let table_path = self.table_path(table_name);
+        if !table_path.exists() {
+            return false;
+        }
+        // Check for common corruption indicators:
+        // 1. Missing _versions directory (primary indicator of interrupted transaction)
+        let versions_path = table_path.join("_versions");
+        if !versions_path.exists() {
+            log::warn!(
+                "Dataset corrupted: missing _versions directory for {}",
+                table_name
+            );
+            return true;
+        }
+        // 2. Check if _versions is empty (interrupted transaction)
+        if let Ok(entries) = std::fs::read_dir(&versions_path) {
+            let count = entries.count();
+            if count == 0 {
+                log::warn!(
+                    "Dataset corrupted: empty _versions directory for {}",
+                    table_name
+                );
+                return true;
+            }
+        }
+        // 3. Check for data files (lance files)
+        let data_files: Vec<_> = table_path
+            .read_dir()
+            .ok()
+            .map(|dir| dir.filter_map(|e| e.ok()).collect::<Vec<_>>())
+            .unwrap_or_default();
+        let has_lance_files = data_files
+            .iter()
+            .any(|e| e.file_name().to_string_lossy().ends_with(".lance"));
+        if !has_lance_files {
+            // No data files, but _versions exists - might be valid empty dataset
+            return false;
+        }
+        false
+    }
+
+    /// Check and clean up orphan checkpoints from interrupted graph tasks.
+    ///
+    /// Orphan checkpoints are checkpoints that exist but don't form a valid chain
+    /// (e.g., due to interrupted task leaving partial state). This method:
+    /// 1. Finds checkpoints without valid parent references
+    /// 2. Identifies chains with gaps
+    /// 3. Optionally removes invalid chains
+    ///
+    /// Returns the number of orphan checkpoints found/removed.
+    pub async fn cleanup_orphan_checkpoints(
+        &mut self,
+        table_name: &str,
+        dry_run: bool,
+    ) -> Result<u32, VectorStoreError> {
+        use futures::TryStreamExt;
+        use lance::deps::arrow_array::Array;
+
+        let table_path = self.table_path(table_name);
+        if !table_path.exists() {
+            return Ok(0);
+        }
+
+        let mut dataset = self.open_or_recover(table_name, false).await?;
+
+        // Scan all checkpoints to find orphans
+        let mut scanner = dataset.scan();
+        scanner.project(&[ID_COLUMN, METADATA_COLUMN])?;
+
+        let mut stream = scanner
+            .try_into_stream()
+            .await
+            .map_err(VectorStoreError::LanceDB)?;
+
+        let mut orphan_ids: Vec<String> = Vec::new();
+        let mut all_ids: Vec<String> = Vec::new();
+        let mut parent_refs: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        while let Some(batch) = stream.try_next().await.map_err(VectorStoreError::LanceDB)? {
+            let id_col = batch.column_by_name(ID_COLUMN);
+            let metadata_col = batch.column_by_name(METADATA_COLUMN);
+
+            if let (Some(id_c), Some(meta_c)) = (id_col, metadata_col) {
+                let ids = id_c
+                    .as_any()
+                    .downcast_ref::<lance::deps::arrow_array::StringArray>();
+                let metas = meta_c
+                    .as_any()
+                    .downcast_ref::<lance::deps::arrow_array::StringArray>();
+
+                if let (Some(ids), Some(metas)) = (ids, metas) {
+                    for i in 0..batch.num_rows() {
+                        if ids.is_null(i) {
+                            continue;
+                        }
+                        let id = ids.value(i).to_string();
+                        all_ids.push(id.clone());
+
+                        // Collect parent references from metadata
+                        if !metas.is_null(i) {
+                            let meta_str = metas.value(i);
+                            if let Ok(meta) = serde_json::from_str::<serde_json::Value>(&meta_str) {
+                                if let Some(parent) = meta.get("parent_id").and_then(|v| v.as_str())
+                                {
+                                    parent_refs.insert(parent.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Find IDs that are not referenced as parents (orphans - likely starting points of interrupted chains)
+        // Also check for UUID-like patterns that indicate temporary/incomplete tasks
+        for id in &all_ids {
+            // Orphan if: not referenced as parent AND looks like a temp UUID pattern
+            if !parent_refs.contains(id) {
+                // Additional check: UUID patterns often indicate interrupted tasks
+                // UUID v1-v5 have 8-4-4-4-12 format with hex characters
+                // Check for common UUID patterns: dashes at specific positions
+                let is_uuid_like = id.len() >= 36
+                    && id.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+                    && id.matches('-').count() == 4;
+                if is_uuid_like || id.len() > 50 {
+                    orphan_ids.push(id.clone());
+                }
+            }
+        }
+
+        let orphan_count = orphan_ids.len() as u32;
+
+        if orphan_count > 0 {
+            log::info!(
+                "Found {} orphan checkpoints in {} (dry_run={})",
+                orphan_count,
+                table_name,
+                dry_run
+            );
+
+            if !dry_run {
+                // Remove orphans
+                for id in &orphan_ids {
+                    dataset
+                        .delete(&format!("{} = '{}'", ID_COLUMN, id.replace('\'', "''")))
+                        .await?;
+                    log::debug!("Removed orphan checkpoint: {}", id);
+                }
+            }
+        }
+
+        Ok(orphan_count)
+    }
+
+    /// Force recovery of a corrupted dataset, discarding all data.
+    ///
+    /// Use this when auto-recovery is insufficient and you want to
+    /// completely reset the checkpoint store.
+    pub async fn force_recover(&mut self, table_name: &str) -> Result<(), VectorStoreError> {
+        let table_path = self.table_path(table_name);
+
+        // Remove from cache
+        {
+            let datasets = self.datasets.lock().await;
+            datasets.remove(table_name);
+        }
+
+        // Remove entire dataset directory
+        if table_path.exists() {
+            log::warn!("Force recovering {}: removing {:?}", table_name, table_path);
+            std::fs::remove_dir_all(&table_path).map_err(|e| {
+                VectorStoreError::General(format!(
+                    "Failed to remove corrupted dataset {}: {}",
+                    table_name, e
+                ))
+            })?;
+        }
+
+        // Recreate empty dataset
+        self.get_or_create_dataset(table_name, true).await?;
+
+        log::info!("Force recovery complete for {}", table_name);
+        Ok(())
+    }
+
+    /// Remove corrupted dataset and recreate it.
+    async fn recover_corrupted_dataset(
+        &mut self,
+        table_name: &str,
+    ) -> Result<Dataset, VectorStoreError> {
+        let table_path = self.table_path(table_name);
+
+        // Remove from cache
+        {
+            let datasets = self.datasets.lock().await;
+            datasets.remove(table_name);
+        }
+
+        // Remove corrupted dataset directory
+        if table_path.exists() {
+            log::warn!("Removing corrupted dataset: {:?}", table_path);
+            std::fs::remove_dir_all(&table_path).map_err(|e| {
+                VectorStoreError::General(format!(
+                    "Failed to remove corrupted dataset {}: {}",
+                    table_name, e
+                ))
+            })?;
+        }
+
+        // Recreate the dataset
+        log::info!("Recreating dataset: {}", table_name);
+        let schema = self.create_schema();
+        let empty_batch = self.create_empty_batch(&schema)?;
+        let batches: Vec<Result<_, ArrowError>> = vec![Ok(empty_batch)];
+        let iter = RecordBatchIterator::new(batches, schema);
+        let table_uri = table_path.to_string_lossy().into_owned();
+        let dataset = Dataset::write(
+            Box::new(iter),
+            table_uri.as_str(),
+            Some(WriteParams::default()),
+        )
+        .await
+        .map_err(VectorStoreError::LanceDB)?;
+
+        // Add to cache
+        {
+            let datasets = self.datasets.lock().await;
+            datasets.insert(table_name.to_string(), dataset.clone());
+        }
+
+        Ok(dataset)
+    }
+
+    /// Try to open a dataset, recovering from corruption if needed.
+    async fn open_or_recover(
+        &mut self,
+        table_name: &str,
+        force_create: bool,
+    ) -> Result<Dataset, VectorStoreError> {
+        // First check if we need to recover
+        if !force_create && self.is_dataset_corrupted(table_name) {
+            return self.recover_corrupted_dataset(table_name).await;
+        }
+
+        // Try normal open
+        let table_path = self.table_path(table_name);
+        if !force_create && table_path.exists() {
+            match Dataset::open(table_path.to_string_lossy().as_ref()).await {
+                Ok(dataset) => {
+                    // Cache the successfully opened dataset
+                    let datasets = self.datasets.lock().await;
+                    datasets.insert(table_name.to_string(), dataset.clone());
+                    return Ok(dataset);
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Failed to open dataset {}: {}. Attempting recovery...",
+                        table_name,
+                        e
+                    );
+                    return self.recover_corrupted_dataset(table_name).await;
+                }
+            }
+        }
+
+        // Create new dataset
+        self.get_or_create_dataset(table_name, force_create).await
     }
 
     /// Create the schema for checkpoint storage.
@@ -255,7 +540,7 @@ impl CheckpointStore {
 
     /// Get the latest checkpoint for a thread.
     pub async fn get_latest(
-        &self,
+        &mut self,
         table_name: &str,
         thread_id: &str,
     ) -> Result<Option<String>, VectorStoreError> {
@@ -267,9 +552,8 @@ impl CheckpointStore {
             return Ok(None);
         }
 
-        let dataset = Dataset::open(table_path.to_string_lossy().as_ref())
-            .await
-            .map_err(VectorStoreError::LanceDB)?;
+        // Use open_or_recover to handle corruption
+        let dataset = self.open_or_recover(table_name, false).await?;
 
         let mut scanner = dataset.scan();
         scanner.project(&[CONTENT_COLUMN, METADATA_COLUMN])?;
@@ -329,7 +613,7 @@ impl CheckpointStore {
 
     /// Get checkpoint history for a thread (newest first).
     pub async fn get_history(
-        &self,
+        &mut self,
         table_name: &str,
         thread_id: &str,
         limit: usize,
@@ -342,9 +626,8 @@ impl CheckpointStore {
             return Ok(Vec::new());
         }
 
-        let dataset = Dataset::open(table_path.to_string_lossy().as_ref())
-            .await
-            .map_err(VectorStoreError::LanceDB)?;
+        // Use open_or_recover to handle corruption
+        let dataset = self.open_or_recover(table_name, false).await?;
 
         let mut scanner = dataset.scan();
         scanner.project(&[CONTENT_COLUMN, METADATA_COLUMN])?;
@@ -403,7 +686,7 @@ impl CheckpointStore {
 
     /// Get checkpoint by ID.
     pub async fn get_by_id(
-        &self,
+        &mut self,
         table_name: &str,
         checkpoint_id: &str,
     ) -> Result<Option<String>, VectorStoreError> {
@@ -414,9 +697,8 @@ impl CheckpointStore {
             return Ok(None);
         }
 
-        let dataset = Dataset::open(table_path.to_string_lossy().as_ref())
-            .await
-            .map_err(VectorStoreError::LanceDB)?;
+        // Use open_or_recover to handle corruption
+        let dataset = self.open_or_recover(table_name, false).await?;
 
         let mut scanner = dataset.scan();
         let filter_str = format!("{} = '{}'", ID_COLUMN, checkpoint_id.replace('\'', "''"));
@@ -447,7 +729,7 @@ impl CheckpointStore {
 
     /// Delete all checkpoints for a thread.
     pub async fn delete_thread(
-        &self,
+        &mut self,
         table_name: &str,
         thread_id: &str,
     ) -> Result<u32, VectorStoreError> {
@@ -457,9 +739,8 @@ impl CheckpointStore {
             return Ok(0);
         }
 
-        let mut dataset = Dataset::open(table_path.to_string_lossy().as_ref())
-            .await
-            .map_err(VectorStoreError::LanceDB)?;
+        // Use open_or_recover to handle corruption
+        let mut dataset = self.open_or_recover(table_name, false).await?;
 
         // PREDICATE PUSH-DOWN: Use thread_id column filter instead of metadata parsing
         let mut scanner = dataset.scan();
@@ -506,15 +787,18 @@ impl CheckpointStore {
     }
 
     /// Count checkpoints for a thread.
-    pub async fn count(&self, table_name: &str, thread_id: &str) -> Result<u32, VectorStoreError> {
+    pub async fn count(
+        &mut self,
+        table_name: &str,
+        thread_id: &str,
+    ) -> Result<u32, VectorStoreError> {
         let table_path = self.table_path(table_name);
         if !table_path.exists() {
             return Ok(0);
         }
 
-        let dataset = Dataset::open(table_path.to_string_lossy().as_ref())
-            .await
-            .map_err(VectorStoreError::LanceDB)?;
+        // Use open_or_recover to handle corruption
+        let dataset = self.open_or_recover(table_name, false).await?;
 
         let mut scanner = dataset.scan();
         scanner.project(&[ID_COLUMN])?;
@@ -553,7 +837,7 @@ impl CheckpointStore {
     /// # Returns
     /// Vector of tuples: (content_json, metadata_json, distance_score)
     pub async fn search(
-        &self,
+        &mut self,
         table_name: &str,
         query_vector: &[f32],
         limit: usize,
@@ -567,10 +851,8 @@ impl CheckpointStore {
             return Ok(Vec::new());
         }
 
-        // Open dataset
-        let dataset = Dataset::open(table_path.to_string_lossy().as_ref())
-            .await
-            .map_err(VectorStoreError::LanceDB)?;
+        // Use open_or_recover to handle corruption
+        let dataset = self.open_or_recover(table_name, false).await?;
 
         // Create scanner with all columns needed for search
         let mut scanner = dataset.scan();
@@ -623,20 +905,25 @@ impl CheckpointStore {
                         .downcast_ref::<lance::deps::arrow_array::Float32Array>();
 
                     if let Some(values_arr) = values_arr {
+                        // Pre-compute values slice once to avoid repeated method calls
+                        let values_slice = values_arr.values();
+                        let db_len = values_slice.len();
+                        let query_len = query_vector.len();
+                        // Use min to handle dimension mismatches safely
+                        let compute_len = db_len.min(query_len);
+
                         for i in 0..batch.num_rows() {
-                            // Compute L2 distance
-                            let mut distance = 0.0f32;
-                            let query_len = query_vector.len();
-                            let values_len = values_arr.len();
-                            for j in 0..query_len {
-                                let db_val = if j < values_len {
-                                    values_arr.value(j)
-                                } else {
-                                    0.0
-                                };
-                                let diff = db_val - query_vector[j];
-                                distance += diff * diff;
-                            }
+                            // Compute L2 distance using SIMD-friendly iterator pattern
+                            // zip() allows LLVM to auto-vectorize the loop
+                            let distance: f32 = query_vector[..compute_len]
+                                .iter()
+                                .zip(&values_slice[..compute_len])
+                                .map(|(q, d)| {
+                                    let diff = q - d;
+                                    diff * diff
+                                })
+                                .sum();
+
                             let distance = distance.sqrt();
 
                             // Get metadata for filtering (thread_id already filtered by predicate push-down)
@@ -705,7 +992,7 @@ impl CheckpointStore {
     /// # Returns
     /// Vector of TimelineRecord sorted by timestamp descending (newest first)
     pub async fn get_timeline_records(
-        &self,
+        &mut self,
         table_name: &str,
         thread_id: &str,
         limit: usize,
@@ -718,9 +1005,8 @@ impl CheckpointStore {
             return Ok(Vec::new());
         }
 
-        let dataset = Dataset::open(table_path.to_string_lossy().as_ref())
-            .await
-            .map_err(VectorStoreError::LanceDB)?;
+        // Use open_or_recover to handle corruption
+        let dataset = self.open_or_recover(table_name, false).await?;
 
         let mut scanner = dataset.scan();
         scanner.project(&[ID_COLUMN, CONTENT_COLUMN, METADATA_COLUMN])?;

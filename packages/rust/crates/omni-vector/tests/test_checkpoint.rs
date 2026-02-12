@@ -17,7 +17,7 @@ async fn test_checkpoint_roundtrip() {
     let db_path = temp_dir.path().join("checkpoints");
     clean_test_db(&db_path);
 
-    let store = CheckpointStore::new(
+    let mut store = CheckpointStore::new(
         temp_dir.path().join("checkpoints").to_str().unwrap(),
         Some(1536),
     )
@@ -71,7 +71,7 @@ async fn test_multiple_checkpoints() {
     let db_path = temp_dir.path().join("checkpoints");
     clean_test_db(&db_path);
 
-    let store = CheckpointStore::new(
+    let mut store = CheckpointStore::new(
         temp_dir.path().join("checkpoints").to_str().unwrap(),
         Some(1536),
     )
@@ -114,7 +114,7 @@ async fn test_search_similar() {
     let db_path = temp_dir.path().join("search_test");
     clean_test_db(&db_path);
 
-    let store = CheckpointStore::new(
+    let mut store = CheckpointStore::new(
         temp_dir.path().join("search_test").to_str().unwrap(),
         Some(10), // Smaller dimension for faster testing
     )
@@ -179,7 +179,7 @@ async fn test_search_with_filter() {
     let db_path = temp_dir.path().join("filter_test");
     clean_test_db(&db_path);
 
-    let store = CheckpointStore::new(
+    let mut store = CheckpointStore::new(
         temp_dir.path().join("filter_test").to_str().unwrap(),
         Some(10),
     )
@@ -228,7 +228,7 @@ async fn test_thread_id_isolation() {
     let db_path = temp_dir.path().join("isolation_test");
     clean_test_db(&db_path);
 
-    let store = CheckpointStore::new(
+    let mut store = CheckpointStore::new(
         temp_dir.path().join("isolation_test").to_str().unwrap(),
         Some(10),
     )
@@ -273,7 +273,7 @@ async fn test_search_with_thread_id_filter() {
     let db_path = temp_dir.path().join("thread_search_test");
     clean_test_db(&db_path);
 
-    let store = CheckpointStore::new(
+    let mut store = CheckpointStore::new(
         temp_dir.path().join("thread_search_test").to_str().unwrap(),
         Some(10),
     )
@@ -366,7 +366,7 @@ async fn test_get_history_thread_isolation() {
     let db_path = temp_dir.path().join("history_isolation");
     clean_test_db(&db_path);
 
-    let store = CheckpointStore::new(
+    let mut store = CheckpointStore::new(
         temp_dir.path().join("history_isolation").to_str().unwrap(),
         Some(10),
     )
@@ -425,7 +425,7 @@ async fn test_count_thread_isolation() {
     let db_path = temp_dir.path().join("count_isolation");
     clean_test_db(&db_path);
 
-    let store = CheckpointStore::new(
+    let mut store = CheckpointStore::new(
         temp_dir.path().join("count_isolation").to_str().unwrap(),
         Some(10),
     )
@@ -467,7 +467,7 @@ async fn test_delete_thread_isolation() {
     let db_path = temp_dir.path().join("delete_isolation");
     clean_test_db(&db_path);
 
-    let store = CheckpointStore::new(
+    let mut store = CheckpointStore::new(
         temp_dir.path().join("delete_isolation").to_str().unwrap(),
         Some(10),
     )
@@ -520,7 +520,7 @@ async fn test_get_latest_timestamp_order() {
     let db_path = temp_dir.path().join("latest_timestamp");
     clean_test_db(&db_path);
 
-    let store = CheckpointStore::new(
+    let mut store = CheckpointStore::new(
         temp_dir.path().join("latest_timestamp").to_str().unwrap(),
         Some(10),
     )
@@ -555,4 +555,230 @@ async fn test_get_latest_timestamp_order() {
     assert!(latest.is_some());
     let latest_content: serde_json::Value = serde_json::from_str(&latest.unwrap()).unwrap();
     assert_eq!(latest_content["id"].as_str().unwrap(), "cp-1");
+}
+
+#[tokio::test]
+async fn test_cleanup_orphan_checkpoints() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("orphan_test");
+    clean_test_db(&db_path);
+
+    let mut store = CheckpointStore::new(
+        temp_dir.path().join("orphan_test").to_str().unwrap(),
+        Some(10),
+    )
+    .await
+    .unwrap();
+
+    // Create valid checkpoints with proper parent chain
+    let valid_records = vec![
+        ("cp-1", "valid-thread", None, 1000.0),
+        ("cp-2", "valid-thread", Some("cp-1"), 1001.0),
+        ("cp-3", "valid-thread", Some("cp-2"), 1002.0),
+    ];
+
+    for (id, thread, parent, ts) in &valid_records {
+        let record = CheckpointRecord {
+            checkpoint_id: id.to_string(),
+            thread_id: thread.to_string(),
+            parent_id: parent.map(|s| s.to_string()),
+            timestamp: *ts,
+            content: format!(r#"{{"id": "{id}"}}"#),
+            embedding: None,
+            metadata: None,
+        };
+        store
+            .save_checkpoint("orphan_table", &record)
+            .await
+            .unwrap();
+    }
+
+    // Create orphan checkpoints (UUID patterns indicating interrupted tasks)
+    // Using proper UUID format: 8-4-4-4-12 (hex chars only)
+    let orphan_records: Vec<(&str, &str, Option<&str>, f64)> = vec![
+        (
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "orphan-thread-1",
+            None,
+            2000.0,
+        ),
+        (
+            "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+            "orphan-thread-2",
+            None,
+            2001.0,
+        ),
+    ];
+
+    for (id, thread, parent, ts) in &orphan_records {
+        let record = CheckpointRecord {
+            checkpoint_id: id.to_string(),
+            thread_id: thread.to_string(),
+            parent_id: parent.map(|s| s.to_string()),
+            timestamp: *ts,
+            content: format!(r#"{{"orphan": "{id}"}}"#),
+            embedding: None,
+            metadata: None,
+        };
+        store
+            .save_checkpoint("orphan_table", &record)
+            .await
+            .unwrap();
+    }
+
+    // Dry run should find 2 orphans
+    let found = store
+        .cleanup_orphan_checkpoints("orphan_table", true)
+        .await
+        .unwrap();
+    assert_eq!(found, 2, "Should find 2 orphan checkpoints");
+
+    // Actual cleanup
+    let removed = store
+        .cleanup_orphan_checkpoints("orphan_table", false)
+        .await
+        .unwrap();
+    assert_eq!(removed, 2, "Should remove 2 orphan checkpoints");
+
+    // Verify orphans are gone
+    let orphan_count = store
+        .count("orphan_table", "orphan-thread-1")
+        .await
+        .unwrap();
+    assert_eq!(orphan_count, 0);
+
+    // Verify valid checkpoints still exist
+    let valid_count = store.count("orphan_table", "valid-thread").await.unwrap();
+    assert_eq!(valid_count, 3);
+}
+
+#[tokio::test]
+async fn test_force_recover() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("force_recover_test");
+    clean_test_db(&db_path);
+
+    let mut store = CheckpointStore::new(
+        temp_dir.path().join("force_recover_test").to_str().unwrap(),
+        Some(10),
+    )
+    .await
+    .unwrap();
+
+    // Create some checkpoints
+    let record = CheckpointRecord {
+        checkpoint_id: "cp-1".to_string(),
+        thread_id: "test-thread".to_string(),
+        parent_id: None,
+        timestamp: 1000.0,
+        content: r#"{"data": "before"}"#.to_string(),
+        embedding: None,
+        metadata: None,
+    };
+    store.save_checkpoint("force_table", &record).await.unwrap();
+
+    // Verify data exists
+    let count_before = store.count("force_table", "test-thread").await.unwrap();
+    assert_eq!(count_before, 1);
+
+    // Force recover (discard all data)
+    store.force_recover("force_table").await.unwrap();
+
+    // Verify data is gone
+    let count_after = store.count("force_table", "test-thread").await.unwrap();
+    assert_eq!(count_after, 0);
+
+    // Should be able to add new checkpoints
+    let record2 = CheckpointRecord {
+        checkpoint_id: "cp-new".to_string(),
+        thread_id: "test-thread".to_string(),
+        parent_id: None,
+        timestamp: 2000.0,
+        content: r#"{"data": "after"}"#.to_string(),
+        embedding: None,
+        metadata: None,
+    };
+    store
+        .save_checkpoint("force_table", &record2)
+        .await
+        .unwrap();
+
+    let latest = store
+        .get_latest("force_table", "test-thread")
+        .await
+        .unwrap();
+    assert!(latest.is_some());
+    assert!(latest.unwrap().contains("after"));
+}
+
+#[tokio::test]
+async fn test_corruption_detection() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("corrupt_test");
+    clean_test_db(&db_path);
+
+    // Create store and add data
+    {
+        let store = CheckpointStore::new(
+            temp_dir.path().join("corrupt_test").to_str().unwrap(),
+            Some(10),
+        )
+        .await
+        .unwrap();
+
+        let record = CheckpointRecord {
+            checkpoint_id: "cp-1".to_string(),
+            thread_id: "session".to_string(),
+            parent_id: None,
+            timestamp: 1000.0,
+            content: r#"{"step": 1}"#.to_string(),
+            embedding: None,
+            metadata: None,
+        };
+        store
+            .save_checkpoint("detect_table", &record)
+            .await
+            .unwrap();
+    }
+
+    // Corrupt by removing _versions directory
+    let table_path = temp_dir.path().join("corrupt_test.lance");
+    let versions_path = table_path.join("_versions");
+    if versions_path.exists() {
+        std::fs::remove_dir_all(&versions_path).unwrap();
+    }
+
+    // Verify corruption is detected when creating new store
+    let mut store = CheckpointStore::new(
+        temp_dir.path().join("corrupt_test").to_str().unwrap(),
+        Some(10),
+    )
+    .await
+    .unwrap();
+
+    // Force recover to get a working store
+    store.force_recover("detect_table").await.unwrap();
+
+    // Verify store is usable after recovery
+    let count = store.count("detect_table", "session").await.unwrap();
+    assert_eq!(count, 0, "Should have 0 checkpoints after recovery");
+
+    // Add new checkpoint
+    let record = CheckpointRecord {
+        checkpoint_id: "cp-new".to_string(),
+        thread_id: "session".to_string(),
+        parent_id: None,
+        timestamp: 2000.0,
+        content: r#"{"step": "new"}"#.to_string(),
+        embedding: None,
+        metadata: None,
+    };
+    store
+        .save_checkpoint("detect_table", &record)
+        .await
+        .unwrap();
+
+    let latest = store.get_latest("detect_table", "session").await.unwrap();
+    assert!(latest.is_some());
+    assert!(latest.unwrap().contains("new"));
 }

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CandidateSkill(BaseModel):
@@ -89,8 +89,8 @@ class CandidateSkill(BaseModel):
         description="Complexity assessment: low, medium, high",
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "suggested_name": "batch_file_rename",
                 "description": "Rename multiple files matching a pattern with new extension",
@@ -128,6 +128,7 @@ class CandidateSkill(BaseModel):
                 "estimated_complexity": "low",
             }
         }
+    )
 
 
 class SkillTemplateContext(BaseModel):
@@ -166,8 +167,8 @@ class CrystallizationResult(BaseModel):
     error: str | None = None
     files_created: list[str] = Field(default_factory=list)
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "success": True,
                 "skill_path": "/project/assets/skills/learned/batch_file_rename",
@@ -176,6 +177,7 @@ class CrystallizationResult(BaseModel):
                 "files_created": ["SKILL.md", "scripts/batch_file_rename.py", "README.md"],
             }
         }
+    )
 
 
 class HarvesterAnalysisResult(BaseModel):

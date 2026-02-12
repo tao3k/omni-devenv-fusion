@@ -140,7 +140,10 @@ description: A test skill
             },
         ]
 
-        with patch("asyncio.run", return_value=mock_skills):
+        with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
+            mock_store_instance = MagicMock()
+            mock_store_instance.get_skill_index_sync.return_value = mock_skills
+            mock_store.return_value = mock_store_instance
             with patch(
                 "omni.foundation.config.skills.SKILLS_DIR",
                 return_value=tmp_path / "assets" / "skills",
@@ -189,7 +192,10 @@ description: A test skill
 
     def test_list_json_empty_skills(self, runner, tmp_path: Path):
         """Test list --json with no skills in Rust DB."""
-        with patch("asyncio.run", return_value=[]):
+        with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
+            mock_store_instance = MagicMock()
+            mock_store_instance.get_skill_index_sync.return_value = []
+            mock_store.return_value = mock_store_instance
             with patch(
                 "omni.foundation.config.skills.SKILLS_DIR",
                 return_value=tmp_path / "assets" / "skills",
@@ -224,7 +230,10 @@ description: A test skill
             },
         ]
 
-        with patch("asyncio.run", return_value=mock_skills):
+        with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
+            mock_store_instance = MagicMock()
+            mock_store_instance.get_skill_index_sync.return_value = mock_skills
+            mock_store.return_value = mock_store_instance
             with patch(
                 "omni.foundation.config.skills.SKILLS_DIR",
                 return_value=tmp_path / "assets" / "skills",
@@ -301,34 +310,34 @@ This is a test skill.
         assert "not found" in result.output.lower()
 
 
-class TestSkillDiscoverDeprecated:
-    """Tests for deprecated 'omni skill discover' command."""
+class TestSkillDiscoverUnavailable:
+    """Tests for 'omni skill discover' availability messaging."""
 
     @pytest.fixture
     def runner(self):
         return CliRunner()
 
-    def test_discover_shows_deprecated(self, runner):
-        """Test that discover command shows deprecation message."""
+    def test_discover_shows_unavailable(self, runner):
+        """Test that discover command shows unavailable message."""
         result = runner.invoke(app, ["skill", "discover", "test"])
 
         assert result.exit_code == 0
-        assert "Deprecated" in result.output or "deprecated" in result.output.lower()
+        assert "Unavailable" in result.output or "not available" in result.output.lower()
 
 
-class TestSkillSearchDeprecated:
-    """Tests for deprecated 'omni skill search' command."""
+class TestSkillSearchUnavailable:
+    """Tests for 'omni skill search' availability messaging."""
 
     @pytest.fixture
     def runner(self):
         return CliRunner()
 
-    def test_search_shows_deprecated(self, runner):
-        """Test that search command shows deprecation message."""
+    def test_search_shows_unavailable(self, runner):
+        """Test that search command shows unavailable message."""
         result = runner.invoke(app, ["skill", "search", "test"])
 
         assert result.exit_code == 0
-        assert "Deprecated" in result.output or "deprecated" in result.output.lower()
+        assert "Unavailable" in result.output or "not available" in result.output.lower()
 
 
 if __name__ == "__main__":

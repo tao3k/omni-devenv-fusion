@@ -27,7 +27,7 @@ def _get_workflow_id(repo_url: str) -> str:
 
 
 @skill_command(
-    name="run_research_graph",
+    name="git_repo_analyer",
     description="""
     Execute the Sharded Deep Research Workflow.
 
@@ -82,7 +82,7 @@ async def run_research_graph(
     # Here is a "Blocking Call".
     # During await, the LLM cannot receive new User Input or call other Tools.
     # This naturally implements "Workflow Exclusive".
-    print(f"🔒 [MCP] Locking context for Research Workflow: {repo_url} (id: {workflow_id})")
+    logger.info("Locking context for Research Workflow", repo_url=repo_url, workflow_id=workflow_id)
 
     try:
         result = await run_research_workflow(
@@ -100,7 +100,7 @@ async def run_research_graph(
                 "workflow_type": _WORKFLOW_TYPE,
             }
 
-        print("🔓 [MCP] Workflow complete. Releasing lock.")
+            logger.info("Workflow complete. Releasing lock.")
 
         error = result.get("error")
         if error:
@@ -136,7 +136,7 @@ async def run_research_graph(
         }
 
     except Exception as e:
-        print("🔓 [MCP] Workflow failed. Releasing lock.")
+        logger.info("Workflow failed. Releasing lock.")
         logger.error("Research workflow failed", error=str(e))
         return {
             "success": False,

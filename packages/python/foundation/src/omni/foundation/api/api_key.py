@@ -32,7 +32,7 @@ def _find_project_root() -> Path:
 
 
 def _load_settings_yaml() -> dict:
-    """Load assets/settings.yaml configuration."""
+    """Load API config from the merged settings view."""
     from omni.foundation.config.settings import get_settings
 
     return get_settings().get("api", {})
@@ -136,14 +136,7 @@ def ensure_api_key() -> str:
     return api_key
 
 
-# Convenience function for backward compatibility
-def get_api_key() -> str | None:
-    """Alias for get_anthropic_api_key()."""
-    return get_anthropic_api_key()
-
-
 __all__ = [
     "ensure_api_key",
     "get_anthropic_api_key",
-    "get_api_key",
 ]

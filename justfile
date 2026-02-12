@@ -360,9 +360,26 @@ lint:
     @lefthook run pre-commit
 
 [group('validate')]
+rust-check:
+    @echo "Running Rust compile checks..."
+    @cargo check --workspace --all-targets
+
+[group('validate')]
+rust-test-snapshots:
+    @echo "Running Rust snapshot contract tests..."
+    @cargo test -p omni-vector --test test_fusion_snapshots
+
+[group('validate')]
 test:
     @echo "TEST PIPELINE"
     @echo "========================================"
+    @echo "[1/3] Rust compile gate"
+    @just rust-check
+    @echo ""
+    @echo "[2/3] Rust snapshot contract gate"
+    @just rust-test-snapshots
+    @echo ""
+    @echo "[3/3] Python test suites"
     @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ \
         -v --tb=short
     @echo ""

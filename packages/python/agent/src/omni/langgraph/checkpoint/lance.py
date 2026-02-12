@@ -103,9 +103,9 @@ class RustLanceCheckpointSaver(BaseCheckpointSaver):
             )
 
         if base_path is None:
-            from omni.foundation.config.dirs import get_checkpoints_db_path
+            from omni.foundation.config.database import get_checkpoint_db_path
 
-            base_path = str(get_checkpoints_db_path())
+            base_path = str(get_checkpoint_db_path())
 
         self._table_name = table_name
         self._notify_on_save = notify_on_save
@@ -136,6 +136,13 @@ class RustLanceCheckpointSaver(BaseCheckpointSaver):
         """
         thread_id = config["configurable"]["thread_id"]
         checkpoint_id = checkpoint["id"]
+
+        # Ensure metadata contains step for LangGraph 1.0+ recovery
+        if "step" not in metadata:
+            metadata = dict(metadata)
+            # Try to get step from checkpoint's versions_seen or default to 0
+            step = checkpoint.get("versions_seen", {}).get("__root__", 0)
+            metadata["step"] = step
 
         # Serialize checkpoint and metadata
         content = _json_dumps(checkpoint)
@@ -237,6 +244,17 @@ class RustLanceCheckpointSaver(BaseCheckpointSaver):
         # LangGraph expects metadata in CheckpointTuple
         metadata = checkpoint.get("_metadata", {})
 
+        # Ensure metadata contains step for LangGraph 1.0+ recovery
+        if not isinstance(metadata, dict):
+            metadata = {}
+        if "step" not in metadata:
+            # Try to extract step from checkpoint or default to 0
+            step = checkpoint.get("versions_seen", {}).get("__root__", 0)
+            if not isinstance(step, int):
+                step = 0
+            metadata = dict(metadata)
+            metadata["step"] = step
+
         return CheckpointTuple(
             config=config,
             checkpoint=checkpoint,
@@ -283,6 +301,16 @@ class RustLanceCheckpointSaver(BaseCheckpointSaver):
             }
 
             metadata = checkpoint.get("_metadata", {})
+
+            # Ensure metadata contains step for LangGraph 1.0+ recovery
+            if not isinstance(metadata, dict):
+                metadata = {}
+            if "step" not in metadata:
+                step = checkpoint.get("versions_seen", {}).get("__root__", 0)
+                if not isinstance(step, int):
+                    step = 0
+                metadata = dict(metadata)
+                metadata["step"] = step
 
             yield CheckpointTuple(
                 config=checkpoint_config,
@@ -370,13 +398,4 @@ def create_checkpointer(
     )
 
 
-# Backward compatibility: Original LanceCheckpointer class
-# Kept for existing code that uses this API
-# Use RustLanceCheckpointSaver for new code with LangGraph integration
-
-# LanceCheckpointer is now an alias for RustLanceCheckpointSaver
-# This maintains backward compatibility while using the new Rust-native implementation
-LanceCheckpointer = RustLanceCheckpointSaver
-
-# Export for convenience
-__all__ = ["RustLanceCheckpointSaver", "create_checkpointer", "LanceCheckpointer"]
+__all__ = ["RustLanceCheckpointSaver", "create_checkpointer"]

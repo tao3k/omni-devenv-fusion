@@ -93,4 +93,4 @@ A skill is OSS 2.0 compliant when:
 
 - [Skills Architecture](skills-architecture.md) - Complete skills architecture guide
 - [Skill Standard](skill-standard.md) - OSS 2.0 compliance
-- [Trinity Architecture](../explanation/trinity-architecture.md)
+- [Trinity Architecture](../explanation/system-layering.md)

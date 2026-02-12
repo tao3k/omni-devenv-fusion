@@ -1,0 +1,19 @@
+# Simple Pipeline Test - UltraRAG Style
+# Sequential flow: analyze → draft → finalize
+
+servers:
+  generator: builtin
+
+parameters:
+  topic: "$topic"
+
+pipeline:
+  - generator.analyze
+  - generator.draft
+  - generator.finalize
+
+runtime:
+  checkpointer:
+    type: memory
+  tracer:
+    callback_dispatch_mode: inline

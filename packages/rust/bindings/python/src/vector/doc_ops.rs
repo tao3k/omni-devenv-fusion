@@ -1,8 +1,6 @@
 //! Document Operations - Add, delete documents helper functions
 //!
-//! Contains: add_documents, add_single, delete, delete_by_file_path
-
-#![allow(dead_code)]
+//! Contains: add_documents, merge_insert_documents, add_single, delete, delete_by_file_path
 
 use omni_vector::VectorStore;
 use pyo3::prelude::*;
@@ -29,6 +27,62 @@ pub(crate) fn add_documents_async(
         store
             .add_documents(table_name, ids, vectors, contents, metadatas)
             .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    })
+}
+
+pub(crate) fn replace_documents_async(
+    path: &str,
+    dimension: usize,
+    enable_kw: bool,
+    table_name: &str,
+    ids: Vec<String>,
+    vectors: Vec<Vec<f32>>,
+    contents: Vec<String>,
+    metadatas: Vec<String>,
+) -> PyResult<()> {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+    rt.block_on(async {
+        let mut store = VectorStore::new_with_keyword_index(path, Some(dimension), enable_kw)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        store
+            .replace_documents(table_name, ids, vectors, contents, metadatas)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    })
+}
+
+pub(crate) fn merge_insert_documents_async(
+    path: &str,
+    dimension: usize,
+    enable_kw: bool,
+    table_name: &str,
+    ids: Vec<String>,
+    vectors: Vec<Vec<f32>>,
+    contents: Vec<String>,
+    metadatas: Vec<String>,
+    match_on: String,
+) -> PyResult<String> {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+    rt.block_on(async {
+        let store = VectorStore::new_with_keyword_index(path, Some(dimension), enable_kw)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let stats = store
+            .merge_insert_documents(table_name, ids, vectors, contents, metadatas, &match_on)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+        serde_json::to_string(&stats)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     })
 }

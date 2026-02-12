@@ -279,22 +279,11 @@ def print_result(result: Any, is_tty: bool = False, json_output: bool = False) -
             metadata = result["data"].get("metadata", {})
         else:
             # Handle isolation.py direct format: content / metadata
-            content = result.get("content", result.get("markdown", ""))
+            # Or plain dict like {'message': '...', ...} from @skill_command
+            content = result.get("content", result.get("markdown"))
             metadata = result.get("metadata", {})
-            # Handle skill.discover format: quick_guide / details
-            if not content and ("quick_guide" in result or "details" in result):
-                content = json.dumps(result, indent=2, ensure_ascii=False)
-                metadata = {}
-            # Handle tools like smart_search that return matches/count
-            if not content and "matches" in result:
-                display_result = result.copy()
-                if "matches" in display_result and len(display_result["matches"]) > 20:
-                    display_result["matches"] = display_result["matches"][:20]
-                    display_result["matches_truncated"] = True
-                content = json.dumps(display_result, indent=2, ensure_ascii=False)
-                metadata = {}
-            # Handle skill.discover format: discovered_capabilities
-            if not content and "discovered_capabilities" in result:
+            # If no content/markdown key, show full result as JSON
+            if not content:
                 content = json.dumps(result, indent=2, ensure_ascii=False)
                 metadata = {}
     elif isinstance(result, str):

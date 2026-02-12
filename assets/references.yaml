@@ -8,6 +8,16 @@
 # =============================================================================
 
 # =============================================================================
+# Zettelkasten (zk) Notebook Configuration
+#
+# zk CLI notebook for managing bidirectional links and note relationships.
+# Configuration keys used by omni.foundation.config.dirs module.
+# =============================================================================
+zk:
+  notebook: "assets/knowledge"
+  config: "{{notebook}}/.zk/zk.toml"
+
+# =============================================================================
 # Harvested Knowledge (User-Created Knowledge Entries)
 #
 # Used by documentation.create_knowledge_entry and knowledge.update_knowledge_base
@@ -62,6 +72,31 @@ ast_symbols_dirs:
     globs:
       - "**/*.py"
     description: "Skill implementations"
+
+# =============================================================================
+# External Dependencies (for Dependency Indexing)
+#
+# External crates/packages to index for API lookup.
+# When a dependency is upgraded, run: omni sync symbols
+# Then use @dependency_search to query new APIs.
+# =============================================================================
+ast_symbols_external:
+  - type: "rust"
+    manifests:
+      # Index external crates from cargo registry (downloaded sources)
+      - "~/.cargo/registry/src/**/Cargo.toml"
+      # Index git dependencies sources
+      - "~/.cargo/git/checkouts/**/Cargo.toml"
+    registry: "cargo"
+    # Only index if NOT a workspace member (external deps only)
+    exclude_workspace: true
+  - type: "python"
+    manifests:
+      # Index external packages from pip
+      - "**/pyproject.toml"
+    registry: "pip"
+    # Only index if NOT in current project
+    exclude_project: true
 
 # =============================================================================
 # Documentation References

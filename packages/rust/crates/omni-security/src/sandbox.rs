@@ -1,6 +1,6 @@
 //! Sandbox - Secure execution environment for harvested skills
 //!
-//! Provides isolated execution using Docker or NsJail for running
+//! Provides isolated execution using Docker or `NsJail` for running
 //! tests on auto-generated skills before promotion.
 //!
 //! ## Architecture
@@ -29,7 +29,7 @@ use thiserror::Error;
 pub enum SandboxMode {
     /// Docker container (cross-platform, requires Docker)
     Docker,
-    /// NsJail (Linux native, higher performance)
+    /// `NsJail` (Linux native, higher performance)
     NsJail,
 }
 
@@ -106,7 +106,7 @@ pub enum SandboxError {
     ExecutionFailed(String),
 }
 
-/// SandboxRunner - Secure execution environment
+/// `SandboxRunner` - Secure execution environment
 ///
 /// Runs Python scripts in isolated containers/processes with:
 /// - Memory limits
@@ -120,6 +120,7 @@ pub struct SandboxRunner {
 
 impl SandboxRunner {
     /// Create a new sandbox runner with default configuration
+    #[must_use]
     pub fn new() -> Self {
         Self {
             config: SandboxConfig::default(),
@@ -127,17 +128,21 @@ impl SandboxRunner {
     }
 
     /// Create with custom configuration
+    #[must_use]
     pub fn with_config(config: SandboxConfig) -> Self {
         Self { config }
     }
 
     /// Run a Python script in the sandbox
     ///
-    /// Args:
-    ///     script_path: Path to the Python script to execute
+    /// `script_path`: Path to the Python script to execute.
     ///
-    /// Returns:
-    ///     SandboxResult indicating success/failure
+    /// Returns a `SandboxResult` indicating success/failure.
+    ///
+    /// # Errors
+    ///
+    /// Returns `SandboxError` when the selected backend is unavailable,
+    /// when path normalization fails, or when command execution fails.
     pub fn run_python(&self, script_path: &Path) -> Result<SandboxResult, SandboxError> {
         match self.config.mode {
             SandboxMode::Docker => self.run_docker(script_path),
@@ -148,7 +153,7 @@ impl SandboxRunner {
     /// Run with Docker container
     fn run_docker(&self, script_path: &Path) -> Result<SandboxResult, SandboxError> {
         // Check if Docker is available
-        if !self.is_docker_available() {
+        if !Self::is_docker_available() {
             return Err(SandboxError::NotAvailable(
                 "Docker is not installed or not running".to_string(),
             ));
@@ -156,7 +161,7 @@ impl SandboxRunner {
 
         let abs_path = script_path
             .canonicalize()
-            .map_err(|e| SandboxError::IoError(format!("Failed to canonicalize path: {}", e)))?;
+            .map_err(|e| SandboxError::IoError(format!("Failed to canonicalize path: {e}")))?;
 
         let dir = abs_path
             .parent()
@@ -204,9 +209,9 @@ impl SandboxRunner {
             .arg(format!("/app/{}", file_name.to_string_lossy()));
 
         // Execute and capture output
-        let output = cmd.output().map_err(|e| {
-            SandboxError::ExecutionFailed(format!("Docker execution failed: {}", e))
-        })?;
+        let output = cmd
+            .output()
+            .map_err(|e| SandboxError::ExecutionFailed(format!("Docker execution failed: {e}")))?;
 
         let duration_ms = 0; // Could track with std::time::Instant
 
@@ -219,10 +224,10 @@ impl SandboxRunner {
         })
     }
 
-    /// Run with NsJail (Linux only)
+    /// Run with `NsJail` (Linux only)
     fn run_nsjail(&self, script_path: &Path) -> Result<SandboxResult, SandboxError> {
-        // Check if NsJail is available
-        if !self.is_nsjail_available() {
+        // Check if `NsJail` is available
+        if !Self::is_nsjail_available() {
             return Err(SandboxError::NotAvailable(
                 "NsJail is not installed".to_string(),
             ));
@@ -234,7 +239,7 @@ impl SandboxRunner {
 
         let abs_path = script_path
             .canonicalize()
-            .map_err(|e| SandboxError::IoError(format!("Failed to canonicalize path: {}", e)))?;
+            .map_err(|e| SandboxError::IoError(format!("Failed to canonicalize path: {e}")))?;
 
         let mut cmd = Command::new("nsjail");
 
@@ -257,9 +262,9 @@ impl SandboxRunner {
             .arg("python3")
             .arg(abs_path.to_string_lossy().as_ref());
 
-        let output = cmd.output().map_err(|e| {
-            SandboxError::ExecutionFailed(format!("NsJail execution failed: {}", e))
-        })?;
+        let output = cmd
+            .output()
+            .map_err(|e| SandboxError::ExecutionFailed(format!("NsJail execution failed: {e}")))?;
 
         let duration_ms = 0;
 
@@ -273,33 +278,33 @@ impl SandboxRunner {
     }
 
     /// Check if Docker is available
-    fn is_docker_available(&self) -> bool {
+    fn is_docker_available() -> bool {
         Command::new("docker")
             .arg("version")
             .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
+            .is_ok_and(|o| o.status.success())
     }
 
-    /// Check if NsJail is available
-    fn is_nsjail_available(&self) -> bool {
+    /// Check if `NsJail` is available
+    fn is_nsjail_available() -> bool {
         Command::new("which")
             .arg("nsjail")
             .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
+            .is_ok_and(|o| o.status.success())
     }
 
     /// Get the current sandbox mode
+    #[must_use]
     pub fn mode(&self) -> SandboxMode {
         self.config.mode
     }
 
     /// Check if sandbox is ready to use
+    #[must_use]
     pub fn is_available(&self) -> bool {
         match self.config.mode {
-            SandboxMode::Docker => self.is_docker_available(),
-            SandboxMode::NsJail => self.is_nsjail_available(),
+            SandboxMode::Docker => Self::is_docker_available(),
+            SandboxMode::NsJail => Self::is_nsjail_available(),
         }
     }
 }
@@ -327,7 +332,7 @@ mod tests {
         }
 
         assert_eq!(config.memory_mb, 512);
-        assert_eq!(config.max_cpus, 1.0);
+        assert!((config.max_cpus - 1.0).abs() < f64::EPSILON);
         assert!(config.network_isolation);
     }
 
@@ -343,7 +348,7 @@ mod tests {
             success: true,
             exit_code: 0,
             stdout: "test output".to_string(),
-            stderr: "".to_string(),
+            stderr: String::new(),
             duration_ms: 100,
         };
 

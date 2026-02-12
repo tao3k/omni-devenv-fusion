@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omni.vector.tool_search.v1.schema.json",
+  "title": "Omni Vector Tool Search Payload v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "name", "tool_name"],
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "input_schema": {
+      "anyOf": [
+        {
+          "type": "object"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "score": {
+      "type": "number"
+    },
+    "vector_score": {
+      "type": "number"
+    },
+    "keyword_score": {
+      "type": "number"
+    },
+    "final_score": {
+      "type": "number"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"]
+    },
+    "skill_name": {
+      "type": "string"
+    },
+    "tool_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "file_path": {
+      "type": "string"
+    },
+    "routing_keywords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "intents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "category": {
+      "type": "string"
+    }
+  }
+}

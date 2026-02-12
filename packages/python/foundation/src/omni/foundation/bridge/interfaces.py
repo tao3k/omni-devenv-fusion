@@ -8,7 +8,10 @@ from the interface definition.
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from .types import CodeSymbol, FileContent, IngestResult, SearchResult, SkillStructure
 
 
 class VectorStoreProvider(Protocol):
@@ -21,7 +24,7 @@ class VectorStoreProvider(Protocol):
         self,
         query: str,
         limit: int = 5,
-        filters: Dict[str, Any] | None = None,
+        filters: dict[str, Any] | None = None,
     ) -> list[SearchResult]:
         """Search for similar documents using vector similarity."""
         ...
@@ -59,7 +62,7 @@ class CodeAnalysisProvider(Protocol):
         code: str,
         pattern: str,
         language: str = "python",
-    ) -> list[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Find AST patterns in source code."""
         ...
 
@@ -75,7 +78,7 @@ class CodeAnalysisProvider(Protocol):
         self,
         code: str,
         language: str | None = None,
-    ) -> Dict[str, int]:
+    ) -> dict[str, int]:
         """Count lines of code by category (blank, comment, code)."""
         ...
 
@@ -83,7 +86,7 @@ class CodeAnalysisProvider(Protocol):
         self,
         code: str,
         language: str = "python",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate a high-level outline of the source file."""
         ...
 
@@ -104,7 +107,7 @@ class FileScannerProvider(Protocol):
         """Scan a directory and return matching file paths."""
         ...
 
-    def get_file_info(self, path: str) -> Dict[str, Any] | None:
+    def get_file_info(self, path: str) -> dict[str, Any] | None:
         """Get metadata about a file."""
         ...
 
@@ -123,7 +126,7 @@ class SkillScannerProvider(Protocol):
         """Scan a skill directory and extract its structure."""
         ...
 
-    def parse_skill_metadata(self, skill_path: str) -> Dict[str, Any]:
+    def parse_skill_metadata(self, skill_path: str) -> dict[str, Any]:
         """Parse the SKILL.md YAML frontmatter."""
         ...
 

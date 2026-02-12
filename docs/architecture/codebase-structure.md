@@ -183,7 +183,7 @@ omni/foundation/
 │   ├── __init__.py
 │   ├── settings.py                 # get_setting() - Settings retrieval, Settings singleton
 │   ├── paths.py                    # get_api_key(), get_mcp_config_path()
-│   ├── directory.py                # get_conf_dir(), set_conf_dir()
+│   ├── directory.py                # PRJ_CONFIG_HOME helpers (get_conf_dir(), set_conf_dir())
 │   ├── dirs.py                     # PRJ_DIRS, PRJ_DATA, PRJ_CACHE
 │   ├── logging.py                  # configure_logging()
 │   ├── skills.py                   # Skills-related config
@@ -527,13 +527,13 @@ assets/skills/
 
 ### Core Configuration
 
-| File                   | Purpose                                                                  |
-| ---------------------- | ------------------------------------------------------------------------ |
-| `assets/settings.yaml` | Central configuration: skills dir, knowledge dir, API keys, LLM settings |
-| `pyproject.toml`       | Python project configuration (uv workspace, ruff, mypy)                  |
-| `Cargo.toml`           | Rust workspace configuration (11 crates)                                 |
-| `justfile`             | Task automation (build, test, lint commands)                             |
-| `.mcp.json`            | MCP server configuration                                                 |
+| File                   | Purpose                                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------- |
+| `assets/settings.yaml` | Repository base defaults (merged with `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml`) |
+| `pyproject.toml`       | Python project configuration (uv workspace, ruff, mypy)                                 |
+| `Cargo.toml`           | Rust workspace configuration (11 crates)                                                |
+| `justfile`             | Task automation (build, test, lint commands)                                            |
+| `.mcp.json`            | MCP server configuration                                                                |
 
 ### Git Configuration
 
@@ -569,7 +569,7 @@ docs/
 │   └── ...
 │
 ├── explanation/                   # Architecture explanations
-│   ├── trinity-architecture.md   # Trinity Architecture overview
+│   ├── system-layering.md   # Trinity Architecture overview
 │   ├── zero-code-skill-architecture.md
 │   └── ...
 │

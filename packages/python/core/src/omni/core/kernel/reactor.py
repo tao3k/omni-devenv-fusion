@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from enum import Enum
@@ -204,7 +205,7 @@ class KernelReactor:
             return
 
         self._running = True
-        self._stats.start_time = asyncio.get_event_loop().time()
+        self._stats.start_time = time.monotonic()
         self._stats.is_running = True
 
         # Start consumer task

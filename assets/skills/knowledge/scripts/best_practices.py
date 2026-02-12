@@ -104,7 +104,7 @@ def get_best_practice(
 
     rg_exec = shutil.which("rg")
     if not rg_exec:
-        return {"success": False, "error": "ripgrep (rg) not found in PATH."}
+        raise RuntimeError("ripgrep (rg) not found in PATH.")
 
     # --- Step 1: Search Documentation (Theory) ---
     doc_targets = []

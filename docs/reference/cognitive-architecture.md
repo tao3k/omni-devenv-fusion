@@ -367,6 +367,6 @@ session2 = SessionManager(session_id="abc12345")  # Auto-loads history
 
 ## Related Documentation
 
-- [Trinity Architecture](./trinity-architecture.md)
+- [Trinity Architecture](./system-layering.md)
 - [Cognitive Scaffolding](./cognitive-scaffolding.md)
 - [Memory Mesh](./memory-mesh.md)

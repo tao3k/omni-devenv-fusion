@@ -18,9 +18,8 @@ from pathlib import Path
 from typing import Any
 
 from omni.foundation.config.logging import get_logger
-from omni.foundation.bridge.rust_immune import is_rust_available
+from omni.foundation.bridge.rust_immune import is_rust_available, scan_code_security
 
-from .validator import StaticValidator, SecurityViolation
 from .simulator import SkillSimulator, SimulationResult
 
 logger = logging.getLogger("omni.immune.system")
@@ -36,7 +35,7 @@ class ImmuneReport:
 
     # Level 1: Static Analysis Results
     static_analysis_passed: bool = False
-    static_violations: list[SecurityViolation] = field(default_factory=list)
+    static_violations: list[dict[str, Any]] = field(default_factory=list)
 
     # Level 2: Dynamic Simulation Results
     simulation_passed: bool = False
@@ -57,7 +56,7 @@ class ImmuneReport:
             "scanned_at": self.scanned_at.isoformat(),
             "static_analysis": {
                 "passed": self.static_analysis_passed,
-                "violations": [v.to_dict() for v in self.static_violations],
+                "violations": self.static_violations,
             },
             "simulation": {
                 "passed": self.simulation_passed,
@@ -138,7 +137,6 @@ class ImmuneSystem:
         self.llm = llm_client
 
         # Initialize components
-        self.validator = StaticValidator()
         self.simulator = SkillSimulator(llm_client)
 
         logger.info("Immune System initialized")
@@ -169,7 +167,8 @@ class ImmuneSystem:
         # ================================================================
         logger.info(f"  [1/3] Running static analysis...")
         try:
-            is_safe, violations = self.validator.scan(skill_path)
+            source = skill_path.read_text("utf-8")
+            is_safe, violations = scan_code_security(source)
             report.static_analysis_passed = is_safe
             report.static_violations = violations
 

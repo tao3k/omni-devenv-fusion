@@ -104,6 +104,46 @@ class TestPromptLoader:
         # Check for either Routing: or Tool Call: (both are valid)
         assert "Routing:" in content or "Tool Call:" in content
 
+    def test_prompts_dir_uses_settings_relative_path(self, tmp_path, monkeypatch):
+        """`prompts.dir` relative path should resolve from project root."""
+        from omni.agent.core.common.prompts import PromptLoader
+
+        PromptLoader.clear_cache()
+        prompt_dir = tmp_path / "custom_prompts" / "routing"
+        prompt_dir.mkdir(parents=True)
+        (prompt_dir / "intent_protocol.md").write_text("<routing_protocol>ok</routing_protocol>")
+
+        monkeypatch.setattr(
+            "omni.agent.core.common.prompts.get_setting",
+            lambda key, default=None: "custom_prompts" if key == "prompts.dir" else default,
+        )
+        monkeypatch.setattr(
+            "omni.agent.core.common.prompts.get_config_paths",
+            lambda: type("P", (), {"project_root": tmp_path})(),
+        )
+
+        content = PromptLoader.load("routing/intent_protocol", must_exist=True)
+        assert "<routing_protocol>ok</routing_protocol>" in content
+
+    def test_prompts_dir_uses_settings_absolute_path(self, tmp_path, monkeypatch):
+        """`prompts.dir` absolute path should be used as-is."""
+        from omni.agent.core.common.prompts import PromptLoader
+
+        PromptLoader.clear_cache()
+        prompt_dir = tmp_path / "abs_prompts" / "routing"
+        prompt_dir.mkdir(parents=True)
+        (prompt_dir / "intent_protocol.md").write_text("<routing_protocol>abs</routing_protocol>")
+
+        monkeypatch.setattr(
+            "omni.agent.core.common.prompts.get_setting",
+            lambda key, default=None: str(tmp_path / "abs_prompts")
+            if key == "prompts.dir"
+            else default,
+        )
+
+        content = PromptLoader.load("routing/intent_protocol", must_exist=True)
+        assert "<routing_protocol>abs</routing_protocol>" in content
+
 
 class TestRoutingGuidanceProvider:
     """Test RoutingGuidanceProvider for meta-cognition protocol."""

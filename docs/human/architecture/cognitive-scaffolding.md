@@ -190,6 +190,6 @@ context = conductor._build_cca_context(
 
 ## Related Documentation
 
-- [Trinity Architecture](../explanation/trinity-architecture.md)
+- [Trinity Architecture](../explanation/system-layering.md)
 - [Memory Mesh](./memory-mesh.md)
 - [LangGraph Workflow Guide](../llm/langgraph-workflow-guide.md)

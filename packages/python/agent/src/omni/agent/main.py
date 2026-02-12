@@ -17,11 +17,14 @@ As installed script:
 """
 
 import argparse
-import asyncio
 import json
+import structlog
 import sys
 
+from omni.foundation.utils.asyncio import run_async_blocking
 from omni.core.kernel import get_kernel
+
+logger = structlog.get_logger("omni.agent.main")
 
 
 async def run_cli(skill_name, command_name, args):
@@ -36,7 +39,7 @@ async def run_cli(skill_name, command_name, args):
     skill = context.get_skill(skill_name)
 
     if not skill:
-        print(f"❌ Skill not found: {skill_name}")
+        logger.error("Skill not found", skill=skill_name)
         return
 
     # 3. Execute
@@ -44,7 +47,7 @@ async def run_cli(skill_name, command_name, args):
         result = await skill.execute(command_name, **args)
         print(result)
     except Exception as e:
-        print(f"❌ Execution Error: {e}")
+        logger.error("Execution error", error=str(e))
 
 
 def main():
@@ -103,13 +106,13 @@ From Claude Code CLI:
                     print(f"❌ Workflow Failed")
 
             except Exception as e:
-                print(f"❌ Graph Execution Error: {e}")
+                logger.error("Graph execution error", error=str(e))
 
         try:
             # When using --graph, the first argument 'command' is treated as the user request
-            asyncio.run(run_graph(args.command))
+            run_async_blocking(run_graph(args.command))
         except Exception as e:
-            print(f"❌ Error: {e}")
+            logger.error("Graph mode error", error=str(e))
             sys.exit(1)
         return
 
@@ -120,7 +123,7 @@ From Claude Code CLI:
         else:
             parsed_args = json.loads(args.args)
     except json.JSONDecodeError as e:
-        print(f"❌ Invalid JSON arguments: {e}")
+        logger.error("Invalid JSON arguments", error=str(e))
         sys.exit(1)
 
     # Parse skill.command format
@@ -131,9 +134,9 @@ From Claude Code CLI:
         s_name, c_name = args.command, "help"
 
     try:
-        asyncio.run(run_cli(s_name, c_name, parsed_args))
+        run_async_blocking(run_cli(s_name, c_name, parsed_args))
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.error("CLI error", error=str(e))
         sys.exit(1)
 
 

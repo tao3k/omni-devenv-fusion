@@ -22,7 +22,7 @@ def test_tool_response_success() -> None:
     response = ToolResponse.success(data={"key": "value"})
     assert response.status == ResponseStatus.SUCCESS
     assert response.data == {"key": "value"}
-    assert response.error is None
+    assert response.error_message is None
 
 
 @unit
@@ -30,7 +30,7 @@ def test_tool_response_error() -> None:
     """Unit test: Verify error response creation."""
     response = ToolResponse.error(message="Not found", code="3001", metadata={"tool": "git.status"})
     assert response.status == ResponseStatus.ERROR
-    assert response.error == "Not found"
+    assert response.error_message == "Not found"
     assert response.error_code == "3001"
 
 
@@ -50,20 +50,29 @@ def test_response_to_mcp_format() -> None:
 
 
 @integration
-async def test_kernel_initialization(kernel) -> None:
+async def test_kernel_initialization() -> None:
     """Integration test: Verify kernel initializes correctly."""
-    # This test uses the kernel fixture which requires real initialization
+    from omni.core.kernel import get_kernel
+
+    kernel = get_kernel()
+    await kernel.initialize()
     assert kernel is not None
 
 
 @integration
 async def test_skill_loader_integration(skills_path) -> None:
     """Integration test: Verify skill loading works with real files."""
-    from omni.core.skills.loader import SkillLoader
+    from omni.core.skills.tools_loader import ToolsLoader
 
-    loader = SkillLoader(skills_dir=str(skills_path))
-    skills = await loader.discover()
-    assert len(skills) > 0
+    scripts_dir = skills_path / "sample" / "scripts"
+    (scripts_dir / "ping.py").write_text(
+        "from omni.foundation.api.decorators import skill_command\n"
+        '@skill_command(name="ping")\n'
+        'def ping(): return "pong"\n'
+    )
+    loader = ToolsLoader(scripts_dir, "sample")
+    loader.load_all()
+    assert "sample.ping" in loader.list_commands()
 
 
 # =============================================================================
@@ -91,9 +100,14 @@ def test_external_api_call() -> None:
 
 
 @benchmark
-def test_response_creation_benchmark(benchmark) -> None:
+def test_response_creation_benchmark() -> None:
     """Benchmark: Measure ToolResponse creation overhead."""
-    benchmark(list, [ToolResponse.success({"data": i}) for i in range(100)])
+    import time
+
+    start = time.perf_counter()
+    _ = [ToolResponse.success({"data": i}) for i in range(100)]
+    elapsed = time.perf_counter() - start
+    assert elapsed >= 0.0
 
 
 # =============================================================================

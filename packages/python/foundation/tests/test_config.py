@@ -10,17 +10,22 @@ class TestConfDirFunctions:
 
     def test_set_conf_dir(self):
         """Test set_conf_dir() function."""
+        import os
+
         from omni.foundation.config.directory import get_conf_dir, set_conf_dir
 
-        original = get_conf_dir()
+        original = os.environ.get("PRJ_CONFIG_HOME")
         try:
             set_conf_dir("/custom/path")
-            assert get_conf_dir() == "/custom/path"
+            assert get_conf_dir() == "/custom/path/omni-dev-fusion"
         finally:
-            # Reset
-            import omni.foundation.config.directory as module
+            if original is None:
+                os.environ.pop("PRJ_CONFIG_HOME", None)
+            else:
+                os.environ["PRJ_CONFIG_HOME"] = original
+            from omni.foundation.config.dirs import PRJ_DIRS
 
-            module._CONF_DIR = None
+            PRJ_DIRS.clear_cache()
 
     def test_get_conf_dir_returns_string(self):
         """Test get_conf_dir() returns a string."""

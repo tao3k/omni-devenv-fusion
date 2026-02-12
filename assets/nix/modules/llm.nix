@@ -18,8 +18,11 @@ in
     __nixpkgs__.spec-kit
     __inputs__.packages.rucola
     __nixpkgs__.zk
-    __nixpkgs__.claude-code
+    # __nixpkgs__.claude-code
+    __inputs__.llm-agents.packages.${system}.claude-code
+    __inputs__.llm-agents.packages.${system}.cursor-agent
     # __nixpkgs__.playwright-driver.browsers
+    # __inputs__.llm-agents.packages.${system}.codex
     __inputs__.llm-agents.packages.${system}.gemini-cli
   ]
   ++ lib.optionals (system != "aarch64-darwin") [

@@ -61,7 +61,7 @@ class StdioTransport(MCPTransport):
         """Start the stdio transport."""
         self._running = True
         self._reader = asyncio.StreamReader()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         self._transport, _ = await loop.connect_read_pipe(
             lambda: asyncio.StreamReaderProtocol(self._reader),
             sys.stdin,
@@ -109,8 +109,8 @@ class StdioTransport(MCPTransport):
 
         except orjson.JSONDecodeError:
             await self._send_parse_error("Invalid JSON")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Error processing message: {e}")
 
     async def _send_parse_error(self, error_message: str) -> None:
         """Send a JSON-RPC parse error response."""
@@ -142,26 +142,52 @@ class StdioTransport(MCPTransport):
             # Handle both dict and Pydantic model responses
             if hasattr(response, "model_dump"):
                 response_dict: dict[str, Any] = response.model_dump()
+            elif isinstance(response, list):
+                # Handle list[TextContent] responses from call_tool
+                response_dict = {"result": response}
             else:
                 response_dict = cast(dict[str, Any], response)
 
-            # JSON-RPC 2.0: Response MUST have a non-null id
+            # Debug log response structure (truncated for safety)
+            logger.debug(
+                f"_write_response: id={response_dict.get('id')}, has_result={'result' in response_dict}, has_error={response_dict.get('error') is not None}"
+            )
+
+            # JSON-RPC 2.0: Response MUST have a non-null id for regular responses
+            # Notifications (no id expected) should NOT go through _write_response
             msg_id = response_dict.get("id")
+
+            # Validate: if this is a notification (no id), it shouldn't have 'result'
+            # This should not happen, but we guard against it
             if msg_id is None:
-                # Notifications don't have id - use _write_notification instead
+                if response_dict.get("error") is not None:
+                    # Error response with unknown id - write with null id
+                    payload: dict[str, Any] = {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": response_dict.get("error"),
+                    }
+                    json_bytes = orjson.dumps(payload, option=orjson.OPT_APPEND_NEWLINE)
+                    sys.stdout.buffer.write(json_bytes)
+                    sys.stdout.buffer.flush()
+                    logger.debug("Wrote error response with null id")
+                # For notifications (no id, no error): silently ignore
+                # This is correct JSON-RPC 2.0 behavior - notifications don't get responses
                 return
 
             # Build JSON-RPC 2.0 compliant response
-            payload: dict[str, Any] = {
-                "jsonrpc": response_dict.get("jsonrpc", "2.0"),
-                "id": msg_id,
-            }
+            # Start with response_dict to preserve all original fields
+            payload: dict[str, Any] = dict(response_dict)
 
             # JSON-RPC 2.0: response MUST contain either "result" OR "error", never both
             if response_dict.get("error") is not None:
-                payload["error"] = response_dict.get("error")
+                # Remove result if present (shouldn't happen, but be defensive)
+                payload.pop("result", None)
             elif "result" in response_dict:
-                payload["result"] = response_dict.get("result")
+                payload["result"] = response_dict["result"]  # Copy explicitly
+            else:
+                # Neither result nor error - add result as null (valid JSON-RPC)
+                payload["result"] = None
 
             # orjson.dumps returns bytes
             json_bytes = orjson.dumps(payload, option=orjson.OPT_APPEND_NEWLINE)
@@ -170,8 +196,8 @@ class StdioTransport(MCPTransport):
             sys.stdout.buffer.write(json_bytes)
             sys.stdout.buffer.flush()
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to write response: {e}")
 
     async def broadcast(self, notification: dict[str, Any]) -> None:
         """Broadcast a notification to all connected clients.
@@ -187,10 +213,12 @@ class StdioTransport(MCPTransport):
                 "params": notification.get("params"),
             }
 
+            logger.debug(
+                f"Broadcast notification: method={payload.get('method')}, params={payload.get('params')}"
+            )
             json_bytes = orjson.dumps(payload, option=orjson.OPT_APPEND_NEWLINE)
             sys.stdout.buffer.write(json_bytes)
             sys.stdout.buffer.flush()
-            logger.debug(f"Broadcast notification: {payload.get('method')}")
         except Exception as e:
             logger.warning(f"Failed to broadcast notification: {e}")
 
@@ -215,7 +243,7 @@ async def stdio_server() -> AsyncGenerator[tuple[asyncio.StreamReader, asyncio.S
     async def write_stream():
         return sys.stdout.buffer
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     transport, _ = await loop.connect_read_pipe(
         lambda: asyncio.StreamReaderProtocol(reader),
         sys.stdin,

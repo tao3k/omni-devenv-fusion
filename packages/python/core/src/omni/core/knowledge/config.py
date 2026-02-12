@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from omni.foundation.config.dirs import get_prj_dir
 
 
 class KnowledgeConfig:
@@ -25,7 +26,7 @@ class KnowledgeConfig:
             # Auto-detect: look for references.yaml in common locations
             search_paths = [
                 Path.cwd() / "assets" / "references.yaml",
-                Path(__file__).parent.parent.parent.parent / "assets" / "references.yaml",
+                get_prj_dir() / "assets" / "references.yaml",
             ]
             for path in search_paths:
                 if path.exists():
@@ -70,6 +71,23 @@ class KnowledgeConfig:
                 description: "Python and Rust packages"
         """
         return self._config.get("ast_symbols_dirs", [])
+
+    @property
+    def ast_symbols_external(self) -> list[dict[str, Any]]:
+        """Get external dependencies for symbol indexing.
+
+        Each entry has:
+            - type: "rust" or "python"
+            - manifests: List of glob patterns for manifest files (Cargo.toml, pyproject.toml)
+
+        Example:
+            ast_symbols_external:
+              - type: "rust"
+                manifests: ["Cargo.toml", "packages/rust/crates/*/Cargo.toml"]
+              - type: "python"
+                manifests: ["pyproject.toml", "packages/python/*/pyproject.toml"]
+        """
+        return self._config.get("ast_symbols_external", [])
 
     @property
     def ast_extensions(self) -> dict[str, str]:

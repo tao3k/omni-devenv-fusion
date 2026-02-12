@@ -17,7 +17,7 @@ Usage:
     return ToolResponse.blocked("Security check failed")
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Optional
 
@@ -59,7 +59,10 @@ class ToolResponse(BaseModel):
     metadata: dict[str, Any] = Field(
         default_factory=dict, description="Additional context information"
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Response timestamp")
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="Response timestamp",
+    )
 
     def to_mcp(self) -> list[dict]:
         """Convert to MCP protocol format.
@@ -172,8 +175,3 @@ class ToolResponse(BaseModel):
     def is_blocked(self) -> bool:
         """Check if response is blocked."""
         return self.status == ResponseStatus.BLOCKED
-
-    class Config:
-        """Pydantic configuration."""
-
-        json_encoders = {datetime: lambda v: v.isoformat()}

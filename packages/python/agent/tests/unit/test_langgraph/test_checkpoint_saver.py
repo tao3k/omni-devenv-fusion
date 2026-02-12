@@ -226,8 +226,8 @@ class TestRustCheckpointSaverSingleton:
         try:
             from omni.langgraph.checkpoint.saver import RustCheckpointSaver
 
-            # Mock LanceCheckpointer
-            with patch("omni.langgraph.checkpoint.saver.LanceCheckpointer") as mock_lance:
+            # Mock RustLanceCheckpointSaver
+            with patch("omni.langgraph.checkpoint.saver.RustLanceCheckpointSaver") as mock_lance:
                 mock1 = MagicMock()
                 mock2 = MagicMock()
                 mock_lance.side_effect = [mock1, mock2]
@@ -236,14 +236,14 @@ class TestRustCheckpointSaverSingleton:
                 saver1 = RustCheckpointSaver(table_name="checkpoints", dimension=1536)
                 saver2 = RustCheckpointSaver(table_name="checkpoints", dimension=1536)
 
-                # Should use same LanceCheckpointer
+                # Should use same checkpointer instance
                 assert mock_lance.call_count == 1
                 assert saver1._checkpointer is saver2._checkpointer
 
                 # Create saver with different dimension
                 saver3 = RustCheckpointSaver(table_name="checkpoints", dimension=768)
 
-                # Should create new LanceCheckpointer
+                # Should create new checkpointer
                 assert mock_lance.call_count == 2
         finally:
             # Restore cache

@@ -7,9 +7,9 @@ Provides high-performance analytics for the knowledge base using PyArrow.
 from __future__ import annotations
 
 from typing import Any
-import asyncio
 
 from omni.foundation.config.logging import get_logger
+from omni.foundation.utils.asyncio import run_async_blocking
 
 logger = get_logger("omni.core.knowledge.analyzer")
 
@@ -26,7 +26,7 @@ def get_knowledge_dataframe(collection: str = "knowledge"):
         raise ImportError("pyarrow is required for analytics. Install with: pip install pyarrow")
 
     try:
-        from omni.agent.cli.commands.reindex import get_database_path
+        from omni.foundation.config import get_database_path
 
         # Librarian uses collection.lance by default for storage path
         storage_path = get_database_path("knowledge")
@@ -36,7 +36,7 @@ def get_knowledge_dataframe(collection: str = "knowledge"):
         store = get_vector_store(index_path=storage_path)
 
         # Get all entries as list of dicts
-        entries = asyncio.run(store.list_all(collection))
+        entries = run_async_blocking(store.list_all(collection))
 
         if not entries:
             return None

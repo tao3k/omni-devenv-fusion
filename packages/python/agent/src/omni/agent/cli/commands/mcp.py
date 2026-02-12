@@ -11,15 +11,223 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import os
 import signal
 import sys
 from enum import Enum
+
+# CRITICAL: Python 3.13 compatibility fix - MUST be before ANY other imports
+# Python 3.13 removed code.InteractiveConsole, but torch.distributed imports pdb
+# which tries to use it at module load time. Add dummy class before any imports.
+if sys.version_info >= (3, 13):
+    import code
+
+    if not hasattr(code, "InteractiveConsole"):
+
+        class _DummyInteractiveConsole:
+            def __init__(self, *args, **kwargs):
+                pass
+
+        code.InteractiveConsole = _DummyInteractiveConsole
+
+# Also set the env var as a belt-and-suspenders measure
+if sys.version_info >= (3, 13):
+    if "TORCH_DISTRIBUTED_DETECTION" not in os.environ:
+        os.environ["TORCH_DISTRIBUTED_DETECTION"] = "1"
 
 import typer
 from mcp import types
 from rich.panel import Panel
 
 from omni.foundation.config.logging import configure_logging, get_logger
+from omni.foundation.utils.asyncio import run_async_blocking
+
+# =============================================================================
+# Lightweight HTTP Server for Embedding (STDIO mode only)
+# =============================================================================
+
+import json as _json
+from aiohttp import web as _web
+
+_embedding_http_app = None
+_embedding_http_runner = None
+
+
+async def _handle_embedding_request(request: _web.Request) -> _web.Response:
+    """Handle embedding requests via MCP tools/call protocol."""
+    logger = get_logger("omni.mcp.embedding.http")
+
+    try:
+        # Parse JSON-RPC request
+        body = await request.json()
+        method = body.get("method", "")
+        params = body.get("params", {})
+        req_id = body.get("id")
+
+        if method != "tools/call":
+            return _web.json_response(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {"code": -32601, "message": f"Method not found: {method}"},
+                }
+            )
+
+        tool_name = params.get("name", "")
+        arguments = params.get("arguments", {})
+
+        # Handle embedding tools
+        if tool_name in ("embed_texts", "embedding.embed_texts"):
+            texts = arguments.get("texts", [])
+            if not texts:
+                return _web.json_response(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "error": {"code": -32602, "message": "'texts' parameter required"},
+                    }
+                )
+
+            from omni.foundation.services.embedding import get_embedding_service
+
+            embed_service = get_embedding_service()
+            vectors = embed_service.embed_batch(texts)
+            result = {
+                "success": True,
+                "count": len(vectors),
+                "vectors": vectors,
+                "preview": [v[:10] for v in vectors] if vectors else [],
+            }
+
+            return _web.json_response(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {"content": [{"type": "text", "text": _json.dumps(result)}]},
+                }
+            )
+
+        elif tool_name in ("embed_single", "embedding.embed_single"):
+            text = arguments.get("text", "")
+            if not text:
+                return _web.json_response(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "error": {"code": -32602, "message": "'text' parameter required"},
+                    }
+                )
+
+            from omni.foundation.services.embedding import get_embedding_service
+
+            embed_service = get_embedding_service()
+            vector = embed_service.embed(text)[0]
+            result = {"success": True, "vector": vector, "preview": vector[:10] if vector else []}
+
+            return _web.json_response(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {"content": [{"type": "text", "text": _json.dumps(result)}]},
+                }
+            )
+
+        else:
+            return _web.json_response(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {"code": -32601, "message": f"Unknown embedding tool: {tool_name}"},
+                }
+            )
+
+    except Exception as e:
+        logger.error(f"Embedding HTTP error: {e}")
+        return _web.json_response(
+            {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32603, "message": str(e)},
+            }
+        )
+
+
+async def _handle_embedding_health(_request: _web.Request) -> _web.Response:
+    """Health endpoint for embedding HTTP service."""
+    return _web.json_response({"status": "ok"})
+
+
+async def _check_embedding_service(host: str = "127.0.0.1", port: int = 3001) -> bool:
+    """Check if embedding HTTP service is already running on the port."""
+    import socket
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(1)
+    try:
+        result = sock.connect_ex((host, port))
+        return result == 0
+    except Exception:
+        return False
+    finally:
+        sock.close()
+
+
+async def _run_embedding_http_server(host: str = "127.0.0.1", port: int = 3001) -> bool:
+    """Run a lightweight HTTP server for embedding requests (stdio mode only).
+
+    This allows external tools like 'omni route test' to share the preloaded
+    embedding model without reloading it.
+
+    Returns:
+        True if we started a new server, False if we connected to an existing one.
+    """
+    global _embedding_http_app, _embedding_http_runner, _i_started_server
+
+    logger = get_logger("omni.mcp.embedding.http")
+
+    # Check if service already exists
+    if await _check_embedding_service(host, port):
+        logger.info(f"🔌 Using existing embedding service on http://{host}:{port}")
+        _i_started_server = False
+        return False
+
+    logger.info(f"🚀 Starting embedding HTTP server on http://{host}:{port}")
+
+    _embedding_http_app = _web.Application()
+    _embedding_http_app.router.add_post("/message", _handle_embedding_request)
+    _embedding_http_app.router.add_get("/health", _handle_embedding_health)
+
+    runner = _web.AppRunner(_embedding_http_app)
+    await runner.setup()
+    site = _web.TCPSite(runner, host, port)
+    await site.start()
+
+    logger.info(f"✅ Embedding HTTP server running on http://{host}:{port}")
+    _embedding_http_runner = runner
+    _i_started_server = True
+    return True
+
+
+async def _stop_embedding_http_server() -> None:
+    """Stop the embedding HTTP server only if we started it."""
+    global _embedding_http_runner, _i_started_server
+
+    # Only stop if we started this server (to avoid shutting down shared service)
+    if not _i_started_server or _embedding_http_runner is None:
+        return
+
+    logger = get_logger("omni.mcp.embedding.http")
+    logger.info("Stopping embedding HTTP server...")
+    await _embedding_http_runner.cleanup()
+    _embedding_http_runner = None
+    _i_started_server = False
+
+
+# Track whether we started the server (for shared instance safety)
+_i_started_server = False
+
+
+# =============================================================================
 
 from ..console import err_console
 
@@ -32,6 +240,7 @@ class TransportMode(str, Enum):
 
 # Global for graceful shutdown
 _shutdown_requested = False
+_shutdown_count = 0  # For SSE mode signal handling
 _handler_ref = None
 _transport_ref = None  # For stdio transport stop
 
@@ -92,10 +301,7 @@ def _setup_signal_handler(handler_ref=None, transport_ref=None, stdio_mode=False
         # SSE mode: stop the transport first (breaks the run_loop)
         if transport_ref is not None:
             try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(transport_ref.stop())
-                loop.close()
+                run_async_blocking(transport_ref.stop())
             except Exception:
                 pass
 
@@ -127,12 +333,7 @@ def _sync_graceful_shutdown() -> None:
     global _handler_ref
     if _handler_ref is not None:
         try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(_graceful_shutdown(_handler_ref))
-            finally:
-                loop.close()
+            run_async_blocking(_graceful_shutdown(_handler_ref))
         except Exception:
             pass
 
@@ -181,69 +382,30 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                 configure_logging(level=log_level)
                 logger = get_logger("omni.mcp.stdio")
 
-                # Use omni.mcp transport with AgentMCPHandler
-                from omni.agent.server import create_agent_handler
-                from omni.mcp import MCPServer
-                from omni.mcp.transport.stdio import StdioTransport
-
-                handler = create_agent_handler()
-                _handler_ref = handler  # Store for signal handler
-
-                # Create stdio transport
-                stdio_transport = StdioTransport()
-                _transport_ref = stdio_transport  # Store for signal handler
-                # Signal handler is set INSIDE run_stdio() (like old stdio.py)
-
-                server = MCPServer(handler=handler, transport=stdio_transport)
-
-                # MCP init options
-                init_options = {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {
-                        "tools": {"listChanged": True},
-                    },
-                    "serverInfo": {
-                        "name": "omni-agent",
-                        "version": "2.0.0",
-                    },
-                }
-
-                # Register MCP protocol handlers
-                @server.request("initialize")
-                async def handle_initialize(**params) -> dict:
-                    """Handle MCP initialize request."""
-                    logger.info("[MCP] Responding to initialize request")
-                    return init_options
-
-                @server.request("tools/list")
-                async def handle_list_tools(**params) -> dict:
-                    """Handle MCP tools/list request."""
-                    result = await handler.handle_request(
-                        {"method": "tools/list", "params": params, "id": None}
-                    )
-                    return result.get("result", {})
-
-                @server.request("tools/call")
-                async def handle_call_tool(
-                    name: str = "", arguments: dict | None = None, **params
-                ) -> dict:
-                    """Handle MCP tools/call request."""
-                    request = {
-                        "method": "tools/call",
-                        "params": {"name": name, "arguments": arguments or {}},
-                        "id": None,
-                    }
-                    result = await handler.handle_request(request)
-                    return result.get("result", {})
-
                 async def run_stdio():
-                    """Run stdio mode - delegate to old stdio.py which handles Ctrl-C properly."""
+                    """Run stdio mode with embedding HTTP server."""
+                    logger.info("📡 Starting Omni MCP Server (STDIO mode)")
+
+                    # Initialize embedding service FIRST (auto-detects, starts HTTP server on 18501)
+                    from omni.foundation.services.embedding import get_embedding_service
+
+                    embed_svc = get_embedding_service()
+                    embed_svc.initialize()  # This triggers auto-detection and HTTP server startup
+                    logger.info("✅ Embedding service initialized")
+
+                    # Run stdio server (it handles its own server/handler creation)
                     from omni.agent.mcp_server.stdio import run_stdio as old_run_stdio
+
+                    # Start model loading AFTER stdio server starts (non-blocking)
+                    embed_svc.start_model_loading()
+                    logger.info("🔄 Embedding model loading in background...")
 
                     await old_run_stdio(verbose=verbose)
 
-                logger.info("📡 Starting Omni MCP Server (STDIO mode)")
-                asyncio.run(run_stdio())
+                    # Stop embedding HTTP server
+                    await _stop_embedding_http_server()
+
+                run_async_blocking(run_stdio())
 
             else:  # SSE mode
                 # Configure logging
@@ -268,11 +430,24 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                 _handler_ref = handler
                 _setup_signal_handler(handler)
 
+                # Initialize embedding service FIRST (auto-detects, starts HTTP server on 18501)
+                from omni.foundation.services.embedding import get_embedding_service
+
+                embed_svc = get_embedding_service()
+                embed_svc.initialize()
+                logger.info("✅ Embedding service initialized")
+
+                # Note: Embedding tools (embed_texts, embed_single) are handled
+                # directly by AgentMCPHandler via preloaded embedding service
+
                 server = SSEServer(handler, host=host, port=port)
 
                 async def run_sse():
                     try:
                         await handler.initialize()
+                        # Start model loading AFTER server starts (non-blocking)
+                        embed_svc.start_model_loading()
+                        logger.info("🔄 Embedding model loading in background...")
                         await server.start()
                         # Keep running until interrupted
                         while not _shutdown_requested:
@@ -283,7 +458,7 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                         logger.info("SSE server cancelled")
                         await _graceful_shutdown(handler)
 
-                asyncio.run(run_sse())
+                run_async_blocking(run_sse())
 
         except KeyboardInterrupt:
             shutdown_logger = get_logger("omni.mcp.shutdown")

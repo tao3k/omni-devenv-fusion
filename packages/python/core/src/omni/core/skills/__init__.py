@@ -57,15 +57,7 @@ from .hydrator import ContextHydrator
 
 from .registry import (
     SkillRegistry,
-    discover_skills,
     get_skill_registry,
-    get_skill_tools,
-    install_remote_skill,
-    jit_install_skill,
-    list_installed_skills,
-    security_scan_skill,
-    suggest_skills_for_task,
-    update_remote_skill,
     # Holographic Registry
     HolographicRegistry,
     ToolMetadata,
@@ -77,7 +69,6 @@ from .runtime import (
     SkillContext,
     SkillManager,
     get_skill_context,
-    get_skill_manager,
     reset_context,
     run_command,
 )
@@ -104,14 +95,6 @@ __all__ = [
     # Registry
     "SkillRegistry",
     "get_skill_registry",
-    "install_remote_skill",
-    "update_remote_skill",
-    "jit_install_skill",
-    "security_scan_skill",
-    "discover_skills",
-    "suggest_skills_for_task",
-    "list_installed_skills",
-    "get_skill_tools",
     # Holographic Registry
     "HolographicRegistry",
     "ToolMetadata",
@@ -120,7 +103,6 @@ __all__ = [
     "SkillContext",
     "SkillManager",
     "get_skill_context",
-    "get_skill_manager",
     "reset_context",
     "run_command",
     # Discovery

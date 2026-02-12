@@ -2,7 +2,7 @@
 
 ## Overview
 
-**Scenario**: Test-driven auto-fix闭环 (Red-Green-Refactor Loop)
+**Scenario**: Test-driven auto-fix (Red-Green-Refactor Loop)
 
 **Goal**: Enable the Agent to:
 

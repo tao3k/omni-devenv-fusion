@@ -60,9 +60,13 @@ pub fn apply_rrf(
         }
     }
 
-    // Sort by RRF score descending
+    // Deterministic ordering: score desc, then tool name asc.
     let mut results: Vec<_> = fusion_map.into_values().collect();
-    results.sort_by(|a, b| b.rrf_score.partial_cmp(&a.rrf_score).unwrap());
+    results.sort_by(|a, b| {
+        b.rrf_score
+            .total_cmp(&a.rrf_score)
+            .then_with(|| a.tool_name.cmp(&b.tool_name))
+    });
 
     results
 }
@@ -104,6 +108,12 @@ pub fn apply_weighted_rrf(
     let mut fusion_map: HashMap<String, HybridSearchResult> = HashMap::new();
     let query_lower = query.to_lowercase();
     let query_parts: Vec<&str> = query_lower.split_whitespace().collect();
+    let file_discovery_intent = is_file_discovery_query(&query_lower, &query_parts);
+    let keyword_context: HashMap<String, ToolSearchResult> = keyword_results
+        .iter()
+        .cloned()
+        .map(|r| (r.tool_name.clone(), r))
+        .collect();
 
     // Smart Fallback Detection:
     // If keyword results are too sparse (< 2), it likely means:
@@ -122,8 +132,8 @@ pub fn apply_weighted_rrf(
         semantic_weight
     };
 
-    // Log fallback mode for debugging
-    if is_keyword_sparse && !keyword_results.is_empty() {
+    // Guard: only log fallback mode when debug logging is enabled
+    if log::log_enabled!(log::Level::Debug) && is_keyword_sparse && !keyword_results.is_empty() {
         log::debug!(
             "Smart RRF Fallback: Sparse keyword results ({}) for query '{}', \
              boosting vector weight to {:.1}",
@@ -201,13 +211,110 @@ pub fn apply_weighted_rrf(
         if name_lower.contains(&query_lower) {
             entry.rrf_score += EXACT_PHRASE_BOOST;
         }
+
+        // Boost C: Metadata alignment from indexed attributes
+        // (description/category/keywords/intents from scanner + decorator data)
+        if let Some(meta) = keyword_context.get(&entry.tool_name) {
+            entry.rrf_score += metadata_alignment_boost(meta, &query_parts);
+            if file_discovery_intent && file_discovery_boost(meta) {
+                entry.rrf_score += 0.25;
+            }
+        }
     }
 
-    // 4. Sort by final score descending
+    // 4. Deterministic ordering: score desc, then tool name asc.
     let mut results: Vec<_> = fusion_map.into_values().collect();
-    results.sort_by(|a, b| b.rrf_score.partial_cmp(&a.rrf_score).unwrap());
+    results.sort_by(|a, b| {
+        b.rrf_score
+            .total_cmp(&a.rrf_score)
+            .then_with(|| a.tool_name.cmp(&b.tool_name))
+    });
 
     results
+}
+
+fn metadata_alignment_boost(meta: &ToolSearchResult, query_parts: &[&str]) -> f32 {
+    if query_parts.is_empty() {
+        return 0.0;
+    }
+
+    let mut boost: f32 = 0.0;
+    let category = meta.category.to_lowercase();
+    let description = meta.description.to_lowercase();
+
+    for term in query_parts {
+        if term.len() <= 2 {
+            continue;
+        }
+
+        if meta
+            .keywords
+            .iter()
+            .any(|k| k.to_lowercase().contains(term))
+        {
+            boost += 0.08;
+        }
+        if meta.intents.iter().any(|i| i.to_lowercase().contains(term)) {
+            boost += 0.09;
+        }
+        if !category.is_empty() && category.contains(term) {
+            boost += 0.05;
+        }
+        if description.contains(term) {
+            boost += 0.03;
+        }
+    }
+
+    boost.min(0.45)
+}
+
+fn is_file_discovery_query(query_lower: &str, query_parts: &[&str]) -> bool {
+    let intent_terms = [
+        "find",
+        "list",
+        "files",
+        "file",
+        "directory",
+        "folder",
+        "path",
+        "glob",
+        "extension",
+    ];
+    let has_term = query_parts
+        .iter()
+        .any(|t| intent_terms.contains(t) || t.starts_with("*."));
+    has_term || query_lower.contains(".py") || query_lower.contains(".rs")
+}
+
+fn file_discovery_boost(meta: &ToolSearchResult) -> bool {
+    let category = meta.category.to_lowercase();
+    let description = meta.description.to_lowercase();
+    let tool_name = meta.tool_name.to_lowercase();
+
+    if tool_name.contains("advanced_tools.smart_find") {
+        return true;
+    }
+
+    let file_terms = [
+        "find",
+        "file",
+        "files",
+        "directory",
+        "path",
+        "glob",
+        "filename",
+    ];
+    file_terms
+        .iter()
+        .any(|t| category.contains(t) || description.contains(t))
+        || meta
+            .keywords
+            .iter()
+            .any(|k| file_terms.iter().any(|t| k.to_lowercase().contains(t)))
+        || meta
+            .intents
+            .iter()
+            .any(|i| file_terms.iter().any(|t| i.to_lowercase().contains(t)))
 }
 
 /// Adaptive RRF - Hybrid search with soft fallback for code queries
@@ -226,7 +333,6 @@ pub fn apply_adaptive_rrf(
     query: &str,
 ) -> Vec<HybridSearchResult> {
     use crate::keyword::{EXACT_PHRASE_BOOST, NAME_TOKEN_BOOST};
-    use ordered_float::OrderedFloat;
     use std::collections::HashMap;
 
     let mut fusion_map: HashMap<String, HybridSearchResult> = HashMap::new();
@@ -245,7 +351,8 @@ pub fn apply_adaptive_rrf(
     let w_vec = base_semantic_weight * (1.0 + (1.0 - kw_confidence));
     let w_kw = base_keyword_weight * kw_confidence;
 
-    if kw_confidence < 1.0 {
+    // Guard: only log when debug logging is enabled
+    if log::log_enabled!(log::Level::Debug) && kw_confidence < 1.0 {
         log::debug!(
             "Adaptive RRF: kw_confidence={:.2}, w_vec={:.2}, w_kw={:.2}",
             kw_confidence,
@@ -321,9 +428,13 @@ pub fn apply_adaptive_rrf(
         }
     }
 
-    // Sort by score
+    // Deterministic ordering: score desc, then tool name asc.
     let mut results: Vec<_> = fusion_map.into_values().collect();
-    results.sort_by(|a, b| OrderedFloat(b.rrf_score).cmp(&OrderedFloat(a.rrf_score)));
+    results.sort_by(|a, b| {
+        b.rrf_score
+            .total_cmp(&a.rrf_score)
+            .then_with(|| a.tool_name.cmp(&b.tool_name))
+    });
 
     results
 }

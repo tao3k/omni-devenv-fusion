@@ -7,24 +7,42 @@ Supports skill.command format with JSON arguments.
 UNIX Philosophy:
 - Logs go to stderr (visible to user, ignored by pipes)
 - Results go to stdout (pure data for pipes)
+
+Usage:
+    omni skill run demo.run_langgraph
+    omni skill run demo.run_langgraph --quiet  # Suppress kernel logs
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
+import logging
 import sys
 from collections.abc import Callable
 
 import typer
 from rich.panel import Panel
 
+from omni.foundation.utils.asyncio import run_async_blocking
+
 from .console import err_console, print_result
+
+
+def _setup_quiet_logging():
+    """Suppress verbose logging for clean skill output."""
+    # Suppress structlog/logger output during skill execution
+    logging.getLogger("omni").setLevel(logging.WARNING)
+    logging.getLogger("omni.core").setLevel(logging.WARNING)
+    logging.getLogger("omni.foundation").setLevel(logging.WARNING)
+    # Suppress litellm logs
+    logging.getLogger("litellm").setLevel(logging.WARNING)
+    logging.getLogger("LiteLLM").setLevel(logging.WARNING)
 
 
 def run_skills(
     commands: list[str],
     json_output: bool = False,
+    quiet: bool = True,
     log_handler: Callable[[str], None] | None = None,
 ) -> None:
     """Execute skill commands using omni-core Kernel.
@@ -32,8 +50,13 @@ def run_skills(
     Args:
         commands: List of command arguments
         json_output: If True, force JSON output even in pipe mode
+        quiet: If True, suppress kernel logs for clean output
         log_handler: Optional callback for logging messages
     """
+    # Suppress verbose logs if quiet mode
+    if quiet:
+        _setup_quiet_logging()
+
     # Log skill invocation
     if log_handler and commands and commands[0] not in ("help", "?"):
         log_handler(f"[CLI] Executing: {' '.join(commands[:2])}")
@@ -63,14 +86,37 @@ def run_skills(
             err_console.print(Panel(f"Invalid JSON args: {e}", title="❌ Error", style="red"))
             raise typer.Exit(1)
 
+    # [NEW] FAST-FAIL: Validate parameters BEFORE kernel initialization
+    # This prevents expensive kernel startup when args are missing
+    full_cmd = f"{skill_name}.{command_name}"
+    try:
+        # Temporarily disabled - Rust scanner get_skill_index() hangs
+        # from omni.core.skills.validation import validate_tool_args, format_validation_errors
+        # validation_errors = validate_tool_args(full_cmd, cmd_args)
+        # if validation_errors:
+        #     err_console.print(
+        #         Panel(
+        #             format_validation_errors(full_cmd, validation_errors),
+        #             title="❌ Missing Required Arguments",
+        #             style="red",
+        #         )
+        #     )
+        #     return  # Exit early without kernel initialization
+        pass  # Validation disabled
+    except Exception:
+        # Validation is best-effort - if it fails, continue to kernel
+        pass
+
     # Use omni-core Kernel (from installed package)
     from omni.core import get_kernel
 
-    kernel = get_kernel()
+    # Create fresh kernel with cortex disabled for CLI skill run (embedding not needed)
+    # Use reset=True to ensure cortex is disabled
+    kernel = get_kernel(enable_cortex=False, reset=True)
 
     # Ensure kernel is initialized
     if not kernel.is_ready:
-        asyncio.run(kernel.initialize())
+        run_async_blocking(kernel.initialize())
 
     ctx = kernel.skill_context
 
@@ -106,7 +152,7 @@ def run_skills(
 
     # Execute command
     try:
-        result = asyncio.run(skill.execute(command_name, **cmd_args))
+        result = run_async_blocking(skill.execute(command_name, **cmd_args))
     except Exception as e:
         err_console.print(Panel(f"Execution error: {e}", title="❌ Error", style="red"))
         raise typer.Exit(1)
@@ -124,7 +170,7 @@ def _show_help() -> None:
     kernel = get_kernel()
 
     if not kernel.is_ready:
-        asyncio.run(kernel.initialize())
+        run_async_blocking(kernel.initialize())
 
     ctx = kernel.skill_context
 

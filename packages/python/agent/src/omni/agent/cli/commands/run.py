@@ -11,7 +11,6 @@ Commands:
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import Annotated
 
@@ -22,6 +21,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.markdown import Markdown
 
+from omni.foundation.utils.asyncio import run_async_blocking
 from omni.foundation.utils.common import setup_import_paths
 
 # Setup paths before importing omni modules
@@ -242,7 +242,7 @@ def register_run_command(parent_app: typer.Typer):
                     finally:
                         pass  # cleanup handled by context manager
 
-            result = asyncio.run(run_omega(task, tui_socket))
+            result = run_async_blocking(run_omega(task, tui_socket))
 
             # Output result
             if json_output:
@@ -314,7 +314,7 @@ def register_run_command(parent_app: typer.Typer):
                 )
 
                 seen_trace_ids = set()
-                session_start = asyncio.get_event_loop().time()
+                session_start = time.monotonic()
                 tool_calls = []
                 llm_hits = 0
 
@@ -575,7 +575,7 @@ def register_run_command(parent_app: typer.Typer):
                         console.print(f"[dim]Traceback: {traceback.format_exc()}[/dim]")
 
                 # --- SESSION DASHBOARD ---
-                duration = asyncio.get_event_loop().time() - session_start
+                duration = time.monotonic() - session_start
 
                 # Calculate estimated tokens (rough approximation)
                 # Input: ~500 tokens/prompt * hits
@@ -619,11 +619,11 @@ def register_run_command(parent_app: typer.Typer):
                 )
                 return
 
-            asyncio.run(run_graph(task))
+            run_async_blocking(run_graph(task))
             return
 
         # Execute task
-        result = asyncio.run(_execute_task_via_kernel(task, steps, verbose))
+        result = run_async_blocking(_execute_task_via_kernel(task, steps, verbose))
 
         # Generate report
         step_count = result.get("step_count", 1)

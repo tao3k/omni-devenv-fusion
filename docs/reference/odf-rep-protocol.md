@@ -4,7 +4,7 @@
 > **Toolchain:** `nightly-2026-01-12`
 > **Philosophy:** Atomic, Fearless, Zero-Cost.
 
-This document defines the engineering standards for Rust core development in Omni-Dev-Fusion Fusion. All code commits under `packages/rust/` must pass this protocol review.
+This document defines the engineering standards for Rust core development in Omni-Dev-Fusion. All code commits under `packages/rust/` must pass this protocol review.
 
 ## 1. Architecture Principles
 
@@ -21,7 +21,7 @@ The Rust codebase is divided into two categories with clear boundaries:
 | Category           | Path         | Responsibility                                         | Forbidden                                                               |
 | :----------------- | :----------- | :----------------------------------------------------- | :---------------------------------------------------------------------- |
 | **The Iron Heart** | `crates/*`   | Pure Rust business logic, algorithms, data structures. | **NO** `pyo3` or Python runtime dependencies. Must compile to WASM/CLI. |
-| **The Glue**       | `bindings/*` | FFI interfaces, type conversion, GIL management.       | **NO** complex business logic. Only act as a搬运工 (porter).            |
+| **The Glue**       | `bindings/*` | FFI interfaces, type conversion, GIL management.       | **NO** complex business logic. Only act as a porter.                    |
 
 ### 1.3 Error Propagation
 
@@ -73,7 +73,7 @@ Since we use Nightly, we can leverage cutting-edge features, but must be restrai
 ### 4.2 Linting
 
 - CI must pass `cargo clippy -- -D warnings`.
-- MUST enable `clippy::pedantic` and `allow` specific rules as needed based on project实际情况.
+- MUST enable `clippy::pedantic` and `allow` specific rules as needed based on project standards.
 
 ## 5. File Structure Specification
 

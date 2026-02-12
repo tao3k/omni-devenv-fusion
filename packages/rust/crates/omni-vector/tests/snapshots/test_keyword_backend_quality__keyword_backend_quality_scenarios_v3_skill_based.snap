@@ -1,0 +1,238 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_keyword_backend_quality.rs
+expression: report
+---
+{
+  "k": 5,
+  "lance_fts_details": [
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "repo_refactor_dry_run",
+      "r_at_5": "0.3333",
+      "success_at_1": "1.0000",
+      "text": "批量替换 代码 dry run regex refactor",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "find_external_crate_symbols",
+      "r_at_5": "0.5000",
+      "success_at_1": "1.0000",
+      "text": "升级依赖后 查 crate symbol api",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "safe_commit_pipeline",
+      "r_at_5": "1.0000",
+      "success_at_1": "1.0000",
+      "text": "安全提交 需要扫描并审批 commit workflow",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "crawl_docs_then_summarize",
+      "r_at_5": "0.5000",
+      "success_at_1": "1.0000",
+      "text": "crawl url 提取 markdown chunk 文档",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "choose_right_tooling",
+      "r_at_5": "0.3333",
+      "success_at_1": "1.0000",
+      "text": "先发现能力再执行命令 tool discover",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "doc_quality_audit",
+      "r_at_5": "1.0000",
+      "success_at_1": "1.0000",
+      "text": "文档润色 markdown 结构 style lint",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.zk_hybrid_search",
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7309",
+      "p_at_5": "0.4000",
+      "query": "memory_and_knowledge_lookup",
+      "r_at_5": "1.0000",
+      "success_at_1": "1.0000",
+      "text": "找历史经验 zk 笔记 hybrid search",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "deep_repo_analysis",
+      "r_at_5": "0.5000",
+      "success_at_1": "1.0000",
+      "text": "大型仓库 深度分析 architecture shard",
+      "top1": "researcher.git_repo_analyer"
+    }
+  ],
+  "queries": 8,
+  "summary": {
+    "lance_fts": {
+      "mean_ndcg_at_5": "0.8717",
+      "mean_p_at_5": "0.2250",
+      "mean_r_at_5": "0.6458",
+      "mrr": "1.0000",
+      "success_at_1": "1.0000"
+    },
+    "tantivy": {
+      "mean_ndcg_at_5": "0.8502",
+      "mean_p_at_5": "0.2250",
+      "mean_r_at_5": "0.6458",
+      "mrr": "0.9375",
+      "success_at_1": "0.8750"
+    }
+  },
+  "tantivy_details": [
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace"
+      ],
+      "mrr_rr": "0.5000",
+      "ndcg_at_5": "0.4702",
+      "p_at_5": "0.2000",
+      "query": "repo_refactor_dry_run",
+      "r_at_5": "0.3333",
+      "success_at_1": "0.0000",
+      "text": "批量替换 代码 dry run regex refactor",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "find_external_crate_symbols",
+      "r_at_5": "0.5000",
+      "success_at_1": "1.0000",
+      "text": "升级依赖后 查 crate symbol api",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "safe_commit_pipeline",
+      "r_at_5": "1.0000",
+      "success_at_1": "1.0000",
+      "text": "安全提交 需要扫描并审批 commit workflow",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "crawl_docs_then_summarize",
+      "r_at_5": "0.5000",
+      "success_at_1": "1.0000",
+      "text": "crawl url 提取 markdown chunk 文档",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "choose_right_tooling",
+      "r_at_5": "0.3333",
+      "success_at_1": "1.0000",
+      "text": "先发现能力再执行命令 tool discover",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "doc_quality_audit",
+      "r_at_5": "1.0000",
+      "success_at_1": "1.0000",
+      "text": "文档润色 markdown 结构 style lint",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.zk_hybrid_search",
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.8340",
+      "p_at_5": "0.4000",
+      "query": "memory_and_knowledge_lookup",
+      "r_at_5": "1.0000",
+      "success_at_1": "1.0000",
+      "text": "找历史经验 zk 笔记 hybrid search",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "deep_repo_analysis",
+      "r_at_5": "0.5000",
+      "success_at_1": "1.0000",
+      "text": "大型仓库 深度分析 architecture shard",
+      "top1": "researcher.git_repo_analyer"
+    }
+  ]
+}

@@ -170,13 +170,6 @@ class UniversalScriptSkill:
         """Check if skill is loaded."""
         return self._loaded
 
-    @property
-    def commands(self) -> dict[str, Callable]:
-        """Get all registered commands (for backward compatibility)."""
-        if self._tools_loader:
-            return self._tools_loader.commands
-        return {}
-
     def get_activation_rule(self) -> tuple[str, list[str]] | None:
         """Get activation rule tuple for this skill.
 
@@ -202,7 +195,7 @@ class UniversalScriptSkill:
         1. Clear sys.modules cache for this skill
         2. Load extensions from extensions/ directory
         3. Load sniffer extensions from extensions/sniffer/ (modular)
-        4. Create ScriptLoader for scripts/ directory
+        4. Create ToolsLoader for scripts/ directory
         5. Inject Rust accelerator if available
         6. Load scripts (they get injected dependencies)
         """
@@ -310,7 +303,7 @@ class UniversalScriptSkill:
         if handler is None:
             available = self._tools_loader.list_commands()
             raise ValueError(
-                f"Command '{command}' not found in skill '{self._name}'. Available: {available}"
+                f"Command '{cmd_name}' not found in skill '{self._name}'. Available: {available}"
             )
 
         # Execute handler

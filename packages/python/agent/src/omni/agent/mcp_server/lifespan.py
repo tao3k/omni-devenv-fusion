@@ -7,24 +7,30 @@ Handles startup/shutdown using the Kernel.
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from mcp.server import Server
 from mcp.types import Notification
 
 from omni.foundation.config.logging import get_logger
 
+if TYPE_CHECKING:
+    from .server import AgentMCPServer
+
 log = get_logger("omni.agent.lifecycle")
 
 # Global registry for MCP server reference (used by kernel for notifications)
-_mcp_server: "Server | None" = None
+# Stores AgentMCPServer which has send_tool_list_changed() method
+_mcp_server: "AgentMCPServer | Server | None" = None
 
 
-def set_mcp_server(server: Server) -> None:
+def set_mcp_server(server: "AgentMCPServer | Server") -> None:
     """Set the MCP server instance for tool list notifications.
 
-    Called during server startup to enable kernel notifications.
+    Args:
+        server: AgentMCPServer instance which has send_tool_list_changed() method.
     """
     global _mcp_server
     _mcp_server = server
@@ -78,6 +84,9 @@ async def server_lifespan(enable_watcher: bool = True):
             kernel.skill_manager.on_registry_update(on_skills_changed)
             log.info("🔔 Registered skill change callback for Live-Wire")
 
+        # Note: Embedding warmup is handled by AgentMCPHandler.initialize()
+        # This ensures embedding is loaded when first tool call is made
+
     except Exception as e:
         log.warning(f"Kernel initialization failed: {e}")
         raise
@@ -112,15 +121,11 @@ async def _notify_tools_changed(skill_changes: dict[str, str]) -> None:
         send_tool_list_changed = getattr(_mcp_server, "send_tool_list_changed", None)
         if send_tool_list_changed is not None and callable(send_tool_list_changed):
             await send_tool_list_changed()
-            log.info("✅ Sent notifications/tools/listChanged to MCP clients")
+            log.info("Sent notifications/tools/listChanged to MCP clients")
         else:
-            # Fallback to direct notification for MCP SDK Server
-            from mcp.types import Notification
-
-            await _mcp_server.send_notification(Notification("notifications/tools/listChanged"))
-            log.info("✅ Sent notifications/tools/listChanged via MCP SDK")
+            log.warning("MCP server does not have send_tool_list_changed method")
     except Exception as e:
-        log.warning(f"❌ Failed to send tool list changed notification: {e}")
+        log.warning(f"Failed to send tool list changed notification: {e}")
 
 
 async def _update_search_index(skill_changes: dict[str, str]):

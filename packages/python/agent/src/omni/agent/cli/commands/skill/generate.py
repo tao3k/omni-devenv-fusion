@@ -51,6 +51,7 @@ from rich.text import Text
 
 from omni.foundation.config.logging import get_logger
 from omni.foundation.config.settings import get_setting
+from omni.foundation.utils.asyncio import run_async_blocking
 from omni.foundation.utils.templating import TemplateEngine
 
 from .base import SKILLS_DIR, err_console, skill_app
@@ -177,7 +178,7 @@ def skill_templates(
     eject: str | None = typer.Option(None, "--eject", "-e", help="Copy template to user directory"),
     info: str | None = typer.Option(None, "--info", "-i", help="Show template content"),
 ):
-    """Manage skill templates. (Deprecated: Use 'omni skill generate' instead)"""
+    """Manage skill templates (hidden internal command)."""
     from .base import _load_templates_module
 
     templates = _load_templates_module()
@@ -397,7 +398,7 @@ def skill_generate(
             err_console.print(Panel("Error: %s" % e, title="Critical Error", border_style="red"))
             sys.exit(1)
 
-    asyncio.run(_run())
+    run_async_blocking(_run())
 
 
 __all__ = []

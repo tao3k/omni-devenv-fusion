@@ -33,17 +33,64 @@ Unified Search Flow:
     4. Return enriched ToolMatch objects
 """
 
-import asyncio
 import json
 import os
-import inspect
-from typing import Any, Callable, get_type_hints
+from typing import TYPE_CHECKING, Any
 
-from omni.foundation.bridge.rust_vector import get_vector_store
+from omni.foundation.config.dirs import get_skills_dir
 from omni.foundation.config.logging import get_logger
+from omni.foundation.services.vector_schema import parse_tool_router_result
 from pydantic import BaseModel
 
+if TYPE_CHECKING:
+    from omni.foundation.bridge.rust_vector import RustVectorStore
+
 logger = get_logger("omni.core.discovery")
+
+
+def get_vector_store() -> "RustVectorStore":
+    """Get Rust vector store instance.
+
+    Kept as a module-level indirection so tests can patch
+    ``omni.core.skills.discovery.get_vector_store`` reliably.
+    """
+    from omni.foundation.bridge.rust_vector import get_vector_store as _get_vector_store
+
+    return _get_vector_store()
+
+
+def _resolve_skill_path(skill_name: str, file_path: str) -> str:
+    """Resolve configured skill path from a tool record path."""
+    configured_skills_dir = get_skills_dir()
+    default_path = configured_skills_dir / skill_name
+
+    if not file_path:
+        return default_path.as_posix()
+
+    normalized = file_path.replace("\\", "/")
+    marker = "/skills/"
+    if marker in normalized:
+        remainder = normalized.split(marker, 1)[1]
+        extracted = remainder.split("/", 1)[0].strip()
+        if extracted:
+            return (configured_skills_dir / extracted).as_posix()
+
+    if normalized.startswith("skills/"):
+        remainder = normalized.split("skills/", 1)[1]
+        extracted = remainder.split("/", 1)[0].strip()
+        if extracted:
+            return (configured_skills_dir / extracted).as_posix()
+
+    return default_path.as_posix()
+
+
+def _infer_skill_name(tool_name: str, fallback: str = "") -> str:
+    """Infer skill name from canonical tool name."""
+    if fallback:
+        return fallback
+    if "." in tool_name:
+        return tool_name.split(".", 1)[0]
+    return "unknown"
 
 
 def _py_type_to_json_type(py_type: Any) -> dict:
@@ -64,15 +111,12 @@ def _py_type_to_json_type(py_type: Any) -> dict:
     return {"type": "string", "description": str(py_type)}
 
 
-def generate_usage_template(
-    tool_name: str, input_schema: dict | str | None, implementation: Callable | None = None
-) -> str:
+def generate_usage_template(tool_name: str, input_schema: dict | str | None) -> str:
     """
     Generate a STRICT usage template aligned with JSON Schema.
     Args:
         tool_name: Full tool name (e.g., "git.commit")
         input_schema: JSON Schema dict or string for the tool's parameters
-        implementation: (Kept for API compatibility, not used for docstrings)
     """
     schema = {}
 
@@ -151,12 +195,7 @@ class DiscoveredSkill(BaseModel):
         skill_name = tool.get("skill_name", "unknown")
         file_path = tool.get("file_path", "")
 
-        # Extract skill path from file_path
-        if "/assets/skills/" in file_path:
-            skill_path = file_path.split("/assets/skills/")[-1].split("/")[0]
-            skill_path = f"assets/skills/{skill_path}"
-        else:
-            skill_path = f"assets/skills/{skill_name}"
+        skill_path = _resolve_skill_path(skill_name, file_path)
 
         # Check for extensions directory
         has_ext = os.path.isdir(os.path.join(skill_path, "extensions")) if skill_path else False
@@ -291,6 +330,8 @@ class SkillDiscoveryService:
         self._registry: dict[str, ToolRecord] = {}
         self._registry_loaded = False
         self._source: str = "lance"  # Track data source for testing
+        # Cache for discovered skills (skill_name -> DiscoveredSkill)
+        self._cache: list[Any] = []
 
     @property
     def source(self) -> str:
@@ -316,12 +357,8 @@ class SkillDiscoveryService:
 
         # Step 1: Try LanceDB (Primary Source)
         try:
-            from omni.foundation.bridge.rust_vector import get_vector_store
-
             store = get_vector_store()
-            import asyncio
-
-            tools = asyncio.run(store.list_all_tools())
+            tools = store.list_all_tools()
 
             if tools:
                 for tool in tools:
@@ -374,7 +411,6 @@ class SkillDiscoveryService:
         """
         try:
             import re
-            from omni.foundation.bridge.rust_vector import get_vector_store
             from omni.foundation.services.embedding import get_embedding_service
 
             store = get_vector_store()
@@ -403,7 +439,7 @@ class SkillDiscoveryService:
                 query_vector=query_vector,
                 query_text=keyword_query,
                 limit=limit * 2,
-                threshold=threshold,
+                threshold=0.0,
             )
 
             matches = []
@@ -412,21 +448,59 @@ class SkillDiscoveryService:
                 if not isinstance(r, dict):
                     continue
 
-                score = r.get("score", 0.0)
+                parsed = None
+                try:
+                    parsed = parse_tool_router_result(dict(r))
+                except Exception:
+                    parsed = None
+
+                score = float(
+                    parsed.final_score
+                    if parsed is not None
+                    else r.get("final_score", r.get("score", 0.0))
+                )
                 if score < threshold:
                     continue
 
-                tool_name = r.get("name", "")
+                tool_name = (
+                    parsed.tool_name
+                    if parsed is not None
+                    else r.get("tool_name", r.get("name", ""))
+                )
                 tool_record = self.get_tool_record(tool_name)
 
-                usage = generate_usage_template(
-                    tool_name, tool_record.input_schema if tool_record else "{}"
+                schema_for_template = (
+                    parsed.input_schema
+                    if parsed is not None
+                    else (
+                        r.get("input_schema") if isinstance(r.get("input_schema"), dict) else None
+                    )
                 )
+                usage = generate_usage_template(
+                    tool_name,
+                    schema_for_template
+                    if schema_for_template
+                    else (tool_record.input_schema if tool_record else "{}"),
+                )
+                description = (
+                    parsed.description
+                    if parsed is not None
+                    else str(r.get("description") or r.get("content") or "")
+                )
+                if not description and tool_record:
+                    description = tool_record.description
 
                 match = ToolMatch(
                     name=tool_name,
-                    skill_name=str(r.get("skill_name") or ""),
-                    description=str(r.get("description") or ""),
+                    skill_name=_infer_skill_name(
+                        tool_name,
+                        fallback=(
+                            parsed.skill_name
+                            if parsed is not None
+                            else str(r.get("skill_name") or "")
+                        ),
+                    ),
+                    description=description,
                     score=score,
                     matched_intent=query,
                     usage_template=usage,
@@ -449,23 +523,17 @@ class SkillDiscoveryService:
             return matches[:limit]
 
         except Exception as e:
-            logger.warning(f"Rust search failed, falling back to keyword matching: {e}")
-            fallback_results = self._search_tools_fallback(query, limit, threshold)
-
-            # If no fallback results, return skill.discover
-            if not fallback_results:
-                return [
-                    ToolMatch(
-                        name="skill.discover",
-                        skill_name="skill",
-                        description="Discover available skills and tools",
-                        score=0.05,
-                        matched_intent=query,
-                        usage_template='@omni("skill.discover", {"query": "..."})',
-                    )
-                ]
-
-            return fallback_results[:limit]
+            logger.warning(f"Rust search failed, returning discovery fallback only: {e}")
+            return [
+                ToolMatch(
+                    name="skill.discover",
+                    skill_name="skill",
+                    description="Discover available skills and tools",
+                    score=0.05,
+                    matched_intent=query,
+                    usage_template='@omni("skill.discover", {"query": "..."})',
+                )
+            ]
 
     def search_tools(self, query: str, limit: int = 10, threshold: float = 0.1) -> list[ToolMatch]:
         """Synchronous wrapper for search_tools.
@@ -480,9 +548,9 @@ class SkillDiscoveryService:
         Returns:
             List of ToolMatch objects sorted by score
         """
-        import asyncio
+        from omni.foundation.utils.asyncio import run_async_blocking
 
-        return asyncio.run(self.search_tools_async(query, limit, threshold))
+        return run_async_blocking(self.search_tools_async(query, limit, threshold))
 
     def _detect_query_intent(self, query_words: set[str]) -> tuple[str, ...] | None:
         """Detect query intent based on keywords to enable category boosting."""
@@ -491,71 +559,43 @@ class SkillDiscoveryService:
                 return intent_keywords
         return None
 
-    def _search_tools_fallback(self, query: str, limit: int, threshold: float) -> list[ToolMatch]:
-        """Fallback keyword-based search when Rust search is unavailable."""
-        registry = self._load_registry()
-        query_lower = query.lower()
-        query_words = set(query_lower.split())
-        query_intent = self._detect_query_intent(query_words)
-
-        matches: list[tuple[ToolMatch, float]] = []
-
-        for tool_name, tool_record in registry.items():
-            tool_score = 0.0
-            tool_desc = tool_record.description
-            tool_category = tool_record.category
-            skill_name = tool_record.skill_name
-
-            # Direct name match
-            if query_lower.replace(" ", "_") in tool_name.lower():
-                tool_score = max(tool_score, 0.95)
-            elif query_lower.replace(" ", "") in tool_name.lower().replace("_", "").replace(
-                ".", ""
-            ):
-                tool_score = max(tool_score, 0.85)
-
-            # Category boost
-            if query_intent and tool_category in self.CATEGORY_BOOSTS.get(query_intent, []):
-                tool_score = max(tool_score, 0.8)
-
-            # Token match in name
-            for word in query_words:
-                if word in tool_name.lower() and len(word) > 3:
-                    tool_score = max(tool_score, 0.7)
-
-            # Description match
-            if query_lower in tool_desc.lower():
-                tool_score = max(tool_score, 0.6)
-
-            if tool_score >= threshold:
-                usage = generate_usage_template(tool_name, tool_record.input_schema)
-                match = ToolMatch(
-                    name=tool_name,
-                    skill_name=skill_name,
-                    description=tool_desc,
-                    score=tool_score,
-                    matched_intent=query,
-                    usage_template=usage,
-                )
-                matches.append((match, tool_score))
-
-        matches.sort(key=lambda x: x[1], reverse=True)
-        return [m[0] for m in matches[:limit]]
-
-    async def discover_all(self, locations: list[str] | None = None) -> list[DiscoveredSkill]:
+    async def discover_all(self) -> list[DiscoveredSkill]:
         """Discover all skills from LanceDB.
-
-        Args:
-            locations: Ignored (kept for API compat).
 
         Returns:
             List of DiscoveredSkill objects sorted by name.
         """
         logger.debug("🔍 Accessing Skill Index from LanceDB...")
 
-        # Use RustVectorStore directly to read from LanceDB
         store = get_vector_store()
-        tools = await store.list_all_tools()
+        tools = store.list_all_tools()
+
+        return await self._build_skills_from_tools(tools)
+
+    async def _refresh_cache(self) -> None:
+        """Refresh the in-memory cache by re-reading from LanceDB.
+
+        This is called by the file watcher when new skills are created.
+        """
+        logger.debug("🔄 Refreshing skill discovery cache...")
+        self._registry_loaded = False
+        self._registry.clear()
+        store = get_vector_store()
+        tools = store.list_all_tools()
+        await self._build_skills_from_tools(tools)
+        logger.info(f"✅ Skill discovery cache refreshed with {len(self._cache)} skills")
+
+    async def _build_skills_from_tools(self, tools: list[dict[str, Any]]) -> list[DiscoveredSkill]:
+        """Build DiscoveredSkill list from tool records.
+
+        Args:
+            tools: List of tool records from vector store.
+
+        Returns:
+            List of DiscoveredSkill objects sorted by name.
+        """
+        # Cache the result for fast subsequent lookups
+        self._cache.clear()
 
         # Group tools by skill and convert to DiscoveredSkill
         skills_by_name: dict[str, dict[str, Any]] = {}
@@ -563,12 +603,7 @@ class SkillDiscoveryService:
             skill_name = tool.get("skill_name", "unknown")
             file_path = tool.get("file_path", "")
 
-            # Extract skill path from file_path
-            if "/assets/skills/" in file_path:
-                skill_path = file_path.split("/assets/skills/")[-1].split("/")[0]
-                skill_path = f"assets/skills/{skill_path}"
-            else:
-                skill_path = f"assets/skills/{skill_name}"
+            skill_path = _resolve_skill_path(skill_name, file_path)
 
             if skill_name not in skills_by_name:
                 skills_by_name[skill_name] = {

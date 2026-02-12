@@ -14,7 +14,8 @@ from __future__ import annotations
 import hashlib
 import uuid
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
@@ -40,15 +41,30 @@ def temp_dir(tmp_path) -> Path:
     return tmp_path
 
 
+def _create_mock_embedder(dimension: int = 1024) -> MagicMock:
+    """Create a mock embedder for testing."""
+    mock = MagicMock()
+    mock.dimension = dimension
+    mock.backend = "mock"
+    mock.is_loaded = True
+    mock.is_loading = False
+
+    def mock_embed_batch(texts: list[str]) -> list[list[float]]:
+        """Return fake embeddings for testing."""
+        return [[0.1] * dimension for _ in texts]
+
+    mock.embed_batch.side_effect = mock_embed_batch
+    return mock
+
+
 @pytest_asyncio.fixture
 async def vector_store():
     """Create a unique vector store for each test."""
     from omni_core_rs import PyVectorStore
-    from omni.foundation.services.embedding import EmbeddingService
 
-    embedder = EmbeddingService()
     db_path = _unique_db_path()
-    store = PyVectorStore(db_path, embedder.dimension, False)
+    # Use fallback dimension since we're using mock embedder
+    store = PyVectorStore(db_path, 1024, False)
 
     yield store
 
@@ -56,16 +72,14 @@ async def vector_store():
 
 
 @pytest_asyncio.fixture
-async def indexer(vector_store) -> AsyncGenerator[SkillIndexer, None]:
-    """Create a SkillIndexer with isolated vector store."""
-    from omni.foundation.services.embedding import EmbeddingService
-
-    embedder = EmbeddingService()
+async def indexer(vector_store) -> SkillIndexer:
+    """Create a SkillIndexer with mocked embedding service."""
+    mock_embedder = _create_mock_embedder(1024)
     indexer = SkillIndexer(
         vector_store=vector_store,
-        embedding_service=embedder,
+        embedding_service=mock_embedder,
     )
-    yield indexer
+    return indexer
 
 
 @pytest.mark.asyncio
@@ -259,13 +273,11 @@ async def test_tool_metadata_from_record():
 @pytest.mark.asyncio
 async def test_full_pipeline_single_file(temp_dir: Path, vector_store):
     """Test the full indexing pipeline with a single file."""
-    from omni.foundation.services.embedding import EmbeddingService
-
-    embedder = EmbeddingService()
+    mock_embedder = _create_mock_embedder(1024)
 
     indexer = SkillIndexer(
         vector_store=vector_store,
-        embedding_service=embedder,
+        embedding_service=mock_embedder,
         project_root=str(temp_dir),
     )
 
@@ -290,13 +302,11 @@ def create_user(data: dict) -> dict:
 @pytest.mark.asyncio
 async def test_full_pipeline_multiple_files(temp_dir: Path, vector_store):
     """Test the full indexing pipeline with multiple files."""
-    from omni.foundation.services.embedding import EmbeddingService
-
-    embedder = EmbeddingService()
+    mock_embedder = _create_mock_embedder(1024)
 
     indexer = SkillIndexer(
         vector_store=vector_store,
-        embedding_service=embedder,
+        embedding_service=mock_embedder,
         project_root=str(temp_dir),
     )
 
@@ -340,13 +350,11 @@ def add(a: int, b: int) -> int:
 @pytest.mark.asyncio
 async def test_indexer_removal(temp_dir: Path, vector_store):
     """Test removing indexed files."""
-    from omni.foundation.services.embedding import EmbeddingService
-
-    embedder = EmbeddingService()
+    mock_embedder = _create_mock_embedder(1024)
 
     indexer = SkillIndexer(
         vector_store=vector_store,
-        embedding_service=embedder,
+        embedding_service=mock_embedder,
         project_root=str(temp_dir),
     )
 
@@ -370,13 +378,11 @@ def temp_func() -> int:
 @pytest.mark.asyncio
 async def test_indexer_reindex(temp_dir: Path, vector_store):
     """Test re-indexing a file (update scenario)."""
-    from omni.foundation.services.embedding import EmbeddingService
-
-    embedder = EmbeddingService()
+    mock_embedder = _create_mock_embedder(1024)
 
     indexer = SkillIndexer(
         vector_store=vector_store,
-        embedding_service=embedder,
+        embedding_service=mock_embedder,
         project_root=str(temp_dir),
     )
 
@@ -407,13 +413,11 @@ def my_function() -> str:
 @pytest.mark.asyncio
 async def test_indexer_directory_scan(temp_dir: Path, vector_store):
     """Test batch indexing of a directory."""
-    from omni.foundation.services.embedding import EmbeddingService
-
-    embedder = EmbeddingService()
+    mock_embedder = _create_mock_embedder(1024)
 
     indexer = SkillIndexer(
         vector_store=vector_store,
-        embedding_service=embedder,
+        embedding_service=mock_embedder,
         project_root=str(temp_dir),
     )
 

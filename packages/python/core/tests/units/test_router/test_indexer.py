@@ -6,9 +6,12 @@ Tests the optimized batch indexing functionality and singleton patterns.
 from __future__ import annotations
 
 import asyncio
-import pytest
+from unittest.mock import AsyncMock, MagicMock
 
-from omni.core.router.indexer import IndexedEntry, InMemoryIndex, IndexedSkill, SkillIndexer
+import pytest
+from omni.test_kit.fixtures.vector import make_tool_search_payload
+
+from omni.core.router.indexer import IndexedSkill, SkillIndexer
 from omni.foundation.config.settings import get_setting
 
 
@@ -18,7 +21,7 @@ def _is_indexing_available() -> bool:
         from omni.foundation.bridge import RustVectorStore
 
         # Verify RustVectorStore can be created
-        store = RustVectorStore(":memory:", 1536)
+        _ = RustVectorStore(":memory:", 1536)
 
         # Verify embedding service can be imported and used
         from omni.foundation.services.embedding import get_embedding_service
@@ -55,7 +58,7 @@ class TestSkillIndexer:
         assert indexer._indexed_count == 0
 
     def test_in_memory_initialization(self):
-        """Test in-memory mode initialization."""
+        """Test in-memory mode initialization (Rust in-memory backend)."""
         expected_dimension = get_setting("embedding.dimension", 1024)
         indexer = SkillIndexer(storage_path=":memory:")
 
@@ -91,110 +94,6 @@ class TestSkillIndexer:
         assert stats["is_ready"] is False
         # Default uses unified path
         assert "omni-vector" in stats["storage_path"]
-
-
-class TestInMemoryIndex:
-    """Test InMemoryIndex class (fallback when RustVectorStore unavailable)."""
-
-    def test_initialization(self):
-        """Test InMemoryIndex initialization."""
-        index = InMemoryIndex(dimension=384)
-
-        assert index._dimension == 384
-        assert len(index._entries) == 0
-
-    def test_add_single_entry(self):
-        """Test adding a single entry."""
-        index = InMemoryIndex()
-        index.add("test content", {"type": "skill", "skill_name": "test"})
-
-        assert len(index._entries) == 1
-        entry = index._entries[0]
-        assert entry.content == "test content"
-        assert entry.metadata["type"] == "skill"
-
-    def test_add_batch(self):
-        """Test adding entries in batch."""
-        index = InMemoryIndex()
-
-        entries = [
-            ("content 1", {"id": "1"}),
-            ("content 2", {"id": "2"}),
-            ("content 3", {"id": "3"}),
-        ]
-        index.add_batch(entries)
-
-        assert len(index._entries) == 3
-        assert index._entries[0].content == "content 1"
-        assert index._entries[1].content == "content 2"
-        assert index._entries[2].content == "content 3"
-
-    def test_clear(self):
-        """Test clearing the index."""
-        index = InMemoryIndex()
-        index.add("content 1", {"id": "1"})
-        index.add("content 2", {"id": "2"})
-
-        assert len(index._entries) == 2
-
-        index.clear()
-
-        assert len(index._entries) == 0
-
-    def test_search_empty(self):
-        """Test search on empty index."""
-        index = InMemoryIndex()
-
-        results = index.search("test", None, limit=5)
-
-        assert results == []
-
-    def test_search_with_keyword_match(self):
-        """Test keyword-based search (fallback when embeddings unavailable)."""
-        index = InMemoryIndex()
-        index.add("Git commit changes", {"skill_name": "git"})
-        index.add("File system read", {"skill_name": "filesystem"})
-        index.add("Memory save", {"skill_name": "memory"})
-
-        results = index.search("git commit", None, limit=5)
-
-        assert len(results) >= 1
-        # First result should be git-related
-        assert results[0].payload["skill_name"] == "git"
-
-    def test_len(self):
-        """Test __len__ method."""
-        index = InMemoryIndex()
-        assert len(index) == 0
-
-        index.add("content", {})
-        assert len(index) == 1
-
-        index.add_batch([("a", {}), ("b", {})])
-        assert len(index) == 3
-
-
-class TestIndexedEntry:
-    """Test IndexedEntry dataclass."""
-
-    def test_create_indexed_entry(self):
-        """Test creating an IndexedEntry."""
-        entry = IndexedEntry(
-            content="Test content",
-            metadata={"skill_name": "test", "weight": 1.0},
-            embedding=[0.1, 0.2, 0.3],
-        )
-
-        assert entry.content == "Test content"
-        assert entry.metadata["skill_name"] == "test"
-        assert entry.embedding == [0.1, 0.2, 0.3]
-
-    def test_indexed_entry_without_embedding(self):
-        """Test creating an IndexedEntry without embedding."""
-        entry = IndexedEntry(content="No embedding", metadata={})
-
-        assert entry.content == "No embedding"
-        assert entry.embedding is None
 
 
 class TestIndexedSkill:
@@ -259,6 +158,37 @@ class TestSkillIndexerIndexing:
 
         # Should have 1 skill entry + 2 command entries = 3 total
         assert count == 3
+
+    @pytest.mark.asyncio
+    async def test_index_skills_normalizes_prefixed_command_name(self):
+        """When command name already includes skill prefix, avoid double prefix in IDs."""
+        indexer = SkillIndexer(storage_path=":memory:")
+        fake_memory = MagicMock()
+        indexer._memory_index = fake_memory
+
+        skills = [
+            {
+                "name": "advanced_tools",
+                "description": "Advanced tools",
+                "commands": [
+                    {
+                        "name": "advanced_tools.smart_find",
+                        "description": "Find files",
+                    }
+                ],
+            }
+        ]
+
+        count = await indexer.index_skills(skills)
+        assert count == 2
+        fake_memory.add_batch.assert_called_once()
+
+        entries = fake_memory.add_batch.call_args.args[0]
+        command_entry = next(
+            metadata for _, metadata in entries if metadata.get("type") == "command"
+        )
+        assert command_entry["tool_name"] == "advanced_tools.smart_find"
+        assert command_entry["id"] == "advanced_tools.smart_find"
 
     @pytest.mark.asyncio
     async def test_index_skills_in_memory_clear_and_reindex(self):
@@ -423,3 +353,80 @@ class TestSkillIndexerSearch:
         # Results may be empty if no high-confidence matches
         for r in results:
             assert r.score >= 0.99
+
+    @pytest.mark.asyncio
+    async def test_search_rust_path_uses_search_tools(self):
+        """Rust-backed search should use explicit search_tools path."""
+        indexer = SkillIndexer(storage_path=":memory:")
+        indexer._store = MagicMock()
+        indexer._embedding_service = MagicMock()
+        indexer._embedding_service.embed.return_value = [[0.1, 0.2, 0.3]]
+        indexer._store.search_tools = AsyncMock(
+            return_value=[
+                make_tool_search_payload(
+                    name="git.status",
+                    tool_name="git.status",
+                    description="Show status",
+                    input_schema={},
+                    file_path="skills/git.py",
+                    score=0.8,
+                    vector_score=0.7,
+                    keyword_score=0.6,
+                    final_score=0.82,
+                    confidence="high",
+                    routing_keywords=["git", "status"],
+                )
+            ]
+        )
+
+        results = await indexer.search("git status", limit=3, threshold=0.1)
+
+        assert len(results) == 1
+        assert results[0].id == "git.status"
+        assert results[0].score == 0.8
+        assert results[0].payload["skill_name"] == "git"
+        indexer._store.search_tools.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_search_rust_path_applies_threshold(self):
+        """Rust-backed search should filter low-scoring records."""
+        indexer = SkillIndexer(storage_path=":memory:")
+        indexer._store = MagicMock()
+        indexer._embedding_service = MagicMock()
+        indexer._embedding_service.embed.return_value = [[0.1, 0.2, 0.3]]
+        indexer._store.search_tools = AsyncMock(
+            return_value=[
+                make_tool_search_payload(
+                    name="git.status",
+                    tool_name="git.status",
+                    description="Show status",
+                    input_schema={},
+                    file_path="skills/git.py",
+                    score=0.2,
+                    vector_score=0.2,
+                    keyword_score=0.2,
+                    final_score=0.2,
+                    confidence="low",
+                    routing_keywords=["git", "status"],
+                ),
+                make_tool_search_payload(
+                    name="git.commit",
+                    tool_name="git.commit",
+                    description="Commit changes",
+                    input_schema={},
+                    file_path="skills/git.py",
+                    score=0.95,
+                    vector_score=0.9,
+                    keyword_score=0.85,
+                    final_score=0.96,
+                    confidence="high",
+                    routing_keywords=["git", "commit"],
+                ),
+            ]
+        )
+
+        results = await indexer.search("git", limit=5, threshold=0.9)
+
+        assert len(results) == 1
+        assert results[0].id == "git.commit"
+        assert results[0].score >= 0.9

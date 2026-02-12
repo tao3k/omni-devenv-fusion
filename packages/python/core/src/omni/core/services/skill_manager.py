@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -95,15 +96,19 @@ class SkillManager:
         self.project_root = Path(project_root or Path.cwd()).resolve()
 
         # LanceDB path - use unified vector DB path from PRJ_CACHE
-        from omni.foundation.config.dirs import get_database_path
+        from omni.foundation.config.database import get_database_path
 
         db_path = vector_store_path or get_database_path("skills")
 
         # Embedding service (singleton pattern)
         self.embedding_service = embedding_service or get_embedding_service()
+        # Get dimension from settings (lazy load only when actually embedding)
+        from omni.foundation.config.settings import get_setting
 
-        # Initialize Rust Vector Store
-        self.vector_store = PyVectorStore(db_path, self.embedding_service.dimension, False)
+        embedding_dimension = get_setting("embedding.dimension", 1024)
+
+        # Initialize Rust Vector Store with dimension from settings
+        self.vector_store = PyVectorStore(db_path, embedding_dimension, False)
 
         # Initialize Pipeline Components
         self.indexer = SkillIndexer(
@@ -127,6 +132,12 @@ class SkillManager:
 
         # Callbacks for skill changes (used by MCP Gateway for notifications)
         self._on_update_callbacks: list[Callable[[], None]] = []
+
+        # Debounce state for preventing race conditions with multiple MCP clients
+        self._notify_in_progress = False
+        self._notify_cooldown_seconds = 1.0  # Cooldown between notifications
+        self._last_notify_time: float = 0.0
+        self._pending_notify = False  # Flag for coalesced notifications
 
         # Librarian (initialized in startup to avoid circular imports)
         self.librarian: "Librarian | None" = None
@@ -158,19 +169,55 @@ class SkillManager:
 
         This is called by the ReactiveSkillWatcher when it processes
         file change events that affect the skill registry.
-        """
-        logger.info(f"🔔 _notify_updates called with {len(self._on_update_callbacks)} callbacks")
 
-        for i, callback in enumerate(self._on_update_callbacks):
-            try:
-                logger.debug(f"🔔 Invoking callback {i + 1}/{len(self._on_update_callbacks)}")
-                # Check if callback is a coroutine function
-                if asyncio.iscoroutinefunction(callback):
-                    await callback()
-                else:
-                    callback()
-            except Exception as e:
-                logger.warning(f"Error in update callback {i}: {e}")
+        Thread-safe with debouncing to prevent race conditions when
+        multiple file changes occur in quick succession or when
+        multiple MCP clients are connected.
+        """
+        now = time.monotonic()
+
+        # Check if already processing - mark as pending if so (don't skip)
+        if self._notify_in_progress:
+            self._pending_notify = True
+            logger.debug("🔔 Notification already in progress, marking as pending")
+            return
+
+        # Check cooldown - ignore if too soon after last notification
+        if now - self._last_notify_time < self._notify_cooldown_seconds:
+            logger.debug(
+                f"🔔 Notification skipped (cooldown): {now - self._last_notify_time:.2f}s since last"
+            )
+            return
+
+        self._notify_in_progress = True
+        self._pending_notify = False
+
+        try:
+            self._last_notify_time = now
+            logger.info(
+                f"🔔 _notify_updates called with {len(self._on_update_callbacks)} callbacks"
+            )
+
+            for i, callback in enumerate(self._on_update_callbacks):
+                try:
+                    logger.debug(f"🔔 Invoking callback {i + 1}/{len(self._on_update_callbacks)}")
+                    # Check if callback is a coroutine function
+                    if asyncio.iscoroutinefunction(callback):
+                        await callback()
+                    else:
+                        callback()
+                except Exception as e:
+                    logger.warning(f"Error in update callback {i}: {e}")
+        finally:
+            self._notify_in_progress = False
+
+        # If a notification came in while we were processing, trigger it now
+        if self._pending_notify:
+            self._pending_notify = False
+            logger.debug("🔔 Processing pending notification")
+            # Schedule the next notification (but respect cooldown)
+            await asyncio.sleep(0.05)  # Brief delay to batch rapid changes
+            await self._notify_updates()
 
     async def startup(self, initial_scan: bool = False, ingest_knowledge: bool = False):
         """Bootstrap the skill system.

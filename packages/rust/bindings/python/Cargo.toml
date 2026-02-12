@@ -19,6 +19,9 @@ notify = ["omni-io/notify"]
 # Python 3.13 support via PyO3 0.23
 pyo3 = { workspace = true, features = ["extension-module"] }
 
+# Parallel processing for batch file operations
+rayon = { workspace = true }
+
 # Internal crates
 omni-events = { path = "../../crates/omni-events" }
 omni-sniffer = { path = "../../crates/omni-sniffer" }
@@ -34,6 +37,7 @@ omni-scanner = { path = "../../crates/omni-scanner" }
 omni-executor = { path = "../../crates/omni-executor" }
 omni-tui = { path = "../../crates/omni-tui" }
 omni-knowledge = { path = "../../crates/omni-knowledge" }
+omni-sandbox = { path = "../../crates/omni-sandbox" }
 
 # Workspace dependencies (inherited)
 serde = { workspace = true }
@@ -42,6 +46,7 @@ anyhow = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
 uuid = { workspace = true }
 chrono = { workspace = true }
+which = "6.0"
 
 [dev-dependencies]
 tempfile = { workspace = true }

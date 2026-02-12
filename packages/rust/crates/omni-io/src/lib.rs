@@ -1,5 +1,3 @@
-#![allow(clippy::doc_markdown)]
-
 //! omni-io - Safe and efficient file I/O for Omni DevEnv
 //!
 //! A high-performance file reading library with safety features.

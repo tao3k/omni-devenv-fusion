@@ -13,11 +13,26 @@ import types
 from collections.abc import Callable
 from typing import Any, get_type_hints
 
-from pydantic import Field, create_model
+from pydantic import ConfigDict, Field, create_model
 
 from ..config.logging import get_logger
 
 logger = get_logger("omni.api.schema")
+
+
+_RESERVED_PYDANTIC_FIELD_NAMES = {"model_config"}
+
+
+def _safe_model_field_name(param_name: str) -> str:
+    """Return a safe internal field name for dynamic Pydantic models.
+
+    Pydantic v2 reserves certain names (e.g. ``model_config``). When a tool
+    function uses one of these names as a parameter, we keep the public schema
+    key via aliasing and only rewrite the internal temporary model field name.
+    """
+    if param_name in _RESERVED_PYDANTIC_FIELD_NAMES:
+        return f"param_{param_name}"
+    return param_name
 
 
 def _generate_tool_schema(
@@ -55,7 +70,7 @@ def _generate_tool_schema(
     # Build a set of types to exclude from schema generation
     _INJECTED_TYPES_SET = {Settings, ConfigPaths}
 
-    fields = {}
+    fields: dict[str, tuple[Any, Any]] = {}
 
     for param_name, param in sig.parameters.items():
         # 1. Filter out dependency injection params (e.g., project_root) and *args/**kwargs
@@ -178,11 +193,17 @@ def _generate_tool_schema(
             field_kwargs["default"] = param.default
 
         # Build the field - use actual annotation for proper type inference
+        safe_name = _safe_model_field_name(param_name)
+        if safe_name != param_name:
+            # Keep external contract stable: schema still exposes original name.
+            field_kwargs["alias"] = param_name
+            field_kwargs["serialization_alias"] = param_name
+
         try:
-            fields[param_name] = (annotation, Field(**field_kwargs))
+            fields[safe_name] = (annotation, Field(**field_kwargs))
         except Exception:
             # Fallback: use Any if annotation causes issues
-            fields[param_name] = (Any, Field(**field_kwargs))
+            fields[safe_name] = (Any, Field(**field_kwargs))
             logger.debug(f"Failed to add field {param_name} to schema for {func.__name__}")
 
     # Create a temporary Pydantic model just to extract the JSON Schema
@@ -191,8 +212,12 @@ def _generate_tool_schema(
         TempModel = create_model(
             f"Temp_{func.__name__}_Params",
             **fields,  # type: ignore[arg-type]
+            __config__=ConfigDict(
+                arbitrary_types_allowed=True,
+                populate_by_name=True,
+            ),
         )
-        schema = TempModel.model_json_schema()
+        schema = TempModel.model_json_schema(by_alias=True)
     except Exception as e:
         logger.warning(f"Failed to create Pydantic model for {func.__name__}: {e}")
         # Fallback to minimal schema

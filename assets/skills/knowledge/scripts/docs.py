@@ -1,7 +1,9 @@
 """
-knowledge/docs.py - Knowledge Documentation Commands
+Knowledge Documentation Commands
 
-Create and manage knowledge entries in assets/knowledge/harvested/.
+Commands:
+- create_knowledge_entry: Create a new standardized knowledge entry
+- rebuild_knowledge_index: Rebuild the knowledge base index
 """
 
 import datetime
@@ -57,9 +59,12 @@ async def create_knowledge_entry(title: str, category: str, content: str) -> str
         file_path.write_text(full_content, encoding="utf-8")
 
         # 5. Return complete result for LLM (CLI display handles truncation)
-        return f"[{category.upper()}] {title}\n→ {filename}\n→ Content length: {len(content)} chars"
+        return (
+            f"[{category.upper()}] {title}\n-> {filename}\n-> Content length: {len(content)} chars"
+        )
     except Exception as e:
-        return f"Failed to create doc: {e}"
+        logger.error("Failed to create knowledge entry", error=str(e))
+        raise
 
 
 @skill_command(
@@ -116,41 +121,11 @@ async def rebuild_knowledge_index() -> str:
 
         return f"Index rebuilt. Found {len(index_lines) - 4} entries."
     except Exception as e:
-        return f"Failed to rebuild index: {e}"
+        logger.error("Failed to rebuild knowledge index", error=str(e))
+        raise
 
 
-@skill_command(
-    name="search_knowledge_base",
-    category="search",
-    description="""
-    Simple text search across the knowledge base markdown files.
-
-    Args:
-        - query: str - Search term to find in knowledge base (required)
-
-    Returns:
-        Search results with matches or "No matches found" message.
-    """,
-)
-async def search_knowledge_base(query: str) -> str:
-    """
-    Simple text search across the knowledge base.
-    """
-    results = []
-    try:
-        # Get knowledge directory using get_harvest_dir
-        knowledge_dir = get_harvest_dir()
-        for f in knowledge_dir.rglob("*.md"):
-            if "node_modules" in str(f) or ".git" in str(f):
-                continue
-
-            content = f.read_text(encoding="utf-8", errors="ignore")
-            if query.lower() in content.lower():
-                snippet = content[:200].replace("\n", " ")
-                results.append(f"- **{f.name}**: {snippet}...")
-
-        if not results:
-            return f"No matches found for '{query}'."
-        return f"Found {len(results)} matches:\n" + "\n".join(results[:10])
-    except Exception as e:
-        return f"Search error: {e}"
+__all__ = [
+    "create_knowledge_entry",
+    "rebuild_knowledge_index",
+]

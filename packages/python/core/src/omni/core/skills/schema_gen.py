@@ -254,8 +254,14 @@ def save_schemas(output_path: str | Path | None = None) -> Path:
     if output_path is None:
         output_path = Path.cwd() / "tool_schemas.json"
 
+    def _json_default(value: Any) -> Any:
+        # Decorator metadata may include Python types/classes; encode safely.
+        if isinstance(value, type):
+            return value.__name__
+        return str(value)
+
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(schemas, f, indent=2, ensure_ascii=False)
+        json.dump(schemas, f, indent=2, ensure_ascii=False, default=_json_default)
 
     return Path(output_path)
 

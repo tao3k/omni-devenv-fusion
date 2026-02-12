@@ -26,7 +26,6 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import uuid
@@ -34,12 +33,14 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from omni.foundation.utils.asyncio import run_async_blocking
+
 if TYPE_CHECKING:
     from omni_core_rs import PyVectorStore
 
 from .config import get_knowledge_config
 from .ingestion import FileIngestor
-from .types import KnowledgeCategory, KnowledgeEntry
+from .knowledge_types import KnowledgeCategory, KnowledgeEntry
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,21 @@ class KnowledgeStorage:
     def __init__(self, store: "PyVectorStore", table_name: str = "knowledge_chunks"):
         self._store = store
         self.table_name = table_name
+        # Ensure table exists
+        self._ensure_table()
+
+    def _ensure_table(self) -> None:
+        """Ensure the table exists, create if needed."""
+        try:
+            # Try to access the table - this will fail if it doesn't exist
+            self._store.count(self.table_name)
+        except Exception:
+            # Table doesn't exist, create it
+            try:
+                self._store.create_index(self.table_name)
+                logger.info(f"Created knowledge table: {self.table_name}")
+            except Exception as e:
+                logger.warning(f"Could not create table {self.table_name}: {e}")
 
     def add_batch(self, records: list[dict[str, Any]]) -> None:
         """Add batch of records using add_documents."""
@@ -70,13 +86,67 @@ class KnowledgeStorage:
         for record in records:
             ids.append(record.get("id", ""))
             vectors.append(record.get("vector", []))
-            contents.append(record.get("content", ""))
+            # Support both 'content' and 'text' fields
+            contents.append(record.get("content") or record.get("text", ""))
             metadatas.append(json.dumps(record.get("metadata", {})))
 
         self._store.add_documents(self.table_name, ids, vectors, contents, metadatas)
 
-    def search(self, vector: list[float], limit: int = 5) -> list[dict[str, Any]]:
-        return self._store.search(self.table_name, vector, limit)
+    @staticmethod
+    def _parse_search_results(raw_results: list[Any]) -> list[dict[str, Any]]:
+        """Parse JSON-encoded Rust search payloads into Python dicts."""
+        parsed: list[dict[str, Any]] = []
+        for raw in raw_results:
+            try:
+                data = json.loads(raw) if isinstance(raw, str) else raw
+                if isinstance(data, dict):
+                    parsed.append(data)
+            except (json.JSONDecodeError, TypeError):
+                continue
+        return parsed
+
+    def vector_search(self, vector: list[float], limit: int = 5) -> list[dict[str, Any]]:
+        """Vector search over knowledge chunks."""
+        raw_results = self._store.search_optimized(self.table_name, vector, limit, None)
+        return self._parse_search_results(raw_results)
+
+    def text_search(
+        self, query_text: str, query_vector: list[float], limit: int = 5
+    ) -> list[dict[str, Any]]:
+        """Hybrid text search over knowledge chunks (keyword + vector)."""
+        raw_results = self._store.search_hybrid(
+            self.table_name,
+            query_vector,
+            [query_text],
+            limit,
+        )
+        return self._parse_search_results(raw_results)
+
+    def lexical_scan(self, query_text: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Fallback lexical scan over all rows when hybrid ranking misses obvious hits."""
+        if not hasattr(self._store, "list_all"):
+            return []
+        try:
+            raw_rows = self._store.list_all(self.table_name)
+            if hasattr(raw_rows, "__await__"):
+                rows = run_async_blocking(raw_rows)
+            else:
+                rows = raw_rows
+        except Exception:
+            return []
+
+        q = query_text.strip().lower()
+        if not q:
+            return []
+
+        matches: list[dict[str, Any]] = []
+        for row in rows:
+            content = row.get("content", row.get("text", ""))
+            if isinstance(content, str) and q in content.lower():
+                matches.append(row)
+                if len(matches) >= limit:
+                    break
+        return matches
 
     def count(self) -> int:
         return self._store.count(self.table_name)
@@ -85,7 +155,8 @@ class KnowledgeStorage:
         self._store.drop_table(self.table_name)
 
     def delete(self, entry_id: str) -> bool:
-        return self._store.delete(self.table_name, entry_id)
+        self._store.delete(self.table_name, [entry_id])
+        return True
 
 
 class Librarian:
@@ -114,8 +185,8 @@ class Librarian:
         """Initialize the Librarian."""
         from omni_core_rs import PySyncEngine
         from omni_core_rs import PyVectorStore as RustStore
-        from omni.foundation.config.dirs import get_database_path, get_vector_db_path
-        from omni.foundation.services.embedding import EmbeddingService
+        from omni.foundation.config.database import get_database_path, get_vector_db_path
+        from omni.foundation.services.embedding import get_embedding_service
 
         self.root = Path(project_root).resolve()
         self.batch_size = batch_size
@@ -127,13 +198,18 @@ class Librarian:
         # Load configuration
         self.config = get_knowledge_config(config_path)
 
-        # Initialize embedder
-        self.embedder = embedder or EmbeddingService()
+        # Initialize embedder using singleton pattern to avoid loading model twice
+        self.embedder = embedder or get_embedding_service()
+        # Get dimension from settings (lazy load only when actually embedding)
+        from omni.foundation.config.settings import get_setting
+
+        dimension = get_setting("embedding.dimension", 1024)
 
         # Initialize storage using unified database path
         if store is None:
             db_path = get_database_path("knowledge")
-            store = RustStore(db_path, self.embedder.dimension, True)
+            store = RustStore(db_path, dimension, True)
+            logger.info(f"Created knowledge store with dimension: {dimension}")
         self.storage = KnowledgeStorage(store, table_name=table_name)
 
         # Initialize ingestion
@@ -150,23 +226,6 @@ class Librarian:
     # =========================================================================
     # Async Helper
     # =========================================================================
-
-    def _run_async(self, coro):
-        """Run async code, handling event loop properly.
-
-        This allows Librarian to work both from sync code (CLI) and
-        from async code (MCP server).
-        """
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import nest_asyncio
-
-                nest_asyncio.apply()
-                return loop.run_until_complete(coro)
-        except RuntimeError:
-            pass
-        return asyncio.run(coro)
 
     # =========================================================================
     # Manifest Management (Rust)
@@ -200,16 +259,19 @@ class Librarian:
 
     def ingest(self, clean: bool = False) -> dict[str, int]:
         """Ingest the project into the knowledge base."""
-        return self._run_async(self._ingest_async(clean=clean))
+        return run_async_blocking(self._ingest_async(clean=clean))
 
     async def _ingest_async(self, clean: bool = False) -> dict[str, int]:
         """Async implementation with Rust SyncEngine."""
         if clean:
             self.storage.drop_table()
+            self.storage._ensure_table()
             self.manifest = {}
             self.sync_engine.save_manifest("{}")
             logger.info("Clean ingestion: dropped table and cleared manifest")
         else:
+            # Ensure table exists before any operations
+            self.storage._ensure_table()
             self.manifest = self._load_manifest()
             if self.manifest:
                 logger.info("Incremental mode: checking for changed files...")
@@ -346,7 +408,7 @@ class Librarian:
         if hasattr(self.storage._store, "delete_by_file_path"):
             self.storage._store.delete_by_file_path(self.table_name, [rel_path])
         elif hasattr(self.storage._store, "list_all"):
-            all_entries = asyncio.run(self.storage._store.list_all(self.table_name))
+            all_entries = run_async_blocking(self.storage._store.list_all(self.table_name))
             for entry in all_entries:
                 meta = entry.get("metadata", {})
                 if isinstance(meta, str):
@@ -354,7 +416,7 @@ class Librarian:
                 if meta.get("file_path") == rel_path:
                     entry_id = entry.get("id")
                     if entry_id:
-                        asyncio.run(self.storage._store.delete(entry_id))
+                        run_async_blocking(self.storage._store.delete(entry_id))
 
     def _delete_by_paths_batch(self, rel_paths: list[str]) -> int:
         """Delete chunks for multiple files in batch."""
@@ -403,7 +465,7 @@ class Librarian:
             records = self.ingestor.create_records([path], self.root, mode=self.chunk_mode.value)
 
             if records:
-                asyncio.run(self._process_batch(records))
+                run_async_blocking(self._process_batch(records))
 
             # Update manifest
             self.manifest[rel_path] = file_hash
@@ -433,10 +495,86 @@ class Librarian:
     # Query & Context
     # =========================================================================
 
+    @staticmethod
+    def _lexical_signal(query: str, content: str) -> tuple[int, int]:
+        """Return lexical relevance signal: (exact_phrase_hit, token_overlap_count)."""
+        q = query.strip().lower()
+        c = content.lower()
+        if not q or not c:
+            return (0, 0)
+        exact = 1 if q in c else 0
+        tokens = [t for t in q.split() if t]
+        overlap = sum(1 for t in tokens if t in c)
+        return (exact, overlap)
+
+    def _source_lexical_fallback(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Fallback lexical retrieval directly from source chunks."""
+        q = query.strip().lower()
+        if not q:
+            return []
+        try:
+            files = self.ingestor.discover_files(
+                self.root,
+                max_files=self.max_files,
+                use_knowledge_dirs=self.use_knowledge_dirs,
+            )
+            records = self.ingestor.create_records(files, self.root, mode=self.chunk_mode.value)
+        except Exception:
+            return []
+
+        hits: list[dict[str, Any]] = []
+        for rec in records:
+            content = rec.get("text", "")
+            if isinstance(content, str) and q in content.lower():
+                hits.append(
+                    {
+                        "id": rec.get("id", ""),
+                        "content": content,
+                        "score": 0.0,
+                        "metadata": rec.get("metadata", {}),
+                    }
+                )
+                if len(hits) >= limit:
+                    break
+        return hits
+
     def query(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         """Search the knowledge base."""
         vectors = self.embedder.embed(query)
-        return self.storage.search(vectors[0], limit=limit)
+        # embedder.embed returns list[list[float]], extract first vector
+        query_vector = vectors[0] if vectors else [0.0] * self.embedder.dimension
+        results = self.storage.text_search(query, query_vector, limit=limit)
+
+        # If top-N misses obvious lexical hits (common with mock/noisy embeddings),
+        # expand candidate pool once and rerank.
+        has_lexical_hit = any(
+            self._lexical_signal(query, r.get("content", r.get("text", "")))[1] > 0 for r in results
+        )
+        if not has_lexical_hit:
+            expanded_limit = max(limit * 5, limit + 5)
+            if expanded_limit > limit:
+                results = self.storage.text_search(query, query_vector, limit=expanded_limit)
+            has_lexical_hit = any(
+                self._lexical_signal(query, r.get("content", r.get("text", "")))[1] > 0
+                for r in results
+            )
+            if not has_lexical_hit:
+                fallback = self.storage.lexical_scan(query, limit=max(limit * 5, 20))
+                if fallback:
+                    results = fallback
+                else:
+                    source_hits = self._source_lexical_fallback(query, limit=max(limit * 5, 20))
+                    if source_hits:
+                        results = source_hits
+
+        def _sort_key(item: dict[str, Any]) -> tuple[int, int, float]:
+            content = item.get("content", item.get("text", ""))
+            exact, overlap = self._lexical_signal(query, content)
+            score = float(item.get("score", 0.0) or 0.0)
+            return (exact, overlap, score)
+
+        ranked = sorted(results, key=_sort_key, reverse=True)
+        return ranked[:limit]
 
     def search_raw(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         """Search and return raw structured results."""
@@ -472,11 +610,23 @@ class Librarian:
         blocks = []
         for res in results:
             meta = res.get("metadata", {})
+            # Handle metadata - it could be a dict or a JSON string
+            if isinstance(meta, str):
+                try:
+                    import json
+
+                    meta = json.loads(meta)
+                except (json.JSONDecodeError, TypeError):
+                    meta = {}
+            if not isinstance(meta, dict):
+                meta = {}
             path = meta.get("file_path", "unknown")
-            lines = f"L{meta.get('start_line', '?')}-{meta.get('end_line', '?')}"
+            lines = f"{meta.get('start_line', '?')}-{meta.get('end_line', '?')}"
             chunk_type = meta.get("chunk_type", "code")
 
-            block = f"[{chunk_type.upper()}] {path} ({lines})\n```\n{res['text']}\n```"
+            # Use 'content' field (not 'text')
+            content = res.get("content", res.get("text", ""))
+            block = f"[{chunk_type.upper()}] {path} ({lines})\n```\n{content}\n```"
             blocks.append(block)
 
         return "\n\n".join(blocks)

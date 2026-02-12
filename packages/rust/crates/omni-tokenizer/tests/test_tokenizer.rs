@@ -27,5 +27,5 @@ fn test_truncate_no_op() {
 fn test_count_tokens_with_model() {
     let result = count_tokens_with_model("Hello, world!", "cl100k_base");
     assert!(result.is_ok());
-    assert!(result.unwrap() > 0);
+    assert!(result.is_ok_and(|v| v > 0));
 }

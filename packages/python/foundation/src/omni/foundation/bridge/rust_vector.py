@@ -14,6 +14,9 @@ from functools import cached_property
 from typing import Any
 
 from omni.foundation.config.logging import get_logger
+from omni.foundation.services.vector_schema import parse_tool_search_payload
+
+from .types import FileContent, IngestResult
 
 # Thread pool for blocking embedding operations (prevents event loop blocking)
 _EMBEDDING_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="embedding")
@@ -26,9 +29,43 @@ except ImportError:
     _rust = None
     RUST_AVAILABLE = False
 
-from .types import FileContent, IngestResult, SearchResult
-
 logger = get_logger("omni.bridge.vector")
+
+
+def _confidence_profile_json() -> str:
+    """Build JSON payload for Rust-side confidence calibration.
+
+    Source of truth is `router.search.profiles` + `router.search.active_profile`.
+    """
+    from omni.foundation.config.settings import get_setting
+
+    profile = {
+        "high_threshold": 0.75,
+        "medium_threshold": 0.5,
+        "high_base": 0.90,
+        "high_scale": 0.05,
+        "high_cap": 0.99,
+        "medium_base": 0.60,
+        "medium_scale": 0.30,
+        "medium_cap": 0.89,
+        "low_floor": 0.10,
+    }
+    active_name = str(get_setting("router.search.active_profile", "balanced"))
+    profiles = get_setting("router.search.profiles", {})
+    if isinstance(profiles, dict):
+        selected = profiles.get(active_name)
+        if isinstance(selected, dict):
+            for key, value in selected.items():
+                if key in profile:
+                    profile[key] = float(value)
+    return json.dumps(profile)
+
+
+def _rerank_enabled() -> bool:
+    """Resolve rerank flag from unified search settings."""
+    from omni.foundation.config.settings import get_setting
+
+    return bool(get_setting("router.search.rerank", True))
 
 
 class RustVectorStore:
@@ -64,6 +101,15 @@ class RustVectorStore:
             f"Initialized RustVectorStore at {index_path} (keyword_index={enable_keyword_index})"
         )
 
+    def _default_table_name(self) -> str:
+        """Infer default table name from database file path."""
+        from pathlib import Path
+
+        name = Path(self._index_path).name.lower()
+        if name.endswith("router.lance"):
+            return "router"
+        return "skills"
+
     @cached_property
     def _embedding_service(self):
         """Lazily load embedding service for query encoding."""
@@ -78,6 +124,8 @@ class RustVectorStore:
         query_text: str | None = None,
         limit: int = 5,
         threshold: float = 0.0,
+        confidence_profile: dict[str, float] | None = None,
+        rerank: bool | None = None,
     ) -> list[dict]:
         """Direct access to Rust search_tools with Keyword Rescue.
 
@@ -92,42 +140,58 @@ class RustVectorStore:
             query_text: Raw query text for keyword rescue
             limit: Maximum results to return
             threshold: Minimum score threshold
+            confidence_profile: Optional explicit confidence calibration profile.
+            rerank: Optional override for Rust metadata-aware rerank stage.
+                None uses `router.search.rerank`.
 
         Returns:
             List of dicts with: name, description, score, skill_name, tool_name, etc.
         """
         try:
             # Call Rust's search_tools (synchronous in the binding, run in thread pool)
-            # Note: Rust signature is (table_name, query_vector, query_text, limit, threshold)
-            loop = asyncio.get_event_loop()
+            # Rust signature:
+            # (
+            #   table_name, query_vector, query_text, limit, threshold,
+            #   confidence_profile_json, rerank
+            # )
+            confidence_profile_json = (
+                json.dumps(confidence_profile, sort_keys=True)
+                if confidence_profile is not None
+                else _confidence_profile_json()
+            )
+            rerank_enabled = _rerank_enabled() if rerank is None else rerank
+            loop = asyncio.get_running_loop()
             json_results = await loop.run_in_executor(
                 None,
                 lambda: self._inner.search_tools(
                     table_name,
                     query_vector,
-                    query_text,  # query_text comes BEFORE limit in Rust
+                    query_text,
                     limit,
                     threshold,
+                    confidence_profile_json,
+                    rerank_enabled,
                 ),
             )
 
-            # Convert PyObject dicts to Python dicts
-            # PyO3 returns Py<PyAny> which is a reference to Python objects
-            results = []
+            # Convert PyObject dicts to Python dicts and validate against
+            # canonical Rust<->Python tool-search schema contract.
+            results: list[dict[str, Any]] = []
             for data in json_results:
                 try:
-                    # Use pyo3's proper conversion
                     if hasattr(data, "keys") and callable(getattr(data, "keys", None)):
-                        # It's a dict-like object, convert properly
-                        results.append({k: data[k] for k in data.keys()})
+                        candidate = {k: data[k] for k in data}
                     elif isinstance(data, dict):
-                        results.append(data)
+                        candidate = dict(data)
                     else:
-                        # Fallback: try dict() conversion
                         try:
-                            results.append(dict(data))
+                            candidate = dict(data)
                         except (TypeError, ValueError):
                             logger.debug(f"Skipping unconvertible result: {type(data)}")
+                            continue
+
+                    payload = parse_tool_search_payload(candidate)
+                    results.append(payload.to_router_result())
                 except Exception as convert_err:
                     logger.debug(f"Failed to convert result: {convert_err}")
                     continue
@@ -138,125 +202,32 @@ class RustVectorStore:
             logger.debug(f"search_tools failed: {e}")
             return []
 
-    async def search(
-        self,
-        query: str,
-        limit: int = 5,
-        filters: dict[str, Any] | None = None,
-    ) -> list[SearchResult]:
-        """Search for similar documents.
-
-        Uses semantic embedding search with fallback to keyword matching.
-        Embedding generation runs in thread pool to avoid blocking event loop.
-        """
+    def get_search_profile(self) -> dict[str, Any]:
+        """Return Rust-owned hybrid search profile."""
+        default_profile = {
+            "semantic_weight": 1.0,
+            "keyword_weight": 1.5,
+            "rrf_k": 10,
+            "implementation": "rust-native-weighted-rrf",
+            "strategy": "weighted_rrf_field_boosting",
+            "field_boosting": {"name_token_boost": 0.5, "exact_phrase_boost": 1.5},
+        }
         try:
-            # Generate query embedding in thread pool (FastEmbed is CPU-bound)
-            loop = asyncio.get_event_loop()
-            query_embedding = await loop.run_in_executor(
-                _EMBEDDING_EXECUTOR,
-                self._embedding_service.embed,
-                query,
-            )
-
-            # Handle embedding format (may be [[...]] or [...])
-            if query_embedding and isinstance(query_embedding[0], list):
-                query_vector = query_embedding[0]
-            else:
-                query_vector = query_embedding
-
-            # Use new search_tools API which supports Keyword Rescue (Hybrid Search)
-            # This passes the raw query text to Rust for Tantivy fallback
-            if hasattr(self._inner, "search_tools"):
-                # Correct parameter order matching Rust signature:
-                # (table_name, query_vector, query_text, limit, threshold)
-                json_results = self._inner.search_tools(
-                    "skills",
-                    query_vector,
-                    query,  # query_text for keyword rescue
-                    limit,
-                    0.0,  # threshold
-                )
-
-                # Convert dicts (PyObject) to SearchResult objects directly
-                # search_tools returns list[dict], not list[json_str]
-                results = []
-                for data in json_results:
-                    # data is already a dict
-                    score = data.get("score", 0.0)
-
-                    # Convert to SearchResult
-                    # The Rust tool search returns flattened structure, adapt to payload
-                    metadata = {
-                        "command": data.get("name"),  # search_tools maps command -> name
-                        "tool_name": data.get("tool_name"),
-                        "skill_name": data.get("skill_name"),
-                        "description": data.get("description"),
-                        "keywords": data.get("keywords"),
-                        "file_path": data.get("file_path"),
-                    }
-
-                    results.append(
-                        SearchResult(
-                            score=score,
-                            payload=metadata,
-                            id=data.get("tool_name", ""),
-                        )
-                    )
-
-                logger.info(
-                    f"Hybrid route: '{query}' -> {len(results)} results (via Rust search_tools)"
-                )
-                return results
-
-            # Fallback for old bindings (should not happen if compiled correctly)
-            if filters:
-                json_results = self._inner.search_filtered(
-                    "skills", query_vector, limit, json.dumps(filters)
-                )
-            else:
-                json_results = self._inner.search("skills", query_vector, limit)
-
-            logger.info(f"DEBUG: Query vec len={len(query_vector)}, sample={query_vector[:3]}")
-            logger.info(f"DEBUG: Raw json_results count={len(json_results)}")
-
-            results = []
-            for json_str in json_results:
-                try:
-                    data = json.loads(json_str)
-                    metadata = data.get("metadata")
-                    if metadata is None:
-                        metadata = {}
-
-                    # Convert distance to similarity score (smaller distance = higher score)
-                    # LanceDB uses L2 distance by default. For normalized vectors:
-                    # L2^2 = 2(1 - cosine_sim) => cosine_sim = 1 - L2^2 / 2
-                    # The 'distance' returned by LanceDB for L2 is the squared distance (L2^2).
-                    distance = data.get("distance", 1.0)
-                    score = max(0.0, 1.0 - distance / 2.0)
-
-                    logger.debug(
-                        f"DEBUG SEARCH: id={data.get('id')} dist={distance:.4f} score={score:.4f}"
-                    )
-
-                    results.append(
-                        SearchResult(
-                            score=score,
-                            payload=metadata,
-                            id=data.get("id", ""),
-                        )
-                    )
-                except (json.JSONDecodeError, KeyError):
-                    continue
-
-            return results
-        except Exception as e:
-            # Gracefully handle missing table - don't spam logs
-            error_str = str(e)
-            if "not found" in error_str.lower() or "table" in error_str.lower():
-                logger.debug(f"Vector store table not ready: {e}")
-            else:
-                logger.debug(f"Vector search failed: {e}")
-            return []
+            if hasattr(self._inner, "get_search_profile"):
+                raw = self._inner.get_search_profile()
+                if isinstance(raw, dict):
+                    merged = dict(default_profile)
+                    merged.update(raw)
+                    fb = raw.get("field_boosting")
+                    if isinstance(fb, dict):
+                        merged["field_boosting"] = {
+                            "name_token_boost": float(fb.get("name_token_boost", 0.5)),
+                            "exact_phrase_boost": float(fb.get("exact_phrase_boost", 1.5)),
+                        }
+                    return merged
+        except Exception as exc:
+            logger.debug(f"get_search_profile failed, using defaults: {exc}")
+        return default_profile
 
     async def add_documents(
         self,
@@ -286,6 +257,18 @@ class RustVectorStore:
                 rust_vectors.append([float(v) for v in vec])
 
         self._inner.add_documents(table_name, ids, rust_vectors, contents, metadatas)
+
+    async def replace_documents(
+        self,
+        table_name: str,
+        ids: list[str],
+        vectors: list[list[float]],
+        contents: list[str],
+        metadatas: list[str],
+    ) -> None:
+        """Replace all documents in table with the provided batch."""
+        rust_vectors = [list(map(float, vec)) for vec in vectors]
+        self._inner.replace_documents(table_name, ids, rust_vectors, contents, metadatas)
 
     async def ingest(self, content: FileContent) -> IngestResult:
         """Ingest a document into the vector store."""
@@ -329,7 +312,7 @@ class RustVectorStore:
             logger.error(f"Vector store health check failed: {e}")
             return False
 
-    async def list_all_tools(self) -> list[dict]:
+    def list_all_tools(self) -> list[dict]:
         """List all tools from LanceDB.
 
         Returns tools with: name, description, skill_name, category, input_schema.
@@ -338,12 +321,23 @@ class RustVectorStore:
             List of tool dictionaries, or empty list if table doesn't exist.
         """
         try:
-            json_result = self._inner.list_all_tools("skills")
+            json_result = self._inner.list_all_tools(self._default_table_name())
             tools = json.loads(json_result) if json_result else []
             logger.debug(f"Listed {len(tools)} tools from LanceDB")
             return tools
         except Exception as e:
             logger.debug(f"Failed to list tools from LanceDB: {e}")
+            return []
+
+    def get_skill_index_sync(self, base_path: str) -> list[dict]:
+        """Get complete skill index with full metadata from filesystem scan (sync)."""
+        try:
+            json_result = self._inner.get_skill_index(base_path)
+            skills = json.loads(json_result) if json_result else []
+            logger.debug(f"Found {len(skills)} skills in index")
+            return skills
+        except Exception as e:
+            logger.debug(f"Failed to get skill index: {e}")
             return []
 
     async def get_skill_index(self, base_path: str) -> list[dict]:
@@ -364,14 +358,7 @@ class RustVectorStore:
             - routing_keywords, intents, authors, permissions
             - tools (with name, description, category, input_schema)
         """
-        try:
-            json_result = self._inner.get_skill_index(base_path)
-            skills = json.loads(json_result) if json_result else []
-            logger.debug(f"Found {len(skills)} skills in index")
-            return skills
-        except Exception as e:
-            logger.debug(f"Failed to get skill index: {e}")
-            return []
+        return self.get_skill_index_sync(base_path)
 
     async def list_all(self, table_name: str = "knowledge") -> list[dict]:
         """List all entries from a table.
@@ -391,18 +378,8 @@ class RustVectorStore:
             logger.debug(f"Failed to list entries from {table_name}: {e}")
             return []
 
-    async def get_analytics_table(self, table_name: str = "skills"):
-        """Get all tools as a PyArrow Table for analytics.
-
-        This is optimized for high-performance operations using Arrow's columnar format.
-
-        Args:
-            table_name: Name of the table to get analytics for (default: "skills")
-
-        Returns:
-            PyArrow Table with columns: id, content, skill_name, tool_name, file_path, keywords.
-            Returns None on error.
-        """
+    def get_analytics_table_sync(self, table_name: str = "skills"):
+        """Get all tools as a PyArrow Table for analytics (sync path)."""
         try:
             import pyarrow as pa
 
@@ -438,6 +415,30 @@ class RustVectorStore:
             logger.error(f"Failed to index skill tools: {e}")
             return 0
 
+    async def index_skill_tools_dual(
+        self,
+        base_path: str,
+        skills_table: str = "skills",
+        router_table: str = "router",
+    ) -> tuple[int, int]:
+        """Index skills and router tables from one Rust scan."""
+        try:
+            skills_count, router_count = self._inner.index_skill_tools_dual(
+                base_path, skills_table, router_table
+            )
+            logger.info(
+                "Indexed dual tool tables from %s: %s=%s, %s=%s",
+                base_path,
+                skills_table,
+                skills_count,
+                router_table,
+                router_count,
+            )
+            return int(skills_count), int(router_count)
+        except Exception as e:
+            logger.error(f"Failed to index dual skill tables: {e}")
+            return 0, 0
+
     async def drop_table(self, table_name: str) -> bool:
         """Drop a table from the vector store.
 
@@ -453,6 +454,62 @@ class RustVectorStore:
             return True
         except Exception as e:
             logger.debug(f"Failed to drop table {table_name}: {e}")
+            return False
+
+    async def get_table_info(self, table_name: str = "skills") -> dict[str, Any] | None:
+        """Get table metadata including version, rows, schema and fragment count."""
+        try:
+            raw = self._inner.get_table_info(table_name)
+            return json.loads(raw) if raw else None
+        except Exception as e:
+            logger.debug(f"Failed to get table info for {table_name}: {e}")
+            return None
+
+    async def list_versions(self, table_name: str = "skills") -> list[dict[str, Any]]:
+        """List historical table versions."""
+        try:
+            raw = self._inner.list_versions(table_name)
+            return json.loads(raw) if raw else []
+        except Exception as e:
+            logger.debug(f"Failed to list versions for {table_name}: {e}")
+            return []
+
+    async def get_fragment_stats(self, table_name: str = "skills") -> list[dict[str, Any]]:
+        """Get fragment-level row/file stats."""
+        try:
+            raw = self._inner.get_fragment_stats(table_name)
+            return json.loads(raw) if raw else []
+        except Exception as e:
+            logger.debug(f"Failed to get fragment stats for {table_name}: {e}")
+            return []
+
+    async def add_columns(self, table_name: str, columns: list[dict[str, Any]]) -> bool:
+        """Add nullable columns via schema evolution API."""
+        try:
+            payload = json.dumps({"columns": columns})
+            self._inner.add_columns(table_name, payload)
+            return True
+        except Exception as e:
+            logger.debug(f"Failed to add columns on {table_name}: {e}")
+            return False
+
+    async def alter_columns(self, table_name: str, alterations: list[dict[str, Any]]) -> bool:
+        """Alter columns (rename / nullability) via schema evolution API."""
+        try:
+            payload = json.dumps({"alterations": alterations})
+            self._inner.alter_columns(table_name, payload)
+            return True
+        except Exception as e:
+            logger.debug(f"Failed to alter columns on {table_name}: {e}")
+            return False
+
+    async def drop_columns(self, table_name: str, columns: list[str]) -> bool:
+        """Drop non-reserved columns via schema evolution API."""
+        try:
+            self._inner.drop_columns(table_name, columns)
+            return True
+        except Exception as e:
+            logger.debug(f"Failed to drop columns on {table_name}: {e}")
             return False
 
 

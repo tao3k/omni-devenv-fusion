@@ -46,6 +46,7 @@ from omni.foundation.config.logging import get_logger
 from omni.foundation.services.llm.client import InferenceClient
 from omni.langgraph.visualize import register_workflow, visualize_workflow
 from omni.core.context import create_planner_orchestrator
+from omni.foundation.api.handlers import graph_node
 
 logger = get_logger("researcher.graph")
 
@@ -141,7 +142,7 @@ def _get_orchestrator():
     return _orchestrator
 
 
-async def _build_system_prompt(skill_name: str, state: dict) -> str:
+async def _build_system_prompt(skill_name: str, state: dict[str, Any]) -> str:
     """
     Build system prompt using Rust-Powered Cognitive Pipeline.
 
@@ -205,16 +206,59 @@ def _get_cached_system_prompt(state: ResearchState) -> str:
     return ""
 
 
-# Import research module functions using absolute import (PEP 420 namespace package)
-from researcher.scripts.research import (
-    clone_repo,
-    init_harvest_structure,
-    parse_repo_url,
-    repomix_compress_shard,
-    repomix_map,
-    save_index,
-    save_shard_result,
-)
+def _get_research_module():
+    """Lazy import research module functions (handles both skill loader and direct run).
+
+    Uses SKILLS_DIR() API for consistent skill directory resolution.
+    When running via skill loader: uses 'researcher.scripts.research'
+    When running directly: uses relative import from scripts directory
+    """
+    import sys
+    from pathlib import Path
+
+    # Use SKILLS_DIR API for consistent skill directory resolution
+    from omni.foundation.config.skills import SKILLS_DIR
+
+    scripts_dir = SKILLS_DIR("researcher")
+    research_path = str(scripts_dir)
+
+    # Ensure scripts directory is in path
+    if research_path not in sys.path:
+        sys.path.insert(0, research_path)
+
+    try:
+        # Try package import first (skill loader)
+        from researcher.scripts.research import (
+            clone_repo,
+            init_harvest_structure,
+            parse_repo_url,
+            repomix_compress_shard,
+            repomix_map,
+            save_index,
+            save_shard_result,
+        )
+    except ImportError:
+        # Fallback to direct import (direct run)
+        from research import (
+            clone_repo,
+            init_harvest_structure,
+            parse_repo_url,
+            repomix_compress_shard,
+            repomix_map,
+            save_index,
+            save_shard_result,
+        )
+
+    return {
+        "clone_repo": clone_repo,
+        "init_harvest_structure": init_harvest_structure,
+        "parse_repo_url": parse_repo_url,
+        "repomix_compress_shard": repomix_compress_shard,
+        "repomix_map": repomix_map,
+        "save_index": save_index,
+        "save_shard_result": save_shard_result,
+    }
+
 
 # =============================================================================
 # State Definition
@@ -248,7 +292,7 @@ class ResearchState(TypedDict):
     shards_queue: list[ShardDef]  # Shards to process (Plan output)
 
     # Loop Stage (per shard)
-    current_shard: ShardDef  # Shard being processed
+    current_shard: ShardDef | None  # Shard being processed
     shard_counter: int  # For ordering files (01_, 02_, etc.)
     shard_analyses: list[str]  # Accumulated shard summaries
 
@@ -270,17 +314,21 @@ class ResearchState(TypedDict):
 # =============================================================================
 
 
+@graph_node(name="setup")
 async def node_setup(state: ResearchState) -> dict:
     """Setup: Clone repository and generate file tree map using exa."""
     logger.info("[Graph] Setting up research...", url=state["repo_url"])
 
     try:
+        # Lazy import research functions
+        research = _get_research_module()
+
         # Parse owner and repo name from URL
         repo_url = state["repo_url"]
-        repo_owner, repo_name = parse_repo_url(repo_url)
+        repo_owner, repo_name = research["parse_repo_url"](repo_url)
 
         # Clone repository (now returns dict with path and revision)
-        repo_info = clone_repo(repo_url)
+        repo_info = research["clone_repo"](repo_url)
         path = repo_info["path"]
         revision = repo_info["revision"]
         revision_date = repo_info["date"]
@@ -309,7 +357,7 @@ async def node_setup(state: ResearchState) -> dict:
 
     except Exception as e:
         logger.error("[Graph] Setup failed", error=str(e))
-        return {"error": f"Setup failed: {e}", "steps": state["steps"] + 1}
+        raise
 
 
 def _generate_tree_with_exa(path: str, max_depth: int = 3) -> str:
@@ -378,6 +426,7 @@ def _generate_tree_with_exa(path: str, max_depth: int = 3) -> str:
         return "[Error: Could not generate repository tree]"
 
 
+@graph_node(name="architect")
 async def node_architect(state: ResearchState) -> dict:
     """
     Plan: Analyze file tree and define analysis shards.
@@ -391,6 +440,9 @@ async def node_architect(state: ResearchState) -> dict:
     logger.info("[Graph] Architecting shards...")
 
     try:
+        # Lazy import research functions
+        research = _get_research_module()
+
         client = InferenceClient()
         file_tree = state.get("file_tree", "")
         request = state.get("request", "Analyze architecture")
@@ -500,20 +552,32 @@ GUIDELINES:
 
         logger.info("[Graph] Architecting complete", shard_count=len(shard_defs))
 
+        # Initialize harvest directory for shard processing
+        repo_owner = state.get("repo_owner", "unknown")
+        repo_name = state.get("repo_name", "unknown")
+        harvest_path = research["init_harvest_structure"](repo_owner, repo_name)
+        harvest_dir = str(harvest_path)
+
         # Cache system prompt for subsequent shard processing
-        return {
+        result = {
             "shards_queue": shard_defs,
             "shard_counter": 0,
             "shard_analyses": [],
+            "harvest_dir": harvest_dir,
             "system_prompt": system_prompt,  # Cache for shard processing
             "steps": state["steps"] + 1,
         }
+        logger.info(
+            f"[Graph] Architect returning: shards={len(shard_defs)}, harvest_dir={harvest_dir}"
+        )
+        return result
 
     except Exception as e:
         logger.error("[Graph] Architecting failed", error=str(e))
-        return {"error": f"Architecting failed: {e}", "steps": state["steps"] + 1}
+        raise
 
 
+@graph_node(name="process_shard")
 async def node_process_shard(state: ResearchState) -> dict:
     """
     Process: Compress and analyze a single shard.
@@ -530,6 +594,7 @@ async def node_process_shard(state: ResearchState) -> dict:
 
     try:
         shards_queue = state.get("shards_queue", [])
+        logger.info(f"[Graph] Received shards_queue: {len(shards_queue)} items")
         if not shards_queue:
             raise ValueError("No shards in queue")
 
@@ -544,8 +609,11 @@ async def node_process_shard(state: ResearchState) -> dict:
 
         logger.info("[Graph] Processing shard", name=shard_name, file_count=len(files))
 
+        # Lazy import research functions
+        research = _get_research_module()
+
         # Step 1: Compress shard with repomix (using specific file paths)
-        compress_result = repomix_compress_shard(
+        compress_result = research["repomix_compress_shard"](
             path=repo_path,
             targets=files,
             shard_name=shard_name,
@@ -625,12 +693,12 @@ Format as a standalone Markdown section that can be combined with other shard an
             # Get owner and repo_name from state
             repo_owner = state.get("repo_owner", "unknown")
             repo_name = state.get("repo_name", "unknown")
-            harvest_path = init_harvest_structure(repo_owner, repo_name)
+            harvest_path = research["init_harvest_structure"](repo_owner, repo_name)
             harvest_dir = str(harvest_path)
         else:
             harvest_path = Path(harvest_dir)
 
-        save_shard_result(
+        research["save_shard_result"](
             base_dir=harvest_path,
             shard_id=counter,
             title=shard_name,
@@ -657,16 +725,27 @@ Format as a standalone Markdown section that can be combined with other shard an
 
     except Exception as e:
         logger.error("[Graph] Shard processing failed", error=str(e))
-        return {"error": f"Shard processing failed: {e}", "steps": state["steps"] + 1}
+        raise
+
+
+def router_error(state: ResearchState) -> str:
+    """Router: Check for error state and exit early."""
+    if state.get("error"):
+        logger.warning(f"[Graph] Aborting due to error: {state['error']}")
+        return "abort"
+    return "continue"
 
 
 def router_loop(state: ResearchState) -> str:
     """Router: Decide whether to process another shard or synthesize."""
+    if state.get("error"):
+        return "abort"
     if len(state.get("shards_queue", [])) > 0:
         return "process_shard"
     return "synthesize"
 
 
+@graph_node(name="synthesize")
 async def node_synthesize(state: ResearchState) -> dict:
     """
     Synthesize: Generate final index.md with all shard summaries.
@@ -676,6 +755,9 @@ async def node_synthesize(state: ResearchState) -> dict:
     logger.info("[Graph] Synthesizing final report...")
 
     try:
+        # Lazy import research functions
+        research = _get_research_module()
+
         repo_name = state.get("repo_name", "")
         repo_url = state.get("repo_url", "")
         request = state.get("request", "Analyze architecture")
@@ -685,10 +767,15 @@ async def node_synthesize(state: ResearchState) -> dict:
         revision_date = state.get("repo_revision_date", "")
 
         if not harvest_dir:
-            raise ValueError("No harvest directory available")
+            # Initialize harvest_dir from state (handles checkpoint recovery)
+            repo_owner = state.get("repo_owner", "unknown")
+            repo_name_for_dir = state.get("repo_name", "unknown")
+            harvest_path = research["init_harvest_structure"](repo_owner, repo_name_for_dir)
+            harvest_dir = str(harvest_path)
+            logger.info(f"[Graph] Recovered harvest_dir from state: {harvest_dir}")
 
         # Generate index.md with revision info
-        save_index(
+        research["save_index"](
             base_dir=Path(harvest_dir),
             title=repo_name,
             repo_url=repo_url,
@@ -724,7 +811,7 @@ View full report at: index.md"""
 
     except Exception as e:
         logger.error("[Graph] Synthesis failed", error=str(e))
-        return {"error": f"Synthesis failed: {e}", "steps": state["steps"] + 1}
+        raise
 
 
 # =============================================================================
@@ -773,7 +860,7 @@ def _extract_json_list(text: str) -> list[Any]:
 
 
 def create_sharded_research_graph() -> StateGraph:
-    """Create the Sharded Research StateGraph."""
+    """Create the Sharded Research StateGraph with error handling."""
     workflow = StateGraph(ResearchState)
 
     # Add nodes
@@ -781,28 +868,45 @@ def create_sharded_research_graph() -> StateGraph:
     workflow.add_node("architect", node_architect)
     workflow.add_node("process_shard", node_process_shard)
     workflow.add_node("synthesize", node_synthesize)
+    workflow.add_node("abort", lambda state: state)  # No-op abort node
 
     # Set entry point
     workflow.set_entry_point("setup")
 
-    # Linear: setup -> architect
-    workflow.add_edge("setup", "architect")
+    # setup -> architect (with error check)
+    workflow.add_conditional_edges(
+        "setup",
+        router_error,
+        {"continue": "architect", "abort": "abort"},
+    )
 
-    # Parallel: architect -> loop
-    workflow.add_edge("architect", "process_shard")
+    # architect -> process_shard (with error check)
+    workflow.add_conditional_edges(
+        "architect",
+        router_error,
+        {"continue": "process_shard", "abort": "abort"},
+    )
 
-    # Conditional: loop -> (process_shard | synthesize)
+    # Conditional: loop -> (process_shard | synthesize | abort)
     workflow.add_conditional_edges(
         "process_shard",
         router_loop,
         {
             "process_shard": "process_shard",
             "synthesize": "synthesize",
+            "abort": "abort",
         },
     )
 
-    # Final: synthesize -> END
-    workflow.add_edge("synthesize", END)
+    # synthesize -> END (with error check)
+    workflow.add_conditional_edges(
+        "synthesize",
+        router_error,
+        {"continue": END, "abort": "abort"},
+    )
+
+    # abort -> END
+    workflow.add_edge("abort", END)
 
     return workflow
 
@@ -856,8 +960,8 @@ async def run_research_workflow(
     if validated.visualize:
         return {"diagram": visualize_workflow()}
 
-    # Generate unique workflow_id using timestamp to avoid reusing old checkpoints
-    workflow_id = validated.thread_id or f"research-{int(time.time() * 1000)}"
+    # Generate workflow_id using repo_url hash (for resume support)
+    workflow_id = f"research-{abs(hash(validated.repo_url)) % 100000}"
     logger.info(
         "Running sharded research workflow",
         repo_url=validated.repo_url,
@@ -868,7 +972,15 @@ async def run_research_workflow(
     # Try to load existing state from checkpoint store
     saved_state = load_workflow_state(_WORKFLOW_TYPE, workflow_id)
 
-    if saved_state:
+    # Delete any existing failed checkpoint to start fresh
+    from omni.foundation.checkpoint import delete_workflow_state
+
+    if saved_state and saved_state.get("error"):
+        logger.info(f"Deleting previous failed checkpoint: {workflow_id}")
+        delete_workflow_state(_WORKFLOW_TYPE, workflow_id)
+        saved_state = None
+
+    if saved_state and saved_state.get("shards_queue"):
         logger.info(
             "Resuming workflow from checkpoint",
             workflow_id=workflow_id,
@@ -894,7 +1006,8 @@ async def run_research_workflow(
             error=saved_state.get("error"),
         )
     else:
-        logger.info("Starting new workflow", workflow_id=workflow_id)
+        # Start fresh if no valid checkpoint
+        logger.info("Starting new workflow (no valid checkpoint found)")
         initial_state = ResearchState(
             request=validated.request,
             repo_url=validated.repo_url,
@@ -934,7 +1047,7 @@ async def run_research_workflow(
         return result
     except Exception as e:
         logger.error("Workflow failed", error=str(e), exc_info=True)
-        return {"error": str(e), "steps": initial_state.get("steps", 1)}
+        raise
 
 
 # =============================================================================

@@ -186,3 +186,32 @@ async fn test_keyword_index_recreate() {
 
     assert_eq!(index2.count_documents().unwrap(), 1);
 }
+
+#[tokio::test]
+async fn test_keyword_index_skips_uuid_like_documents() {
+    let temp_dir = TempDir::new().unwrap();
+    let index = KeywordIndex::new(temp_dir.path()).unwrap();
+
+    index
+        .bulk_upsert(vec![
+            (
+                "6f9619ff-8b86-d011-b42d-00cf4fc964ff".to_string(),
+                "bad".to_string(),
+                "test".to_string(),
+                vec!["uuid".to_string()],
+                vec![],
+            ),
+            (
+                "advanced_tools.smart_find".to_string(),
+                "Find files".to_string(),
+                "file_discovery".to_string(),
+                vec!["find".to_string(), "files".to_string()],
+                vec![],
+            ),
+        ])
+        .unwrap();
+
+    let results = index.search("find files", 10).unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].tool_name, "advanced_tools.smart_find");
+}

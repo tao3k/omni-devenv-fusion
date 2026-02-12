@@ -124,13 +124,41 @@ class TestSearchCache:
         """Test getting cache statistics."""
         cache = SearchCache(max_size=100, ttl=60)
         cache.set("query", ["result"])
+        cache.get("query")  # hit
+        cache.get("missing")  # miss
 
         stats = cache.stats()
 
         assert stats["size"] == 1
         assert stats["max_size"] == 100
         assert stats["ttl_seconds"] == 60
+        assert stats["hits"] == 1
+        assert stats["misses"] == 1
+        assert stats["requests"] == 2
+        assert stats["hit_rate"] == 0.5
         assert "hit_rate" in stats
+
+    def test_hit_rate_zero_when_no_requests(self):
+        """Hit rate should be zero before any cache lookup."""
+        cache = SearchCache()
+        stats = cache.stats()
+        assert stats["requests"] == 0
+        assert stats["hit_rate"] == 0.0
+
+    def test_clear_resets_hit_miss_counters(self):
+        """clear() should reset cumulative counters with cache content."""
+        cache = SearchCache()
+        cache.set("q", ["r"])
+        cache.get("q")  # hit
+        cache.get("missing")  # miss
+        assert cache.stats()["requests"] == 2
+
+        cache.clear()
+        stats = cache.stats()
+        assert stats["hits"] == 0
+        assert stats["misses"] == 0
+        assert stats["requests"] == 0
+        assert stats["hit_rate"] == 0.0
 
     def test_contains(self):
         """Test membership check."""

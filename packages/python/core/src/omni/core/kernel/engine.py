@@ -63,6 +63,7 @@ class Kernel:
     __slots__ = (
         "_background_tasks",  # Track background tasks for cleanup
         "_components",
+        "_cortex_enabled",  # Enable/disable semantic cortex (for embedding)
         "_discovered_skills",
         "_discovery_service",
         "_lifecycle",
@@ -81,13 +82,17 @@ class Kernel:
         *,
         project_root: Path | None = None,
         skills_dir: Path | None = None,
+        enable_cortex: bool = True,
     ) -> None:
         """Initialize kernel with optional paths.
 
         Args:
             project_root: Project root directory (auto-detected if None)
             skills_dir: Skills directory (defaults to project_root/assets/skills)
+            enable_cortex: Enable semantic cortex (embedding + routing). Set to False
+                for CLI commands that don't need semantic routing (e.g., skill run).
         """
+        self._cortex_enabled = enable_cortex
         self._lifecycle = LifecycleManager(
             on_ready=self._on_ready,
             on_running=self._on_running,
@@ -317,9 +322,7 @@ class Kernel:
         """
         if not self._discovered_skills:
             logger.info(f"🔍 Discovering skills in {self._skills_dir}")
-            self._discovered_skills = await self.discovery_service.discover_all(
-                [str(self._skills_dir)]
-            )
+            self._discovered_skills = await self.discovery_service.discover_all()
             # Note: Discovery count is logged by discovery_service.discover_all()
         return self._discovered_skills
 
@@ -380,43 +383,29 @@ class Kernel:
         on first access, ensuring tools are available for the ReAct loop.
         """
         if self._skill_context is None:
-            import asyncio
-            from concurrent.futures import ThreadPoolExecutor
-
             from omni.core.skills.runtime import SkillContext
+            from omni.foundation.utils.asyncio import run_async_blocking
 
             self._skill_context = SkillContext(self._skills_dir)
 
             # Auto-discover, load, and register all skills
             try:
-                # Run discovery in an async manner
-                def load_skills_sync():
-                    """Load all skills synchronously in a thread."""
 
-                    async def load_all_skills_async():
-                        discovered_skills = await self.discover_skills()
-                        for ds in discovered_skills:
-                            try:
-                                from omni.core.skills.universal import UniversalSkillFactory
+                async def load_all_skills_async():
+                    discovered_skills = await self.discover_skills()
+                    for ds in discovered_skills:
+                        try:
+                            from omni.core.skills.universal import UniversalSkillFactory
 
-                                factory = UniversalSkillFactory(self._project_root)
-                                skill = factory.create_from_discovered(ds)
-                                await skill.load()
-                                self._skill_context.register_skill(skill)
-                            except Exception as e:
-                                logger.warning(f"Failed to load skill {ds.name}: {e}")
+                            factory = UniversalSkillFactory(self._project_root)
+                            skill = factory.create_from_discovered(ds)
+                            await skill.load()
+                            self._skill_context.register_skill(skill)
+                        except Exception as e:
+                            logger.warning(f"Failed to load skill {ds.name}: {e}")
 
-                    # Create a NEW event loop for this thread (avoids conflicts with main loop)
-                    loop = asyncio.new_event_loop()
-                    try:
-                        loop.run_until_complete(load_all_skills_async())
-                    finally:
-                        loop.close()
-
-                # Run in a thread pool to avoid event loop conflicts
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(load_skills_sync)
-                    future.result()  # Wait for completion
+                # Shared runner handles loop/no-loop contexts consistently.
+                run_async_blocking(load_all_skills_async())
 
                 logger.debug(
                     f"Skill context initialized with {self._skill_context.skills_count} skills"
@@ -460,11 +449,16 @@ class Kernel:
         The Cortex provides intent-to-action mapping using vector search.
         """
         if self._router is None:
-            from omni.core.router import FallbackRouter, SemanticRouter, SkillIndexer, UnifiedRouter
+            from omni.core.router import (
+                ExplicitCommandRouter,
+                SemanticRouter,
+                SkillIndexer,
+                UnifiedRouter,
+            )
 
             indexer = SkillIndexer()
             semantic_router = SemanticRouter(indexer)
-            self._router = UnifiedRouter(semantic_router, FallbackRouter())
+            self._router = UnifiedRouter(semantic_router, ExplicitCommandRouter())
         return self._router
 
     # =========================================================================
@@ -680,39 +674,46 @@ class Kernel:
 
         # Step 4: Build Semantic Cortex (The Cortex)
         # Run in background to prevent blocking kernel startup (critical for MCP connection)
-        logger.info("🧠 Building Semantic Cortex (Background)...")
-        cortex_task = asyncio.create_task(self._safe_build_cortex())
-        self._background_tasks.add(cortex_task)
-        cortex_task.add_done_callback(self._background_tasks.discard)
+        # Skip if cortex is disabled (e.g., CLI skill run doesn't need semantic routing)
+        if self._cortex_enabled:
+            logger.info("🧠 Building Semantic Cortex (Background)...")
+            cortex_task = asyncio.create_task(self._safe_build_cortex())
+            self._background_tasks.add(cortex_task)
+            cortex_task.add_done_callback(self._background_tasks.discard)
+        else:
+            logger.info("🧠 Semantic Cortex disabled (CLI mode)")
 
         t3 = _time.time()
 
-        # Step 5: Initialize Intent Sniffer (The Nose)
-        # Loads declarative rules from LanceDB (populated by Rust scanner)
-        logger.info("👃 Initializing Context Sniffer...")
-        await self.load_sniffer_rules()
+        # Step 5 & 6: Initialize Sniffer and Reactor (only when cortex is enabled)
+        # Skip for CLI mode - these are for MCP semantic routing
+        if self._cortex_enabled:
+            logger.info("👃 Initializing Context Sniffer...")
+            await self.load_sniffer_rules()
 
-        t4 = _time.time()
+            t4 = _time.time()
 
-        # Step 6: Initialize Event Reactor (Reactive Architecture)
-        # Wire Cortex, Checkpoint, and Sniffer to the Rust Event Bus
-        logger.info("🔗 Initializing Event Reactor...")
-        self._reactor = get_reactor()
+            logger.info("🔗 Initializing Event Reactor...")
+            self._reactor = get_reactor()
 
-        # Wire Cortex to File Events (auto-increment indexing)
-        self._reactor.register_handler(
-            EventTopic.FILE_CHANGED, self._on_file_changed_cortex, priority=10
-        )
-        self._reactor.register_handler(
-            EventTopic.FILE_CREATED, self._on_file_changed_cortex, priority=10
-        )
+            # Wire Cortex to File Events (auto-increment indexing)
+            self._reactor.register_handler(
+                EventTopic.FILE_CHANGED, self._on_file_changed_cortex, priority=10
+            )
+            self._reactor.register_handler(
+                EventTopic.FILE_CREATED, self._on_file_changed_cortex, priority=10
+            )
 
-        # Wire Sniffer to File Events (reactive context detection)
-        self.sniffer.register_to_reactor()
+            # Wire Sniffer to File Events (reactive context detection)
+            self.sniffer.register_to_reactor()
 
-        # Start the reactor consumer loop
-        await self._reactor.start()
-        logger.info("🧠 Cortex hooked into Reactive Bus")
+            # Start the reactor consumer loop
+            await self._reactor.start()
+            logger.info("🧠 Cortex hooked into Reactive Bus")
+        else:
+            logger.info("👃 Context Sniffer disabled (CLI mode)")
+            logger.info("🔗 Event Reactor disabled (CLI mode)")
+            t4 = _time.time()
 
         # Step 7: Log extension summary (if any extensions were loaded)
         from omni.core.skills.extensions.loader import log_extension_summary
@@ -812,11 +813,22 @@ class Kernel:
         logger.info("👋 Kernel shutdown complete")
 
 
-def get_kernel() -> Kernel:
-    """Get the global kernel instance (singleton)."""
+def get_kernel(*, enable_cortex: bool | None = None, reset: bool = False) -> Kernel:
+    """Get the global kernel instance (singleton).
+
+    Args:
+        enable_cortex: Override cortex setting. If None, uses existing or default (True).
+            Set to False for CLI commands that don't need semantic routing.
+        reset: If True, recreate the kernel instance.
+    """
     global _kernel_instance
-    if _kernel_instance is None:
-        _kernel_instance = Kernel()
+    if _kernel_instance is None or reset:
+        _kernel_instance = Kernel(
+            enable_cortex=enable_cortex if enable_cortex is not None else True
+        )
+    elif enable_cortex is not None:
+        # Update cortex setting if kernel already exists
+        _kernel_instance._cortex_enabled = enable_cortex
     return _kernel_instance
 
 

@@ -137,7 +137,7 @@ One-line description.
 
 **Example**:
 
-- `trinity-architecture.md` - Detailed architecture design
+- `system-layering.md` - Detailed architecture design
 
 ---
 

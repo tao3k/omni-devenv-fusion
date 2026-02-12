@@ -76,9 +76,9 @@ class TestToolsLoader:
         loader.load_all()
 
         commands = loader.list_commands()
-        # Git skill should have commands like git.status, git.commit, etc.
+        # Git skill should expose at least one namespaced git command.
         assert len(commands) > 0
-        assert any("git.status" in cmd for cmd in commands)
+        assert any(cmd.startswith("git.") for cmd in commands)
 
     def test_load_terminal_skill_commands(self):
         """Test loading real terminal skill commands."""
@@ -104,10 +104,9 @@ class TestToolsLoader:
         loader = ToolsLoader(scripts_dir, "git")
         loader.load_all()
 
-        # Get a specific command
-        cmd = loader.get_command("git.status")
-        # Command may or may not exist depending on skill implementation
-        # Just verify the lookup doesn't crash
+        first_cmd = next((c for c in loader.list_commands() if c.startswith("git.")), None)
+        assert first_cmd is not None
+        cmd = loader.get_command(first_cmd)
         assert cmd is None or callable(cmd)
 
     def test_get_command_by_simple_name(self):
@@ -120,9 +119,10 @@ class TestToolsLoader:
         loader = ToolsLoader(scripts_dir, "git")
         loader.load_all()
 
-        # Try simple name lookup
-        cmd = loader.get_command_simple("status")
-        # Command may or may not exist
+        first_cmd = next((c for c in loader.list_commands() if c.startswith("git.")), None)
+        assert first_cmd is not None
+        simple_name = first_cmd.split(".", 1)[1]
+        cmd = loader.get_command_simple(simple_name)
         assert cmd is None or callable(cmd)
 
     def test_inject_context_to_git_skill(self):

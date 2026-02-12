@@ -23,7 +23,7 @@
 //! ```
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::frontmatter::extract_frontmatter;
@@ -81,17 +81,13 @@ struct KnowledgeFrontmatter {
 /// let patterns = scanner.scan_category(PathBuf::from("assets/knowledge"), "pattern").unwrap();
 /// ```
 #[derive(Debug)]
-pub struct KnowledgeScanner {
-    /// Reserved for future configuration options
-    #[allow(dead_code)]
-    config: (),
-}
+pub struct KnowledgeScanner;
 
 impl KnowledgeScanner {
     /// Create a new knowledge scanner with default settings.
     #[must_use]
     pub fn new() -> Self {
-        Self { config: () }
+        Self
     }
 
     /// Scan a single knowledge document.
@@ -180,7 +176,7 @@ impl KnowledgeScanner {
         })
     }
 
-    /// Scan a knowledge directory for all documents.
+    /// Scan a knowledge directory for all documents with parallel processing.
     ///
     /// # Arguments
     ///
@@ -195,16 +191,17 @@ impl KnowledgeScanner {
         base_path: &Path,
         depth: Option<i32>,
     ) -> Result<Vec<KnowledgeEntry>, Box<dyn std::error::Error>> {
-        let mut entries = Vec::new();
+        use rayon::prelude::*;
 
         if !base_path.exists() {
             log::warn!("Knowledge base directory not found: {:?}", base_path);
-            return Ok(entries);
+            return Ok(Vec::new());
         }
 
         let max_depth = depth.unwrap_or(-1);
 
-        for entry in WalkDir::new(base_path)
+        // Collect all markdown files first
+        let md_files: Vec<PathBuf> = WalkDir::new(base_path)
             .follow_links(false)
             .max_depth(if max_depth > 0 {
                 max_depth as usize + 1
@@ -213,13 +210,17 @@ impl KnowledgeScanner {
             })
             .into_iter()
             .filter_map(|e| e.ok())
-        {
-            if entry.file_type().is_file() {
-                if let Some(knowledge) = self.scan_document(entry.path(), base_path) {
-                    entries.push(knowledge);
-                }
-            }
-        }
+            .filter(|e| {
+                e.file_type().is_file() && e.path().extension().map_or(false, |ext| ext == "md")
+            })
+            .map(|e| e.path().to_path_buf())
+            .collect();
+
+        // Process in parallel using rayon
+        let entries: Vec<KnowledgeEntry> = md_files
+            .par_iter()
+            .filter_map(|path| self.scan_document(path, base_path))
+            .collect();
 
         log::info!(
             "Scanned {} knowledge documents from {:?}",

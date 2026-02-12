@@ -37,28 +37,17 @@ def _get_memory_path() -> Path:
 
 
 MEMORY_ROOT = _get_memory_path()
-DEFAULT_TABLE = "knowledge"
+DEFAULT_TABLE = "memory"
 
 
 def _get_embedding(text: str) -> list[float]:
     """
     Get embedding using Foundation embedding service.
 
-    Falls back to deterministic dummy embedding if service fails.
+    Uses Qwen/Qwen3-Embedding-4B (2560 dimensions) with automatic model download.
     """
-    try:
-        service = get_embedding_service()
-        return service.embed(text)[0]
-    except Exception as e:
-        logger.warning(f"Embedding service failed, using fallback: {e}")
-        # Fallback to deterministic hash-based embedding
-        import hashlib
-
-        hash_bytes = hashlib.sha256(text.encode()).digest()
-        vector = [float(b) / 255.0 for b in hash_bytes]
-        dimension = 1536  # Default fallback dimension
-        repeats = (dimension + len(vector) - 1) // len(vector)
-        return (vector * repeats)[:dimension]
+    service = get_embedding_service()
+    return service.embed(text)[0]
 
 
 def _load_skill_manifest(skill_name: str) -> tuple[dict[str, Any] | None, str | None]:
@@ -141,7 +130,7 @@ async def save_memory(
     client = get_vector_store()
     store = client.store
     if not store:
-        return "VectorStore not available. Cannot store memory."
+        raise RuntimeError("VectorStore not available. Cannot store memory.")
 
     try:
         doc_id = str(uuid.uuid4())
@@ -168,10 +157,11 @@ async def save_memory(
         success = await client.add(content, metadata, collection=DEFAULT_TABLE)
         if success:
             return f"Saved memory [{doc_id[:8]}]: {content[:80]}..."
-        return "Failed to store memory."
+        raise RuntimeError("Failed to store memory.")
+
     except Exception as e:
         logger.error("save_memory failed", error=str(e))
-        return f"Error saving memory: {e!s}"
+        raise
 
 
 @skill_command(
@@ -228,12 +218,13 @@ async def search_memory(
                 output[-1] += f" (Meta: {json.dumps(r.metadata)[:50]}...)"
 
         return "\n".join(output)
+
     except Exception as e:
         error_msg = str(e).lower()
         if "table" in error_msg and "not found" in error_msg:
-            return "No memories stored yet. Use save_memory() to store insights first."
+            raise RuntimeError("No memories stored yet. Use save_memory() to store insights first.")
         logger.error("search_memory failed", error=str(e))
-        return f"Error searching memory: {e!s}"
+        raise
 
 
 @skill_command(
@@ -264,13 +255,10 @@ async def index_memory(
     Returns:
         Confirmation of index creation
     """
-    try:
-        success = await get_vector_store().create_index(collection=DEFAULT_TABLE)
-        if success:
-            return "Index creation/optimization complete. Search performance improved."
-        return "Failed to create index."
-    except Exception as e:
-        return f"Error creating index: {e!s}"
+    success = await get_vector_store().create_index(collection=DEFAULT_TABLE)
+    if success:
+        return "Index creation/optimization complete. Search performance improved."
+    raise RuntimeError("Failed to create index.")
 
 
 @skill_command(
@@ -296,11 +284,8 @@ async def get_memory_stats(
     Returns:
         Count of stored memories
     """
-    try:
-        count = await get_vector_store().count(collection=DEFAULT_TABLE)
-        return f"Stored memories: {count}"
-    except Exception as e:
-        return f"Error getting stats: {e!s}"
+    count = await get_vector_store().count(collection=DEFAULT_TABLE)
+    return f"Stored memories: {count}"
 
 
 @skill_command(
@@ -340,11 +325,11 @@ async def load_skill(
     client = get_vector_store()
     store = client.store
     if not store:
-        return "VectorStore not available. Cannot load skill."
+        raise RuntimeError("VectorStore not available. Cannot load skill.")
 
     manifest, prompts = _load_skill_manifest(skill_name)
     if not manifest:
-        return f"Skill '{skill_name}' not found or invalid manifest."
+        raise RuntimeError(f"Skill '{skill_name}' not found or invalid manifest.")
 
     # Build document from manifest
     routing_kw = manifest.get("routing_keywords", [])
@@ -365,8 +350,6 @@ async def load_skill(
     if prompts:
         document += f"\n---\n\n## System Prompts\n{prompts[:2000]}"
 
-    doc_id = f"skill_{skill_name}"
-
     try:
         success = await client.add(
             document,
@@ -379,9 +362,10 @@ async def load_skill(
         )
         if success:
             return f"Skill '{skill_name}' loaded into semantic memory."
-        return f"Failed to load skill '{skill_name}'."
+        raise RuntimeError(f"Failed to load skill '{skill_name}'.")
     except Exception as e:
-        return f"Failed to load skill '{skill_name}': {e}"
+        logger.error("load_skill failed", error=str(e))
+        raise
 
 
 __all__ = [

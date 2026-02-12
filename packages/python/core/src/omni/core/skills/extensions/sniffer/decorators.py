@@ -39,10 +39,6 @@ class SnifferFunc(Protocol):
     def __call__(self, cwd: str) -> float: ...
 
 
-# Alias for backwards compatibility
-SnifferFuncAlias = Callable[[str], float]
-
-
 def sniffer(name: str | None = None, priority: int = 100):
     """
     Decorator: Mark a function as a sniffer.
@@ -96,4 +92,4 @@ class SnifferResult:
         return self.skill_name == other.skill_name and self.score == other.score
 
 
-__all__ = ["SnifferFunc", "SnifferFuncAlias", "SnifferResult", "sniffer"]
+__all__ = ["SnifferFunc", "SnifferResult", "sniffer"]

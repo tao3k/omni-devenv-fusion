@@ -1,6 +1,7 @@
-from typing import Any, List, Optional
+from __future__ import annotations
+
+from typing import Any
 import pytest
-from unittest.mock import MagicMock, AsyncMock
 
 
 class McpTester:
@@ -9,8 +10,8 @@ class McpTester:
     """
 
     def __init__(self):
-        self.notifications: List[tuple[str, Any]] = []
-        self.requests: List[Any] = []
+        self.notifications: list[tuple[str, Any]] = []
+        self.requests: list[Any] = []
 
     def make_success_response(self, id_val: Any, result: Any) -> dict:
         """Create a JSON-RPC success response."""

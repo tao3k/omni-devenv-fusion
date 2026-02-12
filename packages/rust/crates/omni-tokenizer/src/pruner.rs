@@ -14,21 +14,20 @@ pub struct Message {
 /// Prunes context to fit within token limits while preserving important information.
 #[derive(Clone)]
 pub struct ContextPruner {
-    tokenizer: TokenCounter,
     window_size: usize,
     max_tool_output: usize,
 }
 
 impl ContextPruner {
-    /// Create a new ContextPruner.
+    /// Create a new `ContextPruner`.
     ///
     /// # Arguments
     ///
     /// * `window_size` - Number of message pairs (user+assistant) to keep in the working memory (safety zone).
     /// * `max_tool_output` - Maximum length (in characters) for tool outputs in the archive.
+    #[must_use]
     pub fn new(window_size: usize, max_tool_output: usize) -> Self {
         Self {
-            tokenizer: TokenCounter::new(),
             window_size,
             max_tool_output,
         }
@@ -36,8 +35,9 @@ impl ContextPruner {
 
     /// Compress the message history.
     ///
-    /// Preserves system messages and the most recent messages (window_size).
+    /// Preserves system messages and the most recent messages (`window_size`).
     /// Truncates tool outputs in older messages (archive) to save space.
+    #[must_use]
     pub fn compress(&self, messages: Vec<Message>) -> Vec<Message> {
         let total_count = messages.len();
         if total_count == 0 {
@@ -73,8 +73,7 @@ impl ContextPruner {
                     let removed_len = new_msg.content.len() - self.max_tool_output;
 
                     new_msg.content = format!(
-                        "{}...\n[SYSTEM NOTE: Output truncated. {} chars hidden to save context.]",
-                        preview, removed_len
+                        "{preview}...\n[SYSTEM NOTE: Output truncated. {removed_len} chars hidden to save context.]"
                     );
                 }
             }
@@ -91,7 +90,8 @@ impl ContextPruner {
     }
 
     /// Count tokens in a text string.
-    pub fn count_tokens(&self, text: &str) -> usize {
-        self.tokenizer.count_tokens(text)
+    #[must_use]
+    pub fn count_tokens(text: &str) -> usize {
+        TokenCounter::count_tokens(text)
     }
 }

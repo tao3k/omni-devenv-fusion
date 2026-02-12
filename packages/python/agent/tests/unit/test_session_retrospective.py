@@ -158,7 +158,8 @@ class TestSessionRetrospective:
 class TestMemoryArchiver:
     """Test cases for memory archiving with retrospective integration."""
 
-    def test_archive_turn_with_retrospective(self):
+    @pytest.mark.asyncio
+    async def test_archive_turn_with_retrospective(self):
         """Test that archiving includes retrospective generation."""
         from omni.agent.core.memory.archiver import MemoryArchiver
 
@@ -172,7 +173,7 @@ class TestMemoryArchiver:
         ]
 
         # Archive should work without errors
-        archiver.archive_turn(messages)
+        await archiver.archive_turn(messages)
         stats = archiver.get_stats()
 
         assert stats["last_archived_idx"] == 4

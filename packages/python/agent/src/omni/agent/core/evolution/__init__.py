@@ -13,7 +13,7 @@ Modules:
 - factory: Automated skill synthesis
 - schemas: Data models for skill crystallization
 - prompts: LLM prompts for skill extraction
-- immune: Security defense (Rust: omni-ast + omni-security)
+- immune: Security defense orchestration (Rust scan/sandbox backends)
 
 Usage:
     from omni.agent.core.evolution.tracer import TraceCollector, ExecutionTrace
@@ -22,7 +22,7 @@ Usage:
     from omni.agent.core.evolution.harvester import Harvester, CandidateSkill, process_trace_for_skill
     from omni.agent.core.evolution.factory import SkillFactory, create_skill_from_candidate
     from omni.agent.core.evolution.schemas import CandidateSkill, CrystallizationResult
-    from omni.agent.core.evolution.immune import ImmuneSystem, StaticValidator, SkillSimulator
+    from omni.agent.core.evolution.immune import ImmuneSystem
 """
 
 from .harvester import Harvester, process_trace_for_skill

@@ -81,7 +81,7 @@ def batch_replace(
     # Check for required tools
     rg_path = shutil.which("rg")
     if not rg_path:
-        return {"success": False, "error": "'rg' (ripgrep) not found"}
+        raise RuntimeError("'rg' (ripgrep) not found")
 
     # Step 1: Discover files with matches
     try:
@@ -92,7 +92,7 @@ def batch_replace(
             cwd=root,
         )
         if result.returncode != 0 and "no matches" not in result.stderr.lower():
-            return {"success": False, "error": f"ripgrep failed: {result.stderr}"}
+            raise RuntimeError(f"ripgrep failed: {result.stderr}")
 
         matching_files = [f for f in result.stdout.strip().split("\n") if f]
         if not matching_files:
@@ -102,7 +102,7 @@ def batch_replace(
         matching_files = matching_files[:max_files]
 
     except Exception as e:
-        return {"success": False, "error": f"Discovery failed: {e}"}
+        raise RuntimeError(f"Discovery failed: {e}")
 
     # Step 2: Process each file
     changes: list[FileChange] = []
@@ -147,7 +147,7 @@ def batch_replace(
             changes.append(change)
 
     except Exception as e:
-        return {"success": False, "error": f"Processing failed: {e}"}
+        raise RuntimeError(f"Processing failed: {e}")
 
     return {
         "success": True,
@@ -200,16 +200,15 @@ def regex_replace(
             else str(resolved_target).startswith(str(root) + "/")
         )
         if not is_within_root and not outside:
-            return {
-                "success": False,
-                "error": "File path is outside project. Use outside=true to allow.\n"
+            raise RuntimeError(
+                "File path is outside project. Use outside=true to allow.\n"
                 "Example: @omni('advanced_tools.regex_replace', {\n"
                 '  "file_path": "/external/path/file.txt",\n'
                 '  "pattern": "old",\n'
                 '  "replacement": "new",\n'
                 '  "outside": true\n'
-                "})",
-            }
+                "})"
+            )
         target = resolved_target
         if outside and not is_within_root:
             logger.warning(f"[OUTSIDE MODE] Modifying external file: {target}")
@@ -219,14 +218,14 @@ def regex_replace(
 
     # 1. Security Check (skip project boundary check if outside=True)
     if not target.exists():
-        return {"success": False, "error": "File not found."}
+        raise RuntimeError("File not found.")
     if not outside and not str(target).startswith(str(root) + "/"):
-        return {"success": False, "error": "Invalid file path (outside project)."}
+        raise RuntimeError("Invalid file path (outside project).")
 
     # 2. Env Check
     sed_exec = shutil.which("sed")
     if not sed_exec:
-        return {"success": False, "error": "'sed' not found."}
+        raise RuntimeError("'sed' not found.")
 
     # 3. Platform Handling (BSD/macOS vs GNU/Linux)
     is_macos = platform.system() == "Darwin"
@@ -249,7 +248,7 @@ def regex_replace(
         )
 
         if result.returncode != 0:
-            return {"success": False, "error": f"sed failed: {result.stderr}"}
+            raise RuntimeError(f"sed failed: {result.stderr}")
 
         return {
             "success": True,
@@ -259,7 +258,7 @@ def regex_replace(
         }
     except Exception as e:
         logger.error(f"Regex replace failed: {e}")
-        return {"success": False, "error": str(e)}
+        raise
 
 
 __all__ = ["regex_replace", "batch_replace", "FileChange"]

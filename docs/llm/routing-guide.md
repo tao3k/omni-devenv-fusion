@@ -20,11 +20,33 @@ User Query → Semantic Router → Best Matching Skill
 
 Each routing decision has a confidence score:
 
-| Score Range   | Meaning           | Action                |
-| ------------- | ----------------- | --------------------- |
-| **>= 0.8**    | High confidence   | Direct tool dispatch  |
-| **0.5 - 0.8** | Medium confidence | Proceed with caution  |
-| **< 0.5**     | Low confidence    | Ask for clarification |
+| Score Range (Default) | Meaning           | Action                |
+| --------------------- | ----------------- | --------------------- |
+| **>= 0.75**           | High confidence   | Direct tool dispatch  |
+| **0.5 - < 0.75**      | Medium confidence | Proceed with caution  |
+| **< 0.5**             | Low confidence    | Ask for clarification |
+
+Confidence mapping is configurable in `settings.yaml` (resolved from `--conf <dir>`):
+
+```yaml
+router:
+  search:
+    active_profile: "balanced"
+    rerank: true
+    profiles:
+      balanced:
+        high_threshold: 0.75
+        medium_threshold: 0.5
+        high_base: 0.90
+        high_scale: 0.05
+        high_cap: 0.99
+        medium_base: 0.60
+        medium_scale: 0.30
+        medium_cap: 0.89
+        low_floor: 0.10
+    adaptive_threshold_step: 0.15
+    adaptive_max_attempts: 3
+```
 
 ### 3. Routing Factors
 
@@ -66,60 +88,67 @@ The router considers:
 # Later: @omni("filesystem.search_files", {"pattern": "def main"})
 ```
 
-## Trinity Role Routing
+## Omega System Routing
 
-The system routes to one of three Trinity roles:
+The system routes requests through biological functional layers:
 
-### Orchestrator (Planning & Strategy)
+### Cortex (Planning & Decomposition)
 
 For complex tasks requiring planning:
 
 ```python
-# Orchestrator handles:
-# - Multi-step workflows
-# - Task decomposition
-# - Context assembly
-@omni("knowledge.get_development_context")
-@omni("skill.suggest", {"task": "refactor authentication module"})
+# Cortex handles:
+# - Multi-step mission decomposition
+# - Parallel task DAG generation
+# - Mission state management
+@omni("cortex.decompose_task", {"goal": "implement OAuth2 flow"})
 ```
 
-### Coder (Reading & Writing)
+### Cerebellum (Semantic Navigation)
 
-For code manipulation:
+For understanding the codebase and environment:
 
 ```python
-# Coder handles:
-# - File operations
-# - Code analysis
-# - AST operations
-@omni("filesystem.read_files", {"path": "src/main.py"})
-@omni("code_tools.refactor_repository", {
-    "search_pattern": "print($MSG)",
-    "rewrite_pattern": "logger.info($MSG)"
-})
+# Cerebellum handles:
+# - AST semantic scanning
+# - Knowledge RAG retrieval
+# - Tool discovery
+@omni("cerebellum.scan_codebase", {"query": "authentication logic"})
+@omni("knowledge.search", {"topic": "coding standards"})
 ```
 
-### Executor (Operations)
+### Hippocampus (Memory Recall)
 
-For running commands:
+For learning from history:
 
 ```python
-# Executor handles:
-# - Shell commands
-# - Git operations
-# - Test execution
-@omni("terminal.run_task", {"command": "just", "args": ["test"]})
-@omni("git.status")
+# Hippocampus handles:
+# - Episodic memory recall
+# - Experience-driven reasoning
+@omni("hippocampus.recall_experience", {"query": "fix git lock error"})
+```
+
+### Homeostasis (Isolated Execution)
+
+For safe modification and execution:
+
+```python
+# Homeostasis handles:
+# - Isolated file edits
+# - Git branch management
+# - Command execution audit
+@omni("filesystem.write_file", {"path": "src/auth.py", "content": "..."})
+@omni("terminal.run_command", {"command": "pytest"})
 ```
 
 ## Hybrid Routing
 
 ### Confidence Threshold
 
-When confidence is below threshold, the system may invoke the Planner:
+When confidence is below configured thresholds, the system may invoke the Planner:
 
 ```
-User Query → Router → [Confidence < 0.8?]
+User Query → Router → [Confidence < high threshold?]
                            ↓ Yes
                     Planner (Decompose → Task List)
                            ↓
@@ -217,7 +246,7 @@ If routed to wrong skill:
 
 ## Related Documentation
 
-- [Skill Discovery](./skill-discovery.md)
+- [LLM Brain Map](./llm-brain-map.md)
 - [Memory Context](./memory-context.md)
 - [Cognitive Scaffolding](../human/architecture/cognitive-scaffolding.md)
-- [Trinity Architecture](./trinity-architecture.md)
+- [System Layering](../explanation/system-layering.md)

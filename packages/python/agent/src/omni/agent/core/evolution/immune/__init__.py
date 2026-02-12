@@ -1,24 +1,16 @@
 """
-immune.py - Immune System Module
+Immune system module for evolution security gates.
 
-Production-grade immune defense for auto-generated skills.
+This package is Rust-first:
+- Static scan uses `omni.foundation.bridge.rust_immune.scan_code_security`
+- Dynamic simulation uses Rust sandbox integration
+- Python code here is an orchestration and compatibility facade only
 
-Level 1: Static Analysis (Rust: omni-ast via ast-grep)
-Level 2: Dynamic Simulation (Rust: omni-security via Docker/NsJail)
-Level 3: Permission Gatekeeping (Rust: omni-security Zero Trust)
+Quick start:
+    from omni.agent.core.evolution.immune import ImmuneSystem
 
-Quick Start:
-    from omni.agent.core.evolution.immune import ImmuneSystem, StaticValidator, SkillSimulator
-
-    # Full immune system with all defenses
     immune = ImmuneSystem()
     report = await immune.process_candidate(skill_path)
-
-    # Just static analysis
-    is_safe, violations = StaticValidator.scan(skill_path)
-
-    # Just sandbox simulation
-    result = await SkillSimulator().verify_skill(skill_path)
 """
 
 from __future__ import annotations
@@ -54,4 +46,4 @@ __all__ = [
     "rust_immune",
 ]
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"

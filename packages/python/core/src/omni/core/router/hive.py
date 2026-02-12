@@ -22,14 +22,6 @@ from .router import RouteResult, SemanticRouter
 logger = get_logger("omni.core.router.hive")
 
 
-class FallbackRouter:
-    """Fallback router when no explicit route is found."""
-
-    async def route(self, query: str, context: dict[str, Any] | None = None) -> RouteResult | None:
-        """Return None to indicate no route found."""
-        return None
-
-
 class HiveRouter:
     """
     [The Hive Mind]
@@ -40,7 +32,7 @@ class HiveRouter:
     Decision Logic:
     1. Check explicit command patterns (git.status, memory.save)
     2. Semantic routing via Cortex (vector search)
-    3. Context-aware routing via Sniffer
+    3. Context-aware routing via environment signals
     4. None means escalation to LLM Planner
 
     Usage:
@@ -58,7 +50,6 @@ class HiveRouter:
             semantic_router: The Cortex/SemanticRouter for vector-based routing
         """
         self._semantic = semantic_router
-        self._fallback = FallbackRouter()
 
     async def route(self, query: str, context: dict[str, Any] | None = None) -> RouteResult | None:
         """Route a query using the Hive Mind strategy.
@@ -95,7 +86,7 @@ class HiveRouter:
             )
             return semantic_result
 
-        # Strategy 3: Context-aware fallback (based on cwd/environment)
+        # Strategy 3: Context-aware routing (based on cwd/environment)
         if context:
             route_from_context = self._route_from_context(query, context)
             if route_from_context:

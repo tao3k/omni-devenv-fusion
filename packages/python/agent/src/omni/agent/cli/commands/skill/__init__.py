@@ -28,9 +28,6 @@ from . import (
 # Import the skill_app from base
 from .base import skill_app
 
-# Re-export specific commands for backward compatibility
-from .query import skill_discover
-
 
 def register_skill_command(app_instance: typer.Typer) -> None:
     """Register skill subcommand with the main app."""

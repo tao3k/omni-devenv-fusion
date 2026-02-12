@@ -1,0 +1,15 @@
+[
+  {
+    "schema": "omni.vector.hybrid.v1",
+    "id": "doc-1",
+    "content": "hello",
+    "metadata": {
+      "k": "v",
+      "debug_scores": { "vector_score": 0.3, "keyword_score": 0.6 }
+    },
+    "source": "hybrid",
+    "score": 0.8,
+    "vector_score": 0.3,
+    "keyword_score": 0.6
+  }
+]

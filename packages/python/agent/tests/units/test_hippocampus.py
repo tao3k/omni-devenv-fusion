@@ -476,6 +476,8 @@ class TestHippocampusLogic:
     @pytest.mark.asyncio
     async def test_get_stats(self, tmp_path):
         """Test getting hippocampus statistics structure."""
+        from omni.agent.core.memory.hippocampus import HIPPOCAMPUS_COLLECTION
+
         hippocampus, _ = self._create_hippocampus_with_mock_dir(tmp_path)
 
         stats = await hippocampus.get_stats()
@@ -485,7 +487,7 @@ class TestHippocampusLogic:
         assert "vector_count" in stats
         assert "collection" in stats
         assert "trace_dir" in stats
-        assert stats["collection"] == "omni.hippocampus"
+        assert stats["collection"] == HIPPOCAMPUS_COLLECTION
         # trace_count should be >= 0 (actual count from the trace directory)
         assert isinstance(stats["trace_count"], int)
         assert stats["trace_count"] >= 0

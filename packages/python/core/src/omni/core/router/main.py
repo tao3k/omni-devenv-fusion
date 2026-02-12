@@ -24,6 +24,7 @@ from typing import Any
 from omni.foundation.config.logging import get_logger
 
 from .cache import SearchCache
+from .config import load_router_search_config
 from .hive import HiveRouter
 from .hybrid_search import HybridSearch
 from .indexer import SkillIndexer
@@ -61,6 +62,8 @@ class OmniRouter:
         cache_ttl: int | None = None,
         semantic_weight: float | None = None,
         keyword_weight: float | None = None,
+        adaptive_threshold_step: float | None = None,
+        adaptive_max_attempts: int | None = None,
     ):
         """Initialize the unified router.
 
@@ -78,10 +81,12 @@ class OmniRouter:
             cache_size = int(get_setting("router.cache.max_size", 1000))
         if cache_ttl is None:
             cache_ttl = int(get_setting("router.cache.ttl", 300))
-        if semantic_weight is None:
-            semantic_weight = float(get_setting("router.search.semantic_weight", 0.7))
-        if keyword_weight is None:
-            keyword_weight = float(get_setting("router.search.keyword_weight", 0.3))
+        search_config = load_router_search_config(
+            semantic_weight=semantic_weight,
+            keyword_weight=keyword_weight,
+            adaptive_threshold_step=adaptive_threshold_step,
+            adaptive_max_attempts=adaptive_max_attempts,
+        )
 
         self._indexer = SkillIndexer(storage_path)
         self._semantic = SemanticRouter(self._indexer)
@@ -90,11 +95,16 @@ class OmniRouter:
         self._keyword_indexer = None
 
         # Rust-native hybrid search (zero-copy from LanceDB + Tantivy)
-        self._hybrid = HybridSearch()
+        self._hybrid = HybridSearch(storage_path)
         self._cache = SearchCache(max_size=cache_size, ttl=cache_ttl)
         self._hive = HiveRouter(self._semantic)
         self._sniffer = IntentSniffer()
         self._initialized = False
+        self._semantic_weight = search_config.semantic_weight
+        self._keyword_weight = search_config.keyword_weight
+        self._rerank = search_config.rerank
+        self._adaptive_threshold_step = search_config.adaptive_threshold_step
+        self._adaptive_max_attempts = search_config.adaptive_max_attempts
 
     @property
     def indexer(self) -> SkillIndexer:
@@ -189,7 +199,7 @@ class OmniRouter:
         # 1. Cache Lookup
         if use_cache:
             cached = self._cache.get(query)
-            if cached:
+            if cached is not None:
                 logger.debug(f"Cache hit for: {query[:50]}...")
                 return cached
 
@@ -199,27 +209,34 @@ class OmniRouter:
         results: list[RouteResult] = []
         current_threshold = threshold
         fetch_attempts = 0
-        max_attempts = 3
+        max_attempts = self._adaptive_max_attempts
 
         while len(results) < limit and fetch_attempts < max_attempts:
             fetch_attempts += 1
             # Fetch more than needed to account for duplicates/invalid entries
             fetch_limit = limit * (max_attempts - fetch_attempts + 2)
+            # Rust emits canonical final_score/confidence; thresholding is applied on final_score
+            # below to avoid pre-filtering out semantically-relevant low-raw/high-calibrated matches.
             matches = await self._hybrid.search(
-                query, limit=fetch_limit, min_score=current_threshold
+                query, limit=fetch_limit, min_score=0.0, rerank=self._rerank
             )
 
             # Convert matches to RouteResults
             seen_commands: set[str] = {f"{r.skill_name}.{r.command_name}" for r in results}
 
             for match in matches:
-                score = match.get("score", 0.0)
+                if "final_score" not in match or "confidence" not in match:
+                    logger.debug("Skipping match missing required ranking fields")
+                    continue
+                score = float(match["final_score"])
                 if score < current_threshold:
                     continue
 
                 # Parse skill_name and command_name
                 skill_name = match.get("skill_name", "unknown")
-                full_command = match.get("command", "") or match.get("tool_name", "")
+                full_command = (
+                    match.get("command", "") or match.get("tool_name", "") or match.get("name", "")
+                )
 
                 # Extract command_name
                 if full_command.startswith(f"{skill_name}."):
@@ -242,27 +259,24 @@ class OmniRouter:
                     continue
                 seen_commands.add(cmd_key)
 
-                # Determine confidence
+                confidence_raw = str(match["confidence"]).lower()
+                if confidence_raw not in {"high", "medium", "low"}:
+                    logger.debug("Skipping match with invalid confidence level")
+                    continue
                 clamped_score = max(0.0, min(1.0, score))
-                if clamped_score >= 0.75:
-                    confidence = "high"
-                elif clamped_score >= 0.5:
-                    confidence = "medium"
-                else:
-                    confidence = "low"
 
                 results.append(
                     RouteResult(
                         skill_name=skill_name,
                         command_name=command_name,
                         score=clamped_score,
-                        confidence=confidence,  # type: ignore
+                        confidence=confidence_raw,  # type: ignore
                     )
                 )
 
             # If still not enough results, lower threshold and retry
             if len(results) < limit:
-                current_threshold = max(0.0, current_threshold - 0.15)
+                current_threshold = max(0.0, current_threshold - self._adaptive_threshold_step)
 
         # 3. Update Cache
         if use_cache:

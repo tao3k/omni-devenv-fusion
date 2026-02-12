@@ -50,7 +50,6 @@ pub fn extract_python_docstring(body: &str) -> String {
 }
 
 /// Extract docstring from a match
-#[allow(dead_code)]
 #[must_use]
 pub fn extract_docstring_from_match(m: &Match) -> String {
     extract_python_docstring(&m.text)

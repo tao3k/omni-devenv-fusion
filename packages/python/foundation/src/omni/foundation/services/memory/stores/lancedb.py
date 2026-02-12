@@ -458,7 +458,7 @@ class LanceDBMemoryStore(MemoryStore):
     # =====================================================================
 
     def migrate_from_file(self, file_memory_dir: Path) -> dict[str, Any]:
-        """Migrate decisions and tasks from file-based storage."""
+        """Import decisions and tasks from markdown export directories."""
         self._ensure_tables()
 
         migrated = {"decisions": 0, "tasks": 0, "errors": []}

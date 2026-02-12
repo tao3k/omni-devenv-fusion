@@ -52,7 +52,7 @@ pub use lang::Lang;
 pub use item::Match;
 
 // Scan functions (both direct and re-exported from scan module)
-pub use scan::{extract, pattern, scan};
+pub use scan::{extract, pattern, scan, scan_with_lang};
 
 // Python utilities
 pub use python::{

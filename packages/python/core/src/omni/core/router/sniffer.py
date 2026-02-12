@@ -25,11 +25,13 @@ import asyncio
 import fnmatch
 import json
 import os
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from omni.foundation.config.logging import get_logger
+from omni.foundation.config.settings import get_setting
 
 logger = get_logger("omni.core.router.sniffer")
 
@@ -44,8 +46,22 @@ except ImportError:
 
 from omni.core.kernel.reactor import get_reactor, EventTopic
 
-# Threshold for activating a skill based on dynamic sniffer score
+# Threshold for activating a skill based on dynamic sniffer score.
+# Value comes from settings: router.sniffer.score_threshold
 SNIFTER_SCORE_THRESHOLD = 0.5
+
+
+def _load_score_threshold() -> float:
+    """Load dynamic sniffer threshold from settings with clamping."""
+    try:
+        raw = float(get_setting("router.sniffer.score_threshold", SNIFTER_SCORE_THRESHOLD))
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid router.sniffer.score_threshold; using default %.2f",
+            SNIFTER_SCORE_THRESHOLD,
+        )
+        return SNIFTER_SCORE_THRESHOLD
+    return max(0.0, min(1.0, raw))
 
 
 class ActivationRule:
@@ -180,7 +196,7 @@ class IntentSniffer:
         self._dynamic_sniffers: list[DynamicSniffer] = []
         self._declarative_rules: list[DeclarativeRule] = []
         self._cached_suggestions: dict[str, list[str]] = {}
-        self._score_threshold: float = SNIFTER_SCORE_THRESHOLD
+        self._score_threshold: float = _load_score_threshold()
 
         # === Reactor Integration (Step 5) ===
         self._rust_sniffer: Any = None  # Optional Rust bridge for O(1) file matching
@@ -281,17 +297,17 @@ class IntentSniffer:
             # Use router.lance for routing
             router_path = get_database_path("router")
             store = get_vector_store(router_path)
-            tools = await store.list_all_tools()
+            tools = store.list_all_tools()
 
             # Group tools by skill_name and extract routing keywords
             skills_rules: dict[str, list[dict]] = {}
             for tool in tools:
                 skill_name = tool.get("skill_name", "unknown")
-                keywords = tool.get("keywords", [])
-                if keywords:
+                routing_keywords = tool.get("routing_keywords", [])
+                if routing_keywords:
                     if skill_name not in skills_rules:
                         skills_rules[skill_name] = []
-                    for kw in keywords:
+                    for kw in routing_keywords:
                         # Use file_pattern type with the keyword as a glob pattern
                         # This allows keyword-based routing to work via file matching
                         skills_rules[skill_name].append(
@@ -394,7 +410,7 @@ class IntentSniffer:
                     "old_contexts": old_contexts,
                     "new_contexts": new_contexts,
                     "triggered_by": triggered_by,
-                    "timestamp": asyncio.get_event_loop().time(),
+                    "timestamp": time.monotonic(),
                 }
             )
 

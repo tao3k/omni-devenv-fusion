@@ -1,6 +1,6 @@
 //! Tests for Rust-Native Cortex: search_tools and load_tool_registry
 
-use omni_vector::VectorStore;
+use omni_vector::{ToolSearchOptions, VectorStore};
 
 fn clean_test_db(path: &std::path::Path) {
     if path.exists() {
@@ -26,19 +26,19 @@ async fn test_search_tools_basic() {
         (
             "git.commit",
             "Commit changes to repository",
-            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/scripts/commit.py", "keywords": ["git", "commit", "vcs"], "input_schema": {"type": "object", "properties": {"message": {"type": "string"}}}}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/scripts/commit.py", "routing_keywords": ["git", "commit", "vcs"], "input_schema": {"type": "object", "properties": {"message": {"type": "string"}}}}"#,
             vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
             "git.branch",
             "Create or list branches",
-            r#"{"skill_name": "git", "tool_name": "branch", "type": "command", "command": "git.branch", "file_path": "git/scripts/branch.py", "keywords": ["git", "branch", "vcs"], "input_schema": {"type": "object", "properties": {}}}"#,
+            r#"{"skill_name": "git", "tool_name": "branch", "type": "command", "command": "git.branch", "file_path": "git/scripts/branch.py", "routing_keywords": ["git", "branch", "vcs"], "input_schema": {"type": "object", "properties": {}}}"#,
             vec![0.9, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
             "python.run",
             "Execute Python code",
-            r#"{"skill_name": "python", "tool_name": "run", "type": "command", "command": "python.run", "file_path": "python/scripts/run.py", "keywords": ["python", "execute", "code"], "input_schema": {"type": "object", "properties": {"code": {"type": "string"}}}}"#,
+            r#"{"skill_name": "python", "tool_name": "run", "type": "command", "command": "python.run", "file_path": "python/scripts/run.py", "routing_keywords": ["python", "execute", "code"], "input_schema": {"type": "object", "properties": {"code": {"type": "string"}}}}"#,
             vec![0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
     ];
@@ -66,6 +66,59 @@ async fn test_search_tools_basic() {
 }
 
 #[tokio::test]
+async fn test_search_tools_skips_uuid_like_tool_rows() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("uuid_filter_test");
+    clean_test_db(&db_path);
+
+    let store = VectorStore::new_with_keyword_index(
+        temp_dir.path().join("uuid_filter_test").to_str().unwrap(),
+        Some(10),
+        true,
+    )
+    .await
+    .unwrap();
+
+    store
+        .add_documents(
+            "tools",
+            vec![
+                "6f9619ff-8b86-d011-b42d-00cf4fc964ff".to_string(),
+                "advanced_tools.smart_find".to_string(),
+            ],
+            vec![vec![0.2; 10], vec![0.9, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],
+            vec![
+                "bad uuid payload".to_string(),
+                "Find files by name".to_string(),
+            ],
+            vec![
+                r#"{"type":"command","skill_name":"unknown","tool_name":"6f9619ff-8b86-d011-b42d-00cf4fc964ff","command":"6f9619ff-8b86-d011-b42d-00cf4fc964ff","routing_keywords":["uuid"]}"#.to_string(),
+                r#"{"type":"command","skill_name":"advanced_tools","tool_name":"smart_find","command":"smart_find","routing_keywords":["find","files"],"category":"file_discovery"}"#.to_string(),
+            ],
+        )
+        .await
+        .unwrap();
+
+    let results = store
+        .search_tools(
+            "tools",
+            &vec![0.9, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            Some("find python files"),
+            10,
+            0.0,
+        )
+        .await
+        .unwrap();
+
+    assert!(results.iter().all(|r| !r.name.contains("6f9619ff")));
+    assert!(
+        results
+            .iter()
+            .any(|r| r.name == "advanced_tools.smart_find")
+    );
+}
+
+#[tokio::test]
 async fn test_search_tools_with_threshold() {
     let temp_dir = tempfile::tempdir().unwrap();
     let db_path = temp_dir.path().join("threshold_test");
@@ -83,13 +136,13 @@ async fn test_search_tools_with_threshold() {
         (
             "python.run",
             "Run Python code",
-            r#"{"skill_name": "python", "tool_name": "run", "type": "command", "command": "python.run", "file_path": "python/run.py", "keywords": ["python"], "input_schema": {}}"#,
+            r#"{"skill_name": "python", "tool_name": "run", "type": "command", "command": "python.run", "file_path": "python/run.py", "routing_keywords": ["python"], "input_schema": {}}"#,
             vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
             "rust.compile",
             "Compile Rust code",
-            r#"{"skill_name": "rust", "tool_name": "compile", "type": "command", "command": "rust.compile", "file_path": "rust/compile.py", "keywords": ["rust"], "input_schema": {}}"#,
+            r#"{"skill_name": "rust", "tool_name": "compile", "type": "command", "command": "rust.compile", "file_path": "rust/compile.py", "routing_keywords": ["rust"], "input_schema": {}}"#,
             vec![0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
     ];
@@ -134,19 +187,19 @@ async fn test_load_tool_registry() {
         (
             "git.commit",
             "Commit changes",
-            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py", "keywords": ["git"], "input_schema": {"type": "object"}}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py", "routing_keywords": ["git"], "input_schema": {"type": "object"}}"#,
             vec![0.0; 10],
         ),
         (
             "git.branch",
             "List branches",
-            r#"{"skill_name": "git", "tool_name": "branch", "type": "command", "command": "git.branch", "file_path": "git/branch.py", "keywords": ["git"], "input_schema": {"type": "object"}}"#,
+            r#"{"skill_name": "git", "tool_name": "branch", "type": "command", "command": "git.branch", "file_path": "git/branch.py", "routing_keywords": ["git"], "input_schema": {"type": "object"}}"#,
             vec![0.0; 10],
         ),
         (
             "python.run",
             "Run code",
-            r#"{"skill_name": "python", "tool_name": "run", "type": "command", "command": "python.run", "file_path": "python/run.py", "keywords": ["python"], "input_schema": {"type": "object"}}"#,
+            r#"{"skill_name": "python", "tool_name": "run", "type": "command", "command": "python.run", "file_path": "python/run.py", "routing_keywords": ["python"], "input_schema": {"type": "object"}}"#,
             vec![0.0; 10],
         ),
     ];
@@ -196,7 +249,7 @@ async fn test_tool_search_result_structure() {
             vec!["test.tool".to_string()],
             vec![vec![0.0; 10]],
             vec!["Test tool description".to_string()],
-            vec![r#"{"skill_name": "test", "tool_name": "tool", "type": "command", "command": "test.tool", "file_path": "test.py", "keywords": ["test"], "input_schema": {"type": "object", "properties": {"arg": {"type": "string"}}}}"#.to_string()],
+            vec![r#"{"skill_name": "test", "tool_name": "tool", "type": "command", "command": "test.tool", "file_path": "test.py", "routing_keywords": ["test"], "input_schema": {"type": "object", "properties": {"arg": {"type": "string"}}}}"#.to_string()],
         )
         .await
         .unwrap();
@@ -212,7 +265,7 @@ async fn test_tool_search_result_structure() {
     // Verify all fields are correctly populated
     assert_eq!(result.name, "test.tool");
     assert_eq!(result.skill_name, "test");
-    assert_eq!(result.tool_name, "tool");
+    assert_eq!(result.tool_name, "test.tool");
     assert_eq!(result.file_path, "test.py");
     assert_eq!(result.keywords, vec!["test"]);
     assert!(result.score > 0.0);
@@ -240,25 +293,25 @@ async fn test_search_tools_weighted_rrf() {
         (
             "git.commit",
             "Commit changes to repository",
-            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py", "keywords": ["git", "commit", "vcs"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py", "routing_keywords": ["git", "commit", "vcs"], "input_schema": {}}"#,
             vec![0.9, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
             "git.status",
             "Show working tree status",
-            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "git/status.py", "keywords": ["git", "status", "vcs"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "git/status.py", "routing_keywords": ["git", "status", "vcs"], "input_schema": {}}"#,
             vec![0.8, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
             "git.branch",
             "Create or list branches",
-            r#"{"skill_name": "git", "tool_name": "branch", "type": "command", "command": "git.branch", "file_path": "git/branch.py", "keywords": ["git", "branch", "vcs"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "branch", "type": "command", "command": "git.branch", "file_path": "git/branch.py", "routing_keywords": ["git", "branch", "vcs"], "input_schema": {}}"#,
             vec![0.7, 0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
             "python.run",
             "Run Python code",
-            r#"{"skill_name": "python", "tool_name": "run", "type": "command", "command": "python.run", "file_path": "python/run.py", "keywords": ["python", "run"], "input_schema": {}}"#,
+            r#"{"skill_name": "python", "tool_name": "run", "type": "command", "command": "python.run", "file_path": "python/run.py", "routing_keywords": ["python", "run"], "input_schema": {}}"#,
             vec![0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
     ];
@@ -337,13 +390,13 @@ async fn test_search_tools_field_boosting() {
         (
             "git.commit",
             "Commit changes to repository",
-            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py", "keywords": ["git", "commit"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py", "routing_keywords": ["git", "commit"], "input_schema": {}}"#,
             vec![0.5; 10],
         ),
         (
             "git.status",
             "Show git status",
-            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "git/status.py", "keywords": ["git", "status"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "git/status.py", "routing_keywords": ["git", "status"], "input_schema": {}}"#,
             vec![0.5; 10],
         ),
     ];
@@ -421,13 +474,13 @@ async fn test_search_tools_keyword_rescue() {
         (
             "git.commit",
             "Commit changes",
-            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py", "keywords": ["git", "commit"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/commit.py", "routing_keywords": ["git", "commit"], "input_schema": {}}"#,
             vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
             "filesystem.read",
             "Read file contents",
-            r#"{"skill_name": "filesystem", "tool_name": "read", "type": "command", "command": "filesystem.read", "file_path": "fs/read.py", "keywords": ["file", "read"], "input_schema": {}}"#,
+            r#"{"skill_name": "filesystem", "tool_name": "read", "type": "command", "command": "filesystem.read", "file_path": "fs/read.py", "routing_keywords": ["file", "read"], "input_schema": {}}"#,
             vec![0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
     ];
@@ -498,13 +551,13 @@ async fn test_search_tools_key_consistency() {
         (
             "skill.discover",
             "Discover available skills and commands",
-            r#"{"skill_name": "skill", "tool_name": "discover", "type": "command", "command": "skill.discover", "file_path": "skill/scripts/discovery.py", "keywords": ["skill", "discover", "find"], "input_schema": {}}"#,
+            r#"{"skill_name": "skill", "tool_name": "discover", "type": "command", "command": "skill.discover", "file_path": "skill/scripts/discovery.py", "routing_keywords": ["skill", "discover", "find"], "input_schema": {}}"#,
             vec![0.9, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
             "knowledge.status",
             "Check knowledge base status",
-            r#"{"skill_name": "knowledge", "tool_name": "status", "type": "command", "command": "knowledge.status", "file_path": "knowledge/scripts/status.py", "keywords": ["knowledge", "status", "check"], "input_schema": {}}"#,
+            r#"{"skill_name": "knowledge", "tool_name": "status", "type": "command", "command": "knowledge.status", "file_path": "knowledge/scripts/status.py", "routing_keywords": ["knowledge", "status", "check"], "input_schema": {}}"#,
             vec![0.1, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
     ];
@@ -555,7 +608,7 @@ async fn test_search_tools_key_consistency() {
     );
     // The result should have the correct tool_name (not just "discover")
     if let Some(r) = discover_result {
-        assert_eq!(r.tool_name, "discover");
+        assert_eq!(r.tool_name, "skill.discover");
         assert_eq!(r.skill_name, "skill");
     }
 }
@@ -580,13 +633,13 @@ async fn test_search_tools_exact_skill_command() {
         (
             "skill.discover",
             "Capability Discovery - Find available skills",
-            r#"{"skill_name": "skill", "tool_name": "discover", "type": "command", "command": "skill.discover", "file_path": "skill/scripts/discovery.py", "keywords": ["skill", "discover"], "input_schema": {}}"#,
+            r#"{"skill_name": "skill", "tool_name": "discover", "type": "command", "command": "skill.discover", "file_path": "skill/scripts/discovery.py", "routing_keywords": ["skill", "discover"], "input_schema": {}}"#,
             vec![0.5; 10],
         ),
         (
             "knowledge.status",
             "Knowledge base status",
-            r#"{"skill_name": "knowledge", "tool_name": "status", "type": "command", "command": "knowledge.status", "file_path": "knowledge/scripts/status.py", "keywords": ["knowledge", "status"], "input_schema": {}}"#,
+            r#"{"skill_name": "knowledge", "tool_name": "status", "type": "command", "command": "knowledge.status", "file_path": "knowledge/scripts/status.py", "routing_keywords": ["knowledge", "status"], "input_schema": {}}"#,
             vec![0.5; 10],
         ),
     ];
@@ -654,13 +707,13 @@ async fn test_search_tools_vector_only() {
         (
             "git.commit",
             "Commit changes to git",
-            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/scripts/commit.py", "keywords": ["git", "commit"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "commit", "type": "command", "command": "git.commit", "file_path": "git/scripts/commit.py", "routing_keywords": ["git", "commit"], "input_schema": {}}"#,
             vec![0.9, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
             "git.status",
             "Show git status",
-            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "git/scripts/status.py", "keywords": ["git", "status"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "git/scripts/status.py", "routing_keywords": ["git", "status"], "input_schema": {}}"#,
             vec![0.1, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
     ];
@@ -692,6 +745,141 @@ async fn test_search_tools_vector_only() {
     assert_eq!(results[0].name, "git.commit");
 }
 
+/// File-discovery intent should promote smart_find even when keyword backend is unavailable.
+#[tokio::test]
+async fn test_search_tools_file_discovery_intent_boost_without_keyword_backend() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("file_discovery_intent_test");
+    clean_test_db(&db_path);
+
+    // No keyword index on purpose: force vector-only + metadata rerank path.
+    let store = VectorStore::new(
+        temp_dir
+            .path()
+            .join("file_discovery_intent_test")
+            .to_str()
+            .unwrap(),
+        Some(10),
+    )
+    .await
+    .unwrap();
+
+    let tools = vec![
+        (
+            "knowledge.search",
+            "Search knowledge notes and documents",
+            r#"{"skill_name": "knowledge", "tool_name": "knowledge.search", "type": "command", "command": "knowledge.search", "file_path": "knowledge/scripts/search.py", "routing_keywords": ["knowledge","search","notes"], "intents": ["find related notes"], "category": "knowledge", "input_schema": {}}"#,
+            vec![0.95, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        ),
+        (
+            "advanced_tools.smart_find",
+            "Fast recursive file and directory discovery powered by fd",
+            r#"{"skill_name": "advanced_tools", "tool_name": "advanced_tools.smart_find", "type": "command", "command": "advanced_tools.smart_find", "file_path": "advanced_tools/scripts/search.py", "routing_keywords": ["find","files","directory","path","fd"], "intents": ["locate files"], "category": "file_discovery", "input_schema": {}}"#,
+            vec![0.55, 0.45, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        ),
+    ];
+
+    let ids: Vec<String> = tools.iter().map(|t| t.0.to_string()).collect();
+    let contents: Vec<String> = tools.iter().map(|t| t.1.to_string()).collect();
+    let metadatas: Vec<String> = tools.iter().map(|t| t.2.to_string()).collect();
+    let vectors: Vec<Vec<f32>> = tools.iter().map(|t| t.3.clone()).collect();
+
+    store
+        .add_documents("tools", ids, vectors, contents, metadatas)
+        .await
+        .unwrap();
+
+    let query = vec![0.95, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    let results = store
+        .search_tools(
+            "tools",
+            &query,
+            Some("Search for Python files in current directory"),
+            10,
+            0.0,
+        )
+        .await
+        .unwrap();
+
+    assert!(!results.is_empty());
+    assert_eq!(
+        results[0].name,
+        "advanced_tools.smart_find",
+        "File discovery intent should prioritize smart_find. Got: {:?}",
+        results.iter().map(|r| &r.name).collect::<Vec<_>>()
+    );
+}
+
+/// Rerank stage should be optional via ToolSearchOptions.
+#[tokio::test]
+async fn test_search_tools_with_options_can_disable_rerank_boost() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("file_discovery_rerank_toggle_test");
+    clean_test_db(&db_path);
+
+    let store = VectorStore::new(
+        temp_dir
+            .path()
+            .join("file_discovery_rerank_toggle_test")
+            .to_str()
+            .unwrap(),
+        Some(10),
+    )
+    .await
+    .unwrap();
+
+    let tools = vec![
+        (
+            "knowledge.search",
+            "Search knowledge notes and documents",
+            r#"{"skill_name": "knowledge", "tool_name": "knowledge.search", "type": "command", "command": "knowledge.search", "file_path": "knowledge/scripts/search.py", "routing_keywords": ["knowledge","search","notes"], "intents": ["find related notes"], "category": "knowledge", "input_schema": {}}"#,
+            vec![0.95, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        ),
+        (
+            "advanced_tools.smart_find",
+            "Fast recursive file and directory discovery powered by fd",
+            r#"{"skill_name": "advanced_tools", "tool_name": "advanced_tools.smart_find", "type": "command", "command": "advanced_tools.smart_find", "file_path": "advanced_tools/scripts/search.py", "routing_keywords": ["find","files","directory","path","fd"], "intents": ["locate files"], "category": "file_discovery", "input_schema": {}}"#,
+            vec![0.55, 0.45, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        ),
+    ];
+
+    let ids: Vec<String> = tools.iter().map(|t| t.0.to_string()).collect();
+    let contents: Vec<String> = tools.iter().map(|t| t.1.to_string()).collect();
+    let metadatas: Vec<String> = tools.iter().map(|t| t.2.to_string()).collect();
+    let vectors: Vec<Vec<f32>> = tools.iter().map(|t| t.3.clone()).collect();
+
+    store
+        .add_documents("tools", ids, vectors, contents, metadatas)
+        .await
+        .unwrap();
+
+    let query = vec![0.95, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    let with_rerank = store
+        .search_tools(
+            "tools",
+            &query,
+            Some("Search for Python files in current directory"),
+            10,
+            0.0,
+        )
+        .await
+        .unwrap();
+    let without_rerank = store
+        .search_tools_with_options(
+            "tools",
+            &query,
+            Some("Search for Python files in current directory"),
+            10,
+            0.0,
+            ToolSearchOptions { rerank: false },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(with_rerank[0].name, "advanced_tools.smart_find");
+    assert_eq!(without_rerank[0].name, "knowledge.search");
+}
+
 /// Test keyword-only search (rescue mode)
 /// When vector search finds nothing, keyword should rescue
 #[tokio::test]
@@ -711,7 +899,7 @@ async fn test_search_tools_keyword_only_rescue() {
     let tools = vec![(
         "database.query",
         "Execute database query",
-        r#"{"skill_name": "database", "tool_name": "query", "type": "command", "command": "database.query", "file_path": "db/scripts/query.py", "keywords": ["database", "query", "sql"], "input_schema": {}}"#,
+        r#"{"skill_name": "database", "tool_name": "query", "type": "command", "command": "database.query", "file_path": "db/scripts/query.py", "routing_keywords": ["database", "query", "sql"], "input_schema": {}}"#,
         vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // Noisy vector
     )];
 
@@ -770,13 +958,13 @@ async fn test_search_tools_same_tool_name_different_skills() {
         (
             "git.status",
             "Show git repository status",
-            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "git/scripts/status.py", "keywords": ["git", "status"], "input_schema": {}}"#,
+            r#"{"skill_name": "git", "tool_name": "status", "type": "command", "command": "git.status", "file_path": "git/scripts/status.py", "routing_keywords": ["git", "status"], "input_schema": {}}"#,
             vec![0.9, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
         (
             "filesystem.status",
             "Check filesystem status",
-            r#"{"skill_name": "filesystem", "tool_name": "status", "type": "command", "command": "filesystem.status", "file_path": "fs/scripts/status.py", "keywords": ["filesystem", "status", "disk"], "input_schema": {}}"#,
+            r#"{"skill_name": "filesystem", "tool_name": "status", "type": "command", "command": "filesystem.status", "file_path": "fs/scripts/status.py", "routing_keywords": ["filesystem", "status", "disk"], "input_schema": {}}"#,
             vec![0.1, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         ),
     ];

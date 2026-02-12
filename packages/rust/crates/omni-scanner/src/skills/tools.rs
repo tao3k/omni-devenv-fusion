@@ -235,7 +235,22 @@ impl ToolsScanner {
         skill_keywords: &[String],
         skill_intents: &[String],
     ) -> Result<Vec<ToolRecord>, Box<dyn std::error::Error>> {
-        let content = fs::read_to_string(path)?;
+        // Use read_to_string first, fall back to lossy reading for non-UTF-8 files
+        let content = match fs::read_to_string(path) {
+            Ok(content) => content,
+            Err(e) => {
+                // Try lossy reading as fallback for files with encoding issues
+                match fs::read(path) {
+                    Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
+                    Err(_) => {
+                        return Err(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!("Failed to read file as UTF-8: {}", e),
+                        )));
+                    }
+                }
+            }
+        };
         let file_path = path.to_string_lossy().to_string();
         let mut tools = Vec::new();
 
@@ -355,23 +370,40 @@ impl ToolsScanner {
         // Extract parameter descriptions from the decorator description
         let param_descriptions = extract_param_descriptions(description);
 
-        log::debug!(
-            "generate_input_schema: params={:?}, desc_len={}, param_descs={:?}",
-            parameters.iter().map(|p| &p.name).collect::<Vec<_>>(),
-            description.len(),
-            param_descriptions
-        );
+        // Guard: only compute expensive debug output when debug logging is enabled
+        if log::log_enabled!(log::Level::Debug) {
+            log::debug!(
+                "generate_input_schema: params={:?}, desc_len={}, param_descs={:?}",
+                parameters.iter().map(|p| &p.name).collect::<Vec<_>>(),
+                description.len(),
+                param_descriptions
+            );
+        }
 
         let mut props = serde_json::Map::new();
         let mut required_params: Vec<String> = Vec::new();
 
-        for param in parameters {
+        // Guard: collect debug info once instead of multiple log::debug! calls in loop
+        let param_debug_info: Vec<_> = if log::log_enabled!(log::Level::Debug) {
+            parameters
+                .iter()
+                .map(|p| {
+                    if let Some(d) = param_descriptions.get(&p.name) {
+                        format!("Found: {} = {}", p.name, d)
+                    } else {
+                        format!("Fallback: {}", p.name)
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        for param in parameters.iter() {
             // Use extracted description or fallback to placeholder
             let desc = if let Some(d) = param_descriptions.get(&param.name) {
-                log::debug!("Found desc for {}: {}", param.name, d);
                 d.clone()
             } else {
-                log::debug!("Using fallback for {}", param.name);
                 format!("Parameter: {}", param.name)
             };
 
@@ -389,6 +421,11 @@ impl ToolsScanner {
             if !param.has_default {
                 required_params.push(param.name.clone());
             }
+        }
+
+        // Output collected debug info (only if debug logging is enabled)
+        if !param_debug_info.is_empty() {
+            log::debug!("Param processing: {:?}", param_debug_info);
         }
 
         let schema = serde_json::json!({

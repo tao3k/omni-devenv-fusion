@@ -75,7 +75,6 @@ pub fn extract(content: &str, pattern: &str, var: &str, lang: Lang) -> Option<St
 }
 
 /// Scan with SupportLang directly
-#[allow(dead_code)]
 pub fn scan_with_lang(content: &str, pat: &str, support_lang: SupportLang) -> Result<Vec<Match>> {
     let grep_result = support_lang.ast_grep(content);
     let root_node = grep_result.root();

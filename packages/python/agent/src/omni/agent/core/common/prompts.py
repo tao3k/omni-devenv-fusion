@@ -1,7 +1,7 @@
 """
 omni.agent.core.common.prompts - Centralized Prompt Loading API.
 
-Loads system prompts from the assets/prompts directory.
+Loads system prompts from configured prompt directory.
 Zero logic for language translation - relies on LLM polyglot capabilities.
 
 Usage:
@@ -21,15 +21,15 @@ from pathlib import Path
 from functools import lru_cache
 from typing import Dict, Optional
 
-from omni.foundation.runtime.gitops import get_project_root
-from omni.foundation.services.reference import get_conf_dir
+from omni.foundation.config.paths import get_config_paths
+from omni.foundation.config.settings import get_setting
 
 logger = structlog.get_logger(__name__)
 
 
 class PromptLoader:
     """
-    Loads system prompts from the assets/prompts directory.
+    Loads system prompts from a settings-driven prompt directory.
 
     Features:
     - LRU caching to minimize I/O in tight loops
@@ -39,13 +39,18 @@ class PromptLoader:
 
     @staticmethod
     def _get_prompts_dir() -> Path:
-        """Get the prompts directory (assets/prompts)."""
-        # Use the same resolution as other assets (reference.py)
-        conf_dir = get_conf_dir()
-        # If conf_dir is "assets", resolve relative to project root
-        if conf_dir == "assets":
-            return get_project_root() / "assets" / "prompts"
-        return Path(conf_dir) / "prompts"
+        """Get the prompts directory from settings.
+
+        Resolution:
+        1. `prompts.dir` from settings (default: `assets/prompts`)
+        2. Absolute path as-is
+        3. Relative path resolved against project root
+        """
+        configured = get_setting("prompts.dir", "assets/prompts")
+        configured_path = Path(str(configured))
+        if configured_path.is_absolute():
+            return configured_path
+        return get_config_paths().project_root / configured_path
 
     @staticmethod
     @lru_cache(maxsize=64)

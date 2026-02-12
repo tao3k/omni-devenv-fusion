@@ -41,12 +41,15 @@ class SystemPersonaProvider(ContextProvider):
         if self._knowledge_content is None:
             # Try to use settings, fall back to default path
             try:
-                from omni.foundation.config import get_setting
+                from omni.foundation.config import get_setting, get_config_paths
 
                 prompt_path = get_setting("prompts.system_core", "assets/prompts/system_core.md")
+                raw = Path(str(prompt_path))
+                prompt_file = raw if raw.is_absolute() else get_config_paths().project_root / raw
             except (ImportError, Exception):
-                prompt_path = "assets/prompts/system_core.md"
-            prompt_file = Path.cwd() / prompt_path
+                from omni.foundation.runtime.gitops import get_project_root
+
+                prompt_file = get_project_root() / "assets/prompts/system_core.md"
             if prompt_file.exists():
                 self._knowledge_content = prompt_file.read_text()
             else:

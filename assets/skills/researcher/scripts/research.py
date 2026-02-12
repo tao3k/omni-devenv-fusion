@@ -18,6 +18,7 @@ Functions:
 import json
 import re
 import shutil
+import structlog
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -25,10 +26,16 @@ from typing import Any
 
 from omni.foundation.config.dirs import PRJ_CACHE, get_data_dir
 
+logger = structlog.get_logger("researcher.tools")
+
 
 def _get_workspace() -> Path:
-    """Get the research workspace directory."""
-    workspace = Path(PRJ_CACHE("research"))
+    """Get the researcher workspace directory.
+
+    Standardized path: .cache/researcher/
+    This keeps cloned repositories organized by owner for better management.
+    """
+    workspace = Path(PRJ_CACHE("researcher"))
     workspace.mkdir(parents=True, exist_ok=True)
     return workspace
 
@@ -94,6 +101,8 @@ def clone_repo(url: str, branch: str | None = None) -> dict:
     """
     Smart Clone/Update - Accelerates workflow by updating existing repos.
 
+    Uses standardized path format: .cache/researcher/{owner}/{repo_name}
+
     - If repo exists with .git: git fetch + reset --hard (incremental update)
     - If no .git or update fails: fresh clone
 
@@ -102,18 +111,21 @@ def clone_repo(url: str, branch: str | None = None) -> dict:
     """
     import subprocess
 
-    repo_name = url.split("/")[-1].replace(".git", "")
-    repo_path = _get_workspace() / repo_name
+    # Parse owner and repo name for standardized path structure
+    repo_owner, repo_name = parse_repo_url(url)
+    repo_path = _get_workspace() / repo_owner / repo_name
+    GIT_TIMEOUT = 60  # 60 seconds timeout for git operations
 
     # Try incremental update first
     if repo_path.exists() and (repo_path / ".git").exists():
-        print(f"⚡ [Tool] Updating existing repo: {repo_name}...")
+        logger.info("Updating existing repo", repo=repo_name)
 
         # Fetch latest (shallow)
         fetch_result = subprocess.run(
             ["git", "fetch", "--depth", "1"],
             cwd=repo_path,
             capture_output=True,
+            timeout=GIT_TIMEOUT,
         )
 
         if fetch_result.returncode == 0:
@@ -124,6 +136,7 @@ def clone_repo(url: str, branch: str | None = None) -> dict:
                     cwd=repo_path,
                     check=True,
                     capture_output=True,
+                    timeout=GIT_TIMEOUT,
                 )
                 # Clean untracked files for purity
                 subprocess.run(
@@ -131,27 +144,35 @@ def clone_repo(url: str, branch: str | None = None) -> dict:
                     cwd=repo_path,
                     check=True,
                     capture_output=True,
+                    timeout=GIT_TIMEOUT,
                 )
-                print(f"✅ [Tool] Repo updated: {repo_name}")
+                logger.info("Repo updated", repo=repo_name)
                 return _get_repo_info(repo_path)
-            except subprocess.CalledProcessError:
-                pass  # Fall through to fresh clone
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                logger.warning(
+                    "Update failed, falling back to fresh clone",
+                    repo=repo_name,
+                    error=type(e).__name__,
+                )
 
-        print("⚠️ [Tool] Update failed, falling back to fresh clone...")
+        logger.warning("Update failed, falling back to fresh clone", repo=repo_name)
 
     # Fresh clone
     if repo_path.exists():
         shutil.rmtree(repo_path)
 
-    print(f"⬇️ [Tool] Cloning fresh repo: {repo_name}...")
+    logger.info("Cloning fresh repo", repo=repo_name)
     cmd = ["git", "clone", "--depth", "1"]
     if branch:
         cmd.extend(["-b", branch])
     cmd.extend([url, str(repo_path)])
 
-    subprocess.run(cmd, check=True, capture_output=True)
-    print(f"✅ [Tool] Repo cloned: {repo_name}")
-    return _get_repo_info(repo_path)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, timeout=GIT_TIMEOUT)
+        logger.info("Repo cloned", repo=repo_name)
+        return _get_repo_info(repo_path)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(f"Git clone timed out after {GIT_TIMEOUT} seconds for {url}")
 
 
 def _get_repo_info(repo_path: Path) -> dict:

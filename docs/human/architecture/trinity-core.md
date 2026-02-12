@@ -1,14 +1,17 @@
-# Trinity Core Architecture
+# Trinity Core Architecture (Legacy)
 
-> **Status**: Active (Core Document)
+> **Status**: Legacy (Replaced by Omega Architecture)
 > **Version**: v1.0 | 2024-XX-XX
+> **Current Architecture**: [Omega Architecture](omega-architecture.md)
 > **Related**: Trinity v2, Omni Loop
 
 ## Overview
 
-The **Trinity Architecture** defines a unified skill management system that divides the agent's capabilities into three logical roles: **Orchestrator**, **Coder**, and **Executor**.
+The **Trinity Architecture** was the initial framework that divided the agent's capabilities into three logical roles: **Orchestrator**, **Coder**, and **Executor**.
 
-## The Trinity Concept
+**Note**: This architecture has been superseded by the **Omega Architecture (Biological Model)** which provides more granular control and self-evolution capabilities.
+
+## The Trinity Concept (Historical)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

@@ -1,0 +1,27 @@
+# Loop Pipeline Test - Iterative Reflection
+# Loop until quality threshold is reached
+
+servers:
+  generator: builtin
+  evaluator: builtin
+
+parameters:
+  topic: "$topic"
+  max_iterations: 3
+
+pipeline:
+  - generator.analyze
+  - evaluator.evaluate
+  - branch:
+      router: check_quality
+      branches:
+        continue:
+          - generator.reflect
+        complete:
+          - generator.finalize
+
+runtime:
+  checkpointer:
+    type: memory
+  tracer:
+    callback_dispatch_mode: inline

@@ -150,9 +150,9 @@ class StateCheckpointer:
         # Import Rust bindings
         try:
             from omni_core_rs import create_checkpoint_store
-            from omni.foundation.config.dirs import get_checkpoints_db_path
+            from omni.foundation.config.database import get_checkpoint_db_path
 
-            db_path = str(get_checkpoints_db_path())
+            db_path = str(get_checkpoint_db_path())
             self._store = create_checkpoint_store(db_path, 1536)
             self._rust_available = True
         except ImportError:

@@ -2,12 +2,34 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from omni.test_kit.asserts import assert_route_result_shape, assert_route_results_list
 
 from omni.core.router.main import OmniRouter, RouterRegistry, get_router
 from omni.core.router.router import RouteResult
+
+
+def _mock_hybrid_hit(
+    *,
+    skill_name: str = "git",
+    command: str = "status",
+    description: str = "Show status",
+    score: float = 0.85,
+    final_score: float = 0.85,
+    confidence: str = "high",
+    file_path: str | None = None,
+) -> dict[str, object]:
+    return {
+        "skill_name": skill_name,
+        "command": command,
+        "description": description,
+        "score": score,
+        "final_score": final_score,
+        "confidence": confidence,
+        "file_path": file_path or f"{skill_name}/{command}.py",
+    }
 
 
 class TestOmniRouter:
@@ -23,6 +45,7 @@ class TestOmniRouter:
         assert router._cache is not None
         assert router._hive is not None
         assert router._sniffer is not None
+        assert isinstance(router._rerank, bool)
         assert router._initialized is False
 
     def test_custom_initialization(self):
@@ -33,11 +56,58 @@ class TestOmniRouter:
             cache_ttl=600,
             semantic_weight=0.8,
             keyword_weight=0.2,
+            adaptive_threshold_step=0.2,
+            adaptive_max_attempts=4,
         )
 
         assert ":memory:" in router._indexer._storage_path
         assert router._cache._max_size == 500
         assert router._cache._ttl == 600
+        assert router._adaptive_threshold_step == 0.2
+        assert router._adaptive_max_attempts == 4
+
+    @pytest.mark.asyncio
+    async def test_route_hybrid_preserves_rust_confidence_labels(self):
+        """Router should preserve canonical confidence labels from Rust payload."""
+        router = OmniRouter(storage_path=":memory:")
+        mock_results = [
+            {
+                "skill_name": "git",
+                "command": "status",
+                "description": "Show status",
+                "score": 0.7,
+                "final_score": 0.7,
+                "confidence": "high",
+                "file_path": "git/status.py",
+            },
+        ]
+        with patch.object(router._hybrid, "search", AsyncMock(return_value=mock_results)):
+            results = await router.route_hybrid("git status", threshold=0.1, use_cache=False)
+        assert len(results) == 1
+        assert results[0].confidence == "high"
+        assert_route_result_shape(results[0])
+
+    @pytest.mark.asyncio
+    async def test_route_hybrid_uses_configurable_adaptive_retry(self):
+        """Adaptive retry count and decrement should respect configured settings."""
+        router = OmniRouter(
+            storage_path=":memory:",
+            adaptive_max_attempts=2,
+            adaptive_threshold_step=0.2,
+        )
+        search = AsyncMock(return_value=[])
+        with patch.object(router._hybrid, "search", search):
+            results = await router.route_hybrid(
+                "no result", limit=1, threshold=0.5, use_cache=False
+            )
+        assert results == []
+        assert search.await_count == 2
+        first_call = search.await_args_list[0].kwargs
+        second_call = search.await_args_list[1].kwargs
+        assert first_call["min_score"] == 0.0
+        assert second_call["min_score"] == 0.0
+        assert first_call["rerank"] == router._rerank
+        assert second_call["rerank"] == router._rerank
 
     def test_properties(self):
         """Test all property accessors."""
@@ -164,6 +234,7 @@ class TestOmniRouter:
         assert result is not None
         assert result.skill_name == "git"
         assert result.command_name == "status"
+        assert_route_result_shape(result)
 
     @pytest.mark.asyncio
     async def test_route_with_context(self):
@@ -208,6 +279,7 @@ class TestOmniRouter:
         assert isinstance(results, list)
         # Should find git.status with some score
         if results:
+            assert_route_results_list(results, allow_empty=True)
             assert any(r.skill_name == "git" for r in results)
 
     @pytest.mark.asyncio
@@ -217,20 +289,14 @@ class TestOmniRouter:
 
         # Mock the hybrid search to return test results (include file_path to avoid skipping)
         mock_results = [
-            {
-                "skill_name": "git",
-                "command": "status",
-                "description": "Show status",
-                "score": 0.85,
-                "file_path": "git/status.py",
-            },
-            {
-                "skill_name": "git",
-                "command": "commit",
-                "description": "Commit",
-                "score": 0.75,
-                "file_path": "git/commit.py",
-            },
+            _mock_hybrid_hit(),
+            _mock_hybrid_hit(
+                command="commit",
+                description="Commit",
+                score=0.75,
+                final_score=0.75,
+                confidence="medium",
+            ),
         ]
 
         with patch.object(router._hybrid, "search", AsyncMock(return_value=mock_results)):
@@ -241,6 +307,7 @@ class TestOmniRouter:
         for r in results:
             assert isinstance(r, RouteResult)
             assert r.score >= 0.4
+            assert_route_result_shape(r)
 
     @pytest.mark.asyncio
     async def test_route_hybrid_with_threshold(self):
@@ -249,20 +316,14 @@ class TestOmniRouter:
 
         # Mock results with scores that will pass with adaptive thresholding
         mock_results = [
-            {
-                "skill_name": "git",
-                "command": "status",
-                "description": "Show status",
-                "score": 0.85,
-                "file_path": "git/status.py",
-            },
-            {
-                "skill_name": "git",
-                "command": "commit",
-                "description": "Commit",
-                "score": 0.75,
-                "file_path": "git/commit.py",
-            },
+            _mock_hybrid_hit(),
+            _mock_hybrid_hit(
+                command="commit",
+                description="Commit",
+                score=0.75,
+                final_score=0.75,
+                confidence="medium",
+            ),
         ]
 
         with patch.object(router._hybrid, "search", AsyncMock(return_value=mock_results)):
@@ -272,21 +333,14 @@ class TestOmniRouter:
         # All results should meet threshold
         for r in results:
             assert r.score >= 0.6
+            assert_route_result_shape(r)
 
     @pytest.mark.asyncio
     async def test_route_hybrid_caching(self):
         """Test that hybrid routing caches results."""
         router = OmniRouter(storage_path=":memory:")
 
-        mock_results = [
-            {
-                "skill_name": "git",
-                "command": "status",
-                "description": "Show status",
-                "score": 0.85,
-                "file_path": "git/status.py",
-            },
-        ]
+        mock_results = [_mock_hybrid_hit()]
 
         with patch.object(router._hybrid, "search", AsyncMock(return_value=mock_results)):
             query = "git status"
@@ -296,21 +350,14 @@ class TestOmniRouter:
             # Results should be the same (from cache)
             assert len(results1) == len(results2)
             assert router._cache.get(query) is not None
+            assert_route_results_list(results1, allow_empty=False)
 
     @pytest.mark.asyncio
     async def test_route_hybrid_cache_miss(self):
         """Test hybrid routing cache miss returns fresh results."""
         router = OmniRouter(storage_path=":memory:")
 
-        mock_results = [
-            {
-                "skill_name": "git",
-                "command": "status",
-                "description": "Show status",
-                "score": 0.85,
-                "file_path": "git/status.py",
-            },
-        ]
+        mock_results = [_mock_hybrid_hit()]
 
         with patch.object(router._hybrid, "search", AsyncMock(return_value=mock_results)):
             query = "different query"
@@ -318,26 +365,19 @@ class TestOmniRouter:
 
         assert results is not None
         assert len(results) > 0
+        assert_route_results_list(results, allow_empty=False)
 
     @pytest.mark.asyncio
     async def test_route_hybrid_no_cache(self):
         """Test hybrid routing without cache."""
         router = OmniRouter(storage_path=":memory:")
 
-        mock_results = [
-            {
-                "skill_name": "git",
-                "command": "status",
-                "description": "Show status",
-                "score": 0.85,
-                "file_path": "git/status.py",
-            },
-        ]
+        mock_results = [_mock_hybrid_hit()]
 
         with patch.object(router._hybrid, "search", AsyncMock(return_value=mock_results)):
             results = await router.route_hybrid("git status", use_cache=False)
 
-        assert isinstance(results, list)
+        assert_route_results_list(results, allow_empty=True)
 
     @pytest.mark.asyncio
     async def test_suggest_skills(self):
@@ -519,8 +559,7 @@ class TestOmniRouterIntegration:
         router = OmniRouter(storage_path=":memory:")
 
         # Mock the indexer search to return results
-        router._indexer._memory_index = MagicMock()
-        router._indexer._memory_index.search = MagicMock(
+        router._indexer.search = AsyncMock(
             return_value=[
                 SearchResult(
                     id="git.status",
@@ -533,7 +572,6 @@ class TestOmniRouterIntegration:
                 )
             ]
         )
-        router._indexer._memory_index.__len__ = MagicMock(return_value=1)
         router._indexer._indexed_count = 1
 
         # Initialize to set up the rest
@@ -545,6 +583,7 @@ class TestOmniRouterIntegration:
         assert result.skill_name == "git"
         assert result.command_name == "status"
         assert result.confidence == "high"
+        assert_route_result_shape(result)
 
     @pytest.mark.asyncio
     async def test_fallback_to_hive_when_semantic_fails(self):
@@ -553,8 +592,7 @@ class TestOmniRouterIntegration:
 
         # Initialize but don't set up mock - should use hive's fallback
         router._initialized = True
-        router._indexer._memory_index = MagicMock()
-        router._indexer._memory_index.search = MagicMock(return_value=[])
+        router._indexer.search = AsyncMock(return_value=[])
         router._indexer._indexed_count = 1
 
         # Explicit command should work through hive
@@ -562,6 +600,7 @@ class TestOmniRouterIntegration:
 
         assert result is not None
         assert result.skill_name == "git"
+        assert_route_result_shape(result)
 
     @pytest.mark.asyncio
     async def test_route_hybrid_empty_results(self):

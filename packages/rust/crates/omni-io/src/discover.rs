@@ -75,10 +75,10 @@ pub fn discover_files(root: &str, options: &DiscoverOptions) -> Vec<String> {
     }
 
     // Apply max_files limit
-    if let Some(max) = options.max_files {
-        if files.len() > max {
-            files.truncate(max);
-        }
+    if let Some(max) = options.max_files
+        && files.len() > max
+    {
+        files.truncate(max);
     }
 
     // Sort and convert to relative paths
@@ -104,14 +104,12 @@ fn walk_directory(
             let path = entry.path();
 
             // Skip hidden directories
-            if skip_hidden {
-                if let Some(name) = path.file_name() {
-                    if let Some(s) = name.to_str() {
-                        if s.starts_with('.') {
-                            continue;
-                        }
-                    }
-                }
+            if skip_hidden
+                && let Some(name) = path.file_name()
+                && let Some(s) = name.to_str()
+                && s.starts_with('.')
+            {
+                continue;
             }
 
             if path.is_dir() {
@@ -139,12 +137,11 @@ fn walk_directory(
                     let ext_with_dot = format!(".{}", ext);
                     if extensions.contains(&ext_with_dot) || extensions.contains(&ext) {
                         // Check file size
-                        if let Ok(metadata) = entry.metadata() {
-                            if metadata.len() <= max_file_size {
-                                if let Ok(rel_path) = path.strip_prefix(root) {
-                                    files.push(rel_path.to_path_buf());
-                                }
-                            }
+                        if let Ok(metadata) = entry.metadata()
+                            && metadata.len() <= max_file_size
+                            && let Ok(rel_path) = path.strip_prefix(root)
+                        {
+                            files.push(rel_path.to_path_buf());
                         }
                     }
                 }
@@ -168,14 +165,12 @@ fn read_directory(
 
             if path.is_file() {
                 // Skip hidden files
-                if skip_hidden {
-                    if let Some(name) = path.file_name() {
-                        if let Some(s) = name.to_str() {
-                            if s.starts_with('.') {
-                                continue;
-                            }
-                        }
-                    }
+                if skip_hidden
+                    && let Some(name) = path.file_name()
+                    && let Some(s) = name.to_str()
+                    && s.starts_with('.')
+                {
+                    continue;
                 }
 
                 // Check extension - path.extension() returns "py", we need ".py" to match
@@ -184,12 +179,11 @@ fn read_directory(
                     let ext_with_dot = format!(".{}", ext);
                     if extensions.contains(&ext_with_dot) || extensions.contains(&ext) {
                         // Check file size
-                        if let Ok(metadata) = entry.metadata() {
-                            if metadata.len() <= max_file_size {
-                                if let Ok(rel_path) = path.strip_prefix(root) {
-                                    files.push(rel_path.to_path_buf());
-                                }
-                            }
+                        if let Ok(metadata) = entry.metadata()
+                            && metadata.len() <= max_file_size
+                            && let Ok(rel_path) = path.strip_prefix(root)
+                        {
+                            files.push(rel_path.to_path_buf());
                         }
                     }
                 }
@@ -225,14 +219,12 @@ pub fn discover_files_in_dir(
             }
 
             // Skip hidden files
-            if skip_hidden {
-                if let Some(name) = path.file_name() {
-                    if let Some(s) = name.to_str() {
-                        if s.starts_with('.') {
-                            continue;
-                        }
-                    }
-                }
+            if skip_hidden
+                && let Some(name) = path.file_name()
+                && let Some(s) = name.to_str()
+                && s.starts_with('.')
+            {
+                continue;
             }
 
             // Check extension - path.extension() returns "py", we need ".py" to match
@@ -242,10 +234,10 @@ pub fn discover_files_in_dir(
                 let ext_with_dot = format!(".{}", ext);
                 if extensions.contains(&ext_with_dot) || extensions.contains(&ext) {
                     // Check file size
-                    if let Ok(metadata) = entry.metadata() {
-                        if metadata.len() <= max_file_size {
-                            files.push(path);
-                        }
+                    if let Ok(metadata) = entry.metadata()
+                        && metadata.len() <= max_file_size
+                    {
+                        files.push(path);
                     }
                 }
             }
@@ -270,24 +262,21 @@ pub fn should_skip_path(path: &str, skip_hidden: bool, skip_dirs: &[String]) -> 
 
     // Check if any component is a skip directory
     for component in path.components() {
-        if let std::path::Component::Normal(name) = component {
-            if let Some(s) = name.to_str() {
-                if skip_dirs.iter().any(|skip| *skip == s) {
-                    return true;
-                }
-            }
+        if let std::path::Component::Normal(name) = component
+            && let Some(s) = name.to_str()
+            && skip_dirs.iter().any(|skip| *skip == s)
+        {
+            return true;
         }
     }
 
     // Check hidden files
-    if skip_hidden {
-        if let Some(file_name) = path.file_name() {
-            if let Some(s) = file_name.to_str() {
-                if s.starts_with('.') {
-                    return true;
-                }
-            }
-        }
+    if skip_hidden
+        && let Some(file_name) = path.file_name()
+        && let Some(s) = file_name.to_str()
+        && s.starts_with('.')
+    {
+        return true;
     }
 
     false

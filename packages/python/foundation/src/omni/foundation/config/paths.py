@@ -15,7 +15,6 @@ Design Philosophy:
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +34,7 @@ class ConfigPaths:
 
     Features:
     - Uses PRJ_DIRS/PRJ_CONFIG for environment-aware paths
-    - Supports legacy paths for backward compatibility
+    - Settings-driven semantic resolution
     - Singleton pattern (stateless, all state in environment)
 
     Usage:
@@ -47,6 +46,8 @@ class ConfigPaths:
     """
 
     _instance: ConfigPaths | None = None
+    _DEFAULT_ANTHROPIC_SETTINGS = Path(".claude/settings.json")
+    _DEFAULT_MCP_CONFIG = Path(".mcp.json")
 
     def __new__(cls) -> ConfigPaths:
         if cls._instance is None:
@@ -68,8 +69,8 @@ class ConfigPaths:
 
     @property
     def settings_file(self) -> Path:
-        """Main settings file: $PRJ_CONFIG_HOME/settings.yaml"""
-        return PRJ_CONFIG("settings.yaml")
+        """Main settings file: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml"""
+        return PRJ_CONFIG("omni-dev-fusion", "settings.yaml")
 
     # =============================================================================
     # Vendor Specific (Anthropic / OpenAI / etc)
@@ -77,95 +78,40 @@ class ConfigPaths:
 
     def get_anthropic_settings_path(self) -> Path:
         """
-        Get Anthropic settings path.
+        Get Anthropic settings path from configuration.
 
         Strategy:
-        1. Modern: $PRJ_CONFIG_HOME/anthropic/settings.json
-        2. Fallback: $PRJ_ROOT/.claude/settings.json
+        1. Read `api.anthropic_settings` from settings.yaml
+        2. Resolve relative path against project root
         """
-        # 1. Try Modern Standard
-        modern_path = PRJ_CONFIG("anthropic", "settings.json")
-        if modern_path.exists():
-            return modern_path
+        from .settings import get_setting
 
-        # 2. Fallback
-        return self.project_root / ".claude" / "settings.json"
-
-    def get_api_key(self, env_var: str = "ANTHROPIC_API_KEY") -> str | None:
-        """
-        Get API key.
-
-        Priority:
-        1. Environment variable (ANTHROPIC_API_KEY)
-        2. From anthropic/settings.json
-        3. From mcp.json (orchestrator server)
-        4. None
-        """
-        # 1. Check environment variable first
-        api_key = os.environ.get(env_var)
-        if api_key:
-            return api_key
-
-        # 2. Try anthropic/settings.json
-        anthropic_path = self.get_anthropic_settings_path()
-        if anthropic_path and anthropic_path.exists():
-            try:
-                with open(anthropic_path) as f:
-                    config = json.load(f)
-                env = config.get("env", {})
-                api_key = env.get("ANTHROPIC_AUTH_TOKEN") or env.get("ANTHROPIC_API_KEY")
-                if api_key:
-                    return api_key
-            except Exception:
-                pass
-
-        # 3. Try mcp.json as fallback
-        mcp_path = self.get_mcp_config_path()
-        if mcp_path and mcp_path.exists():
-            try:
-                with open(mcp_path) as f:
-                    config = json.load(f)
-                servers = config.get("mcpServers", {})
-                orchestrator = servers.get("orchestrator", {})
-                env = orchestrator.get("env", {})
-                api_key = env.get("ANTHROPIC_API_KEY")
-                if api_key:
-                    return api_key
-            except Exception:
-                pass
-
-        return None
+        configured = get_setting("api.anthropic_settings")
+        if configured in (None, ""):
+            return self.project_root / self._DEFAULT_ANTHROPIC_SETTINGS
+        return self._resolve_project_relative_path(configured)
 
     def get_api_base_url(self) -> str | None:
         """
         Get API base URL.
 
         Priority:
-        1. Environment variable ANTHROPIC_BASE_URL
-        2. From settings.yaml -> api.base_url
+        1. From settings.yaml -> inference.base_url
+        2. Environment variable ANTHROPIC_BASE_URL
         3. None (uses default Anthropic API)
         """
-        # 1. Check environment variable first
+        from .settings import get_setting
+
+        configured = get_setting("inference.base_url")
+        if configured:
+            return str(configured)
+
+        # Keep env fallback for compatibility with existing deployments.
+        import os
+
         base_url = os.environ.get("ANTHROPIC_BASE_URL")
         if base_url:
             return base_url
-
-        # 2. Try settings.yaml
-        settings_path = self.settings_file
-        if settings_path.exists():
-            try:
-                content = settings_path.read_text()
-                for line in content.split("\n"):
-                    line = line.strip()
-                    if line.startswith("api:") or line.startswith("api "):
-                        continue
-                    if "base_url:" in line:
-                        url = line.split("base_url:")[1].strip()
-                        url = url.strip('"').strip("'")
-                        if url:
-                            return url
-            except Exception:
-                pass
 
         return None
 
@@ -176,9 +122,21 @@ class ConfigPaths:
     def get_mcp_config_path(self) -> Path:
         """
         MCP Server Configuration.
-        Location: $PRJ_CONFIG_HOME/mcp.json
+        Location: settings-driven `mcp.config_file` (default `.mcp.json`)
         """
-        return PRJ_CONFIG("mcp.json")
+        from .settings import get_setting
+
+        configured = get_setting("mcp.config_file")
+        if configured in (None, ""):
+            return self.project_root / self._DEFAULT_MCP_CONFIG
+        return self._resolve_project_relative_path(configured)
+
+    def _resolve_project_relative_path(self, configured: Any) -> Path:
+        """Resolve a configured path against project root when relative."""
+        path = Path(str(configured))
+        if path.is_absolute():
+            return path
+        return self.project_root / path
 
     def get_mcp_config(self) -> dict[str, Any] | None:
         """Load and return the MCP configuration."""
@@ -270,16 +228,6 @@ def get_config_paths() -> ConfigPaths:
     return _paths_instance
 
 
-# =============================================================================
-# Convenience Functions (Backward Compatibility)
-# =============================================================================
-
-
-def get_api_key(env_var: str = "ANTHROPIC_API_KEY") -> str | None:
-    """Get Anthropic API key."""
-    return get_config_paths().get_api_key(env_var)
-
-
 def get_mcp_config() -> dict[str, Any] | None:
     """Get MCP configuration from mcp.json."""
     return get_config_paths().get_mcp_config()
@@ -304,7 +252,6 @@ __all__ = [
     "ConfigPaths",
     "format_authorization_wait",
     "get_anthropic_settings_path",
-    "get_api_key",
     "get_config_paths",
     "get_mcp_config",
     "get_mcp_config_path",

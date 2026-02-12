@@ -15,27 +15,39 @@ pub struct SyncManifest(pub HashMap<String, String>);
 /// File change type
 #[derive(Debug, Clone, PartialEq)]
 pub enum FileChange {
+    /// A new file was added.
     Added(PathBuf),
+    /// An existing file was modified.
     Modified(PathBuf),
+    /// A tracked file was deleted.
     Deleted(PathBuf),
 }
 
 /// Sync result
 #[derive(Debug, Clone, Default)]
 pub struct SyncResult {
+    /// Newly added files.
     pub added: Vec<PathBuf>,
+    /// Modified files.
     pub modified: Vec<PathBuf>,
+    /// Deleted files.
     pub deleted: Vec<PathBuf>,
+    /// Number of unchanged files.
     pub unchanged: usize,
 }
 
 /// File discovery options
 #[derive(Debug, Clone)]
 pub struct DiscoveryOptions {
+    /// Optional maximum number of files to scan.
     pub max_files: Option<usize>,
+    /// Whether to skip hidden files and folders.
     pub skip_hidden: bool,
+    /// Directory names to skip during discovery.
     pub skip_dirs: Vec<String>,
+    /// Maximum file size in bytes.
     pub max_file_size: u64,
+    /// Allowed file extensions.
     pub extensions: Vec<String>,
 }
 

@@ -57,6 +57,19 @@ class TestSettingsClass:
         conf_dir = clean_settings.conf_dir
         assert isinstance(conf_dir, str)
 
+    def test_reload_reloads_without_deadlock(self, clean_settings, monkeypatch):
+        """reload() should call _load directly and mark settings loaded."""
+        calls = {"count": 0}
+
+        def _fake_load():
+            calls["count"] += 1
+
+        monkeypatch.setattr(clean_settings, "_load", _fake_load)
+        clean_settings.reload()
+
+        assert calls["count"] == 1
+        assert clean_settings._loaded is True
+
 
 class TestGetSettingFunction:
     """Test the get_setting() convenience function."""
@@ -76,30 +89,18 @@ class TestGetSettingFunction:
         assert result is None
 
 
-class TestConfigPathFunctions:
-    """Test configuration path functions."""
+class TestSettingsModuleSurface:
+    """Test settings module API surface."""
 
-    def test_get_config_path(self, clean_settings):
-        """Test get_config_path() function."""
-        from omni.foundation.config.settings import get_config_path
+    def test_legacy_free_functions_removed(self):
+        """Legacy wrapper functions should not be exported."""
+        import omni.foundation.config.settings as settings_module
 
-        result = get_config_path("missing.key")
-        assert result == ""
-
-    def test_has_setting_function(self, clean_settings):
-        """Test has_setting() function."""
-        from omni.foundation.config.settings import has_setting
-
-        result = has_setting("fake.missing.key")
-        assert result is False
-
-    def test_get_conf_directory(self, clean_settings):
-        """Test get_conf_directory() function."""
-        from omni.foundation.config.settings import get_conf_directory
-
-        result = get_conf_directory()
-        assert isinstance(result, str)
-        assert len(result) > 0
+        assert not hasattr(settings_module, "get_config_path")
+        assert not hasattr(settings_module, "has_setting")
+        assert not hasattr(settings_module, "list_setting_sections")
+        assert not hasattr(settings_module, "get_conf_directory")
+        assert not hasattr(settings_module, "set_configuration_directory")
 
 
 class TestYamlFallback:

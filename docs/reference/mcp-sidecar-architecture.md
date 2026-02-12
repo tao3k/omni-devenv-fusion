@@ -206,6 +206,6 @@ async def handle_list_tools() -> list[Tool]:
 
 ## Related Documentation
 
-- [Trinity Architecture](../explanation/trinity-architecture.md)
+- [Trinity Architecture](../explanation/system-layering.md)
 - [Skill Standard](../human/architecture/skill-standard.md)
 - [MCP Best Practices](./mcp-best-practices.md)

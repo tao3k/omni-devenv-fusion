@@ -198,7 +198,7 @@ class SkillIndexer:
                 table_name=self.table_name,
                 file_paths=[file_path],
             )
-            logger.info(f"Removed skills for {file_path}")
+            logger.info(f"Changed skills for {file_path}")
             return 1
         except Exception as e:
             logger.error(f"Failed to remove skills for {file_path}: {e}")

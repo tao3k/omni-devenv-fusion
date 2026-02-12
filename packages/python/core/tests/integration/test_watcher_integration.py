@@ -305,3 +305,469 @@ class TestFileWatcherConfig:
 
         assert "**/*.rs" in config.patterns
         assert "**/target/**" in config.exclude
+
+
+class TestNotifyDebouncing:
+    """Tests for debouncing logic to prevent race conditions with multiple MCP clients."""
+
+    @pytest.fixture
+    def skill_manager(self):
+        """Create a SkillManager for testing debouncing."""
+        from omni.core.services.skill_manager import SkillManager
+
+        manager = SkillManager()
+        # Set short cooldown for testing
+        manager._notify_cooldown_seconds = 0.1
+        return manager
+
+    @pytest.mark.asyncio
+    async def test_multiple_callbacks_notified(self, skill_manager):
+        """Test that all registered callbacks are notified."""
+        call_counts = []
+
+        async def callback1():
+            call_counts.append(1)
+
+        async def callback2():
+            call_counts.append(2)
+
+        async def callback3():
+            call_counts.append(3)
+
+        skill_manager._on_update_callbacks = [callback1, callback2, callback3]
+
+        await skill_manager._notify_updates()
+
+        assert len(call_counts) == 3
+        assert 1 in call_counts
+        assert 2 in call_counts
+        assert 3 in call_counts
+
+    @pytest.mark.asyncio
+    async def test_rapid_notifications_debounced(self, skill_manager):
+        """Test that rapid notifications are debounced."""
+        call_count = 0
+
+        async def callback():
+            nonlocal call_count
+            call_count += 1
+
+        skill_manager._on_update_callbacks = [callback]
+
+        # Send multiple rapid notifications
+        await skill_manager._notify_updates()
+        await skill_manager._notify_updates()
+        await skill_manager._notify_updates()
+
+        # Should only count as one due to cooldown
+        assert call_count == 1
+
+        # Wait for cooldown
+        await asyncio.sleep(0.15)
+
+        # Now another notification should work
+        await skill_manager._notify_updates()
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_concurrent_notifications_handled(self, skill_manager):
+        """Test that concurrent notifications are handled correctly."""
+        call_order = []
+
+        async def slow_callback():
+            await asyncio.sleep(0.1)
+            call_order.append("slow")
+
+        async def fast_callback():
+            call_order.append("fast")
+
+        skill_manager._on_update_callbacks = [slow_callback, fast_callback]
+
+        # Start notification
+        task = asyncio.create_task(skill_manager._notify_updates())
+
+        # Send another notification while first is in progress
+        await asyncio.sleep(0.02)  # Let slow callback start
+        await skill_manager._notify_updates()
+
+        await task
+
+        # Both callbacks from first notification should have run
+        # The second notification should have been skipped due to in-progress flag
+        assert "slow" in call_order
+        assert "fast" in call_order
+
+    @pytest.mark.asyncio
+    async def test_pending_notification_after_concurrent(self, skill_manager):
+        """Test that pending notifications are processed after current one completes."""
+        call_count = []
+
+        async def callback():
+            nonlocal call_count
+            call_count.append(1)
+            await asyncio.sleep(0.05)
+
+        skill_manager._on_update_callbacks = [callback]
+
+        # Start first notification
+        task1 = asyncio.create_task(skill_manager._notify_updates())
+
+        # Immediately send another (should be marked as pending)
+        await skill_manager._notify_updates()
+
+        await task1
+
+        # Wait a bit and the pending notification should have triggered
+        await asyncio.sleep(0.2)
+
+        # Should have run twice (initial + pending)
+        assert len(call_count) >= 2
+
+    @pytest.mark.asyncio
+    async def test_callback_exception_handling(self, skill_manager):
+        """Test that exceptions in one callback don't affect others."""
+        call_count = []
+
+        async def failing_callback():
+            raise ValueError("Intentional error")
+
+        async def working_callback():
+            nonlocal call_count
+            call_count.append(1)
+
+        async def another_callback():
+            nonlocal call_count
+            call_count.append(2)
+
+        skill_manager._on_update_callbacks = [failing_callback, working_callback, another_callback]
+
+        # Should not raise, just log the error
+        await skill_manager._notify_updates()
+
+        # Working callbacks should still be called
+        assert 1 in call_count
+        assert 2 in call_count
+
+    @pytest.mark.asyncio
+    async def test_sync_callback_handling(self, skill_manager):
+        """Test that synchronous callbacks work correctly."""
+        call_count = []
+
+        def sync_callback():
+            call_count.append("sync")
+
+        async def async_callback():
+            call_count.append("async")
+
+        skill_manager._on_update_callbacks = [sync_callback, async_callback]
+
+        await skill_manager._notify_updates()
+
+        assert "sync" in call_count
+        assert "async" in call_count
+
+
+class TestSkillDiscoveryCache:
+    """Tests for skill discovery cache refresh mechanism."""
+
+    @pytest.fixture
+    def discovery_service(self):
+        """Create a SkillDiscoveryService for testing with mocked store."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        import asyncio
+
+        # Create mock store that returns tools
+        mock_store = MagicMock()
+        mock_tools = [
+            {
+                "skill_name": "git",
+                "tool_name": "git.status",
+                "description": "Show git status",
+                "file_path": "/project/assets/skills/git/scripts/commands.py",
+            }
+        ]
+        # list_all_tools is synchronous in the actual implementation
+        mock_store.list_all_tools = MagicMock(return_value=mock_tools)
+
+        # Patch get_vector_store to return our mock
+        with patch("omni.core.skills.discovery.get_vector_store", return_value=mock_store):
+            from omni.core.skills.discovery import SkillDiscoveryService
+
+            service = SkillDiscoveryService()
+            service._cache = []  # Initialize cache
+            return service
+
+    def test_cache_initialization(self, discovery_service):
+        """Test that cache is initialized properly."""
+        assert hasattr(discovery_service, "_cache")
+        assert isinstance(discovery_service._cache, list)
+
+    @pytest.mark.asyncio
+    async def test_refresh_cache_clears_registry(self, discovery_service):
+        """Test that refresh_cache clears the registry."""
+        from unittest.mock import MagicMock, patch
+
+        # Set up registry with some data
+        discovery_service._registry = {"some_tool": MagicMock()}
+        discovery_service._registry_loaded = True
+
+        # Patch get_vector_store to return mock with empty tools
+        mock_store = MagicMock()
+        mock_store.list_all_tools = MagicMock(return_value=[])
+
+        with patch("omni.core.skills.discovery.get_vector_store", return_value=mock_store):
+            await discovery_service._refresh_cache()
+
+            # Registry should be cleared and reloaded
+            assert discovery_service._registry_loaded is False
+
+    @pytest.mark.asyncio
+    async def test_refresh_cache_logs_info(self, discovery_service, caplog):
+        """Test that refresh_cache logs appropriately."""
+        import logging
+
+        # Patch get_vector_store to return mock
+        mock_store = MagicMock()
+        mock_store.list_all_tools = MagicMock(return_value=[])
+
+        with patch("omni.core.skills.discovery.get_vector_store", return_value=mock_store):
+            with caplog.at_level(logging.DEBUG):
+                await discovery_service._refresh_cache()
+
+                assert any(
+                    "refreshing" in msg.lower() or "refresh" in msg.lower()
+                    for msg in caplog.messages
+                )
+
+
+class TestFileEventHandling:
+    """Tests for file event handling with different scenarios."""
+
+    @pytest.fixture
+    def temp_skill_dir(self, tmp_path):
+        """Create a temporary skill directory."""
+        skill_dir = tmp_path / "test_skill"
+        skill_dir.mkdir()
+        (skill_dir / "scripts").mkdir()
+        return skill_dir
+
+    @pytest.fixture
+    def mock_indexer(self):
+        """Create a mock indexer."""
+        from unittest.mock import AsyncMock
+
+        indexer = AsyncMock()
+        indexer.index_file = AsyncMock(return_value=1)
+        indexer.reindex_file = AsyncMock(return_value=1)
+        indexer.remove_file = AsyncMock(return_value=1)
+        return indexer
+
+    @pytest.mark.asyncio
+    async def test_created_file_event(self, temp_skill_dir, mock_indexer):
+        """Test handling of file creation events."""
+        from omni.core.kernel.watcher import FileChangeEvent, FileChangeType, ReactiveSkillWatcher
+
+        watcher = ReactiveSkillWatcher(
+            indexer=mock_indexer,
+            patterns=["**/*.py"],
+            debounce_seconds=0.01,
+            poll_interval=0.01,
+        )
+
+        # Create a new file
+        new_file = temp_skill_dir / "scripts" / "new_command.py"
+        new_file.write_text("""
+def new_command():
+    '''A new command'''
+    pass
+""")
+
+        # Create event for the new file
+        event = FileChangeEvent(
+            path=str(new_file),
+            event_type=FileChangeType.CREATED,
+        )
+
+        await watcher._handle_event(event)
+
+        # index_file should have been called
+        mock_indexer.index_file.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_modified_file_event(self, temp_skill_dir, mock_indexer):
+        """Test handling of file modification events."""
+        from omni.core.kernel.watcher import FileChangeEvent, FileChangeType, ReactiveSkillWatcher
+
+        watcher = ReactiveSkillWatcher(
+            indexer=mock_indexer,
+            patterns=["**/*.py"],
+            debounce_seconds=0.01,
+            poll_interval=0.01,
+        )
+
+        # Create and modify a file
+        cmd_file = temp_skill_dir / "scripts" / "commands.py"
+        cmd_file.write_text("""
+def existing_command():
+    '''An existing command'''
+    pass
+""")
+
+        event = FileChangeEvent(
+            path=str(cmd_file),
+            event_type=FileChangeType.MODIFIED,
+        )
+
+        await watcher._handle_event(event)
+
+        # reindex_file should have been called
+        mock_indexer.reindex_file.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_deleted_file_event(self, temp_skill_dir, mock_indexer):
+        """Test handling of file deletion events."""
+        from omni.core.kernel.watcher import FileChangeEvent, FileChangeType, ReactiveSkillWatcher
+
+        watcher = ReactiveSkillWatcher(
+            indexer=mock_indexer,
+            patterns=["**/*.py"],
+            debounce_seconds=0.01,
+            poll_interval=0.01,
+        )
+
+        # Create a file then delete it
+        cmd_file = temp_skill_dir / "scripts" / "to_delete.py"
+        cmd_file.write_text("""
+def to_delete():
+    '''Will be deleted'''
+    pass
+""")
+
+        # Delete the file
+        cmd_file.unlink()
+
+        event = FileChangeEvent(
+            path=str(cmd_file),
+            event_type=FileChangeType.DELETED,
+        )
+
+        await watcher._handle_event(event)
+
+        # remove_file should have been called
+        mock_indexer.remove_file.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_nonexistent_file_for_created_event(self, temp_skill_dir, mock_indexer):
+        """Test that non-existent file for CREATED event is handled correctly.
+
+        The watcher has a workaround: CREATED events for non-existent files
+        should be treated as DELETED events (Rust watcher may report created
+        instead of deleted when a file is deleted).
+        """
+        from omni.core.kernel.watcher import FileChangeEvent, FileChangeType, ReactiveSkillWatcher
+
+        watcher = ReactiveSkillWatcher(
+            indexer=mock_indexer,
+            patterns=["**/*.py"],
+            debounce_seconds=0.01,
+            poll_interval=0.01,
+        )
+
+        # Event for a file that doesn't exist (Rust watcher workaround)
+        nonexistent_file = temp_skill_dir / "scripts" / "nonexistent.py"
+        event = FileChangeEvent(
+            path=str(nonexistent_file),
+            event_type=FileChangeType.CREATED,
+        )
+
+        await watcher._handle_event(event)
+
+        # For CREATED events where file doesn't exist, it should be treated as DELETED
+        # So remove_file should be called, not index_file
+        mock_indexer.index_file.assert_not_called()
+        mock_indexer.reindex_file.assert_not_called()
+        mock_indexer.remove_file.assert_called_once()
+
+
+class TestWatcherWithKernelIntegration:
+    """Integration tests for watcher with kernel."""
+
+    @pytest.fixture
+    def kernel_mock(self):
+        """Create a mock kernel for testing."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        kernel = MagicMock()
+        kernel.reload_skill = AsyncMock()
+        return kernel
+
+    @pytest.mark.asyncio
+    async def test_reload_skill_called_on_modification(self, kernel_mock):
+        """Test that kernel.reload_skill is called on file modification."""
+        from omni.core.kernel.watcher import FileChangeEvent, FileChangeType, ReactiveSkillWatcher
+        from unittest.mock import AsyncMock, patch
+        from pathlib import Path
+
+        mock_indexer = AsyncMock()
+        mock_indexer.reindex_file = AsyncMock(return_value=1)
+
+        # Create a temp directory to use as skills_dir
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skills_dir = Path(tmpdir)
+
+            # Patch SKILLS_DIR where it's defined
+            with patch("omni.foundation.config.skills.SKILLS_DIR", return_value=skills_dir):
+                watcher = ReactiveSkillWatcher(
+                    indexer=mock_indexer,
+                    patterns=["**/*.py"],
+                    debounce_seconds=0.01,
+                    poll_interval=0.01,
+                )
+                watcher._kernel = kernel_mock
+
+                # Create test file path under the temp skills_dir
+                test_file = skills_dir / "git" / "scripts" / "commands.py"
+                event = FileChangeEvent(
+                    path=str(test_file),
+                    event_type=FileChangeType.MODIFIED,
+                )
+
+                await watcher._handle_event(event)
+
+                # reload_skill should have been called for "git"
+                kernel_mock.reload_skill.assert_called_once_with("git")
+
+    @pytest.mark.asyncio
+    async def test_reload_skill_not_called_for_unknown_skill(self, kernel_mock):
+        """Test that reload_skill is not called for files outside skills dir."""
+        from omni.core.kernel.watcher import FileChangeEvent, FileChangeType, ReactiveSkillWatcher
+        from unittest.mock import AsyncMock, patch
+        from pathlib import Path
+
+        mock_indexer = AsyncMock()
+        mock_indexer.reindex_file = AsyncMock(return_value=1)
+
+        # Create a temp directory to use as skills_dir
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skills_dir = Path(tmpdir)
+
+            # Patch SKILLS_DIR where it's defined
+            with patch("omni.foundation.config.skills.SKILLS_DIR", return_value=skills_dir):
+                watcher = ReactiveSkillWatcher(
+                    indexer=mock_indexer,
+                    patterns=["**/*.py"],
+                    debounce_seconds=0.01,
+                    poll_interval=0.01,
+                )
+                watcher._kernel = kernel_mock
+
+                # Event for a file outside skills directory
+                event = FileChangeEvent(
+                    path="/project/src/some_module.py",
+                    event_type=FileChangeType.MODIFIED,
+                )
+
+                await watcher._handle_event(event)
+
+                # reload_skill should NOT have been called
+                kernel_mock.reload_skill.assert_not_called()

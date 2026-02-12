@@ -1,9 +1,22 @@
 # MCP Tool Schema - Developer Guide
 
 > Trinity Architecture - Agent Layer (L3 Transport)
-> Last Updated: 2026-01-23
+> Last Updated: 2026-02-12
 
-This document describes the MCP Tool schema system, including `inputSchema`, `annotations`, and how to use the `@skill_command` decorator effectively.
+This document describes the MCP Tool schema system, including `inputSchema`, **tools/call result contract**, and how to use the `@skill_command` decorator effectively.
+
+---
+
+## 0. tools/call result contract (response shape)
+
+All skill tool results are normalized so MCP clients (e.g. Cursor) never receive `result: null` or unrecognized keys, avoiding `invalid_union` schema errors.
+
+- **Success**: The JSON-RPC response has `result` set to an **object** with:
+  - `content`: array of `{ "type": "text", "text": "<string>" }` (never null; empty string if no output).
+  - `isError`: `false`.
+- **Error**: The server sends a JSON-RPC **error** response (`error` object, no `result`). The stdio transport turns handler error responses into raised exceptions so the MCP layer always emits either a valid `result` object or an `error` object.
+
+Implementations use `_tool_result_content(text, is_error=False)` in the agent handler so every success path returns this shape.
 
 ---
 
@@ -23,7 +36,7 @@ This document describes the MCP Tool schema system, including `inputSchema`, `an
   "properties": {
     "path": {
       "type": "string",
-      "description": "文件路径"
+      "description": "File path"
     },
     "encoding": {
       "type": "string",
@@ -81,18 +94,18 @@ from omni.foundation.api.decorators import skill_command
     name="search_code",
     description="Search for patterns in code files",
     # MCP Annotations
-    read_only=True,      # 只读操作
-    idempotent=True,     # 幂等调用
+    read_only=True,      # Read-only operation
+    idempotent=True,     # Idempotent call
 )
 def search_code(
-    query: str,                          # 必需参数
-    file_pattern: str = "*.py",          # 有默认值
-    case_sensitive: bool = False,        # 布尔类型
-    max_results: int = 100,              # 整数
-    encoding: Literal["utf-8", "gbk"] = "utf-8",  # 枚举
-    exclude_patterns: list[str] | None = None,    # 可选列表
+    query: str,                          # Required parameter
+    file_pattern: str = "*.py",          # Has default value
+    case_sensitive: bool = False,        # Boolean type
+    max_results: int = 100,              # Integer
+    encoding: Literal["utf-8", "gbk"] = "utf-8",  # Enum
+    exclude_patterns: list[str] | None = None,    # Optional list
 ) -> str:
-    """搜索代码中的模式"""
+    """Search for patterns in code"""
     ...
 ```
 
@@ -104,32 +117,32 @@ def search_code(
   "properties": {
     "query": {
       "type": "string",
-      "description": "搜索查询字符串"
+      "description": "Search query string"
     },
     "file_pattern": {
       "type": "string",
-      "description": "文件匹配模式",
+      "description": "File match pattern",
       "default": "*.py"
     },
     "case_sensitive": {
       "type": "boolean",
-      "description": "是否区分大小写",
+      "description": "Whether to be case-sensitive",
       "default": false
     },
     "max_results": {
       "type": "integer",
-      "description": "最大结果数",
+      "description": "Maximum number of results",
       "default": 100
     },
     "encoding": {
       "type": "string",
       "enum": ["utf-8", "gbk"],
-      "description": "文件编码"
+      "description": "File encoding"
     },
     "exclude_patterns": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "排除模式列表"
+      "description": "List of exclude patterns"
     }
   },
   "required": ["query"]

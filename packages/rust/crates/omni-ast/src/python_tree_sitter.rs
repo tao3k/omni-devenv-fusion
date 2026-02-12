@@ -421,34 +421,49 @@ fn extract_string_content(s: &str) -> String {
 /// Information about a decorated function
 #[derive(Debug, Clone)]
 pub struct DecoratedFunction {
+    /// Function identifier.
     pub name: String,
+    /// Parsed function parameters.
     pub parameters: Vec<ParameterInfo>,
+    /// Parsed or inferred docstring.
     pub docstring: String,
+    /// Raw function source text.
     pub text: String,
+    /// Parsed decorator metadata when present.
     pub decorator: Option<DecoratorInfo>,
 }
 
 /// Information about a decorator
 #[derive(Debug, Clone, Default)]
 pub struct DecoratorInfo {
+    /// Decorator function name.
     pub name: String,
+    /// Parsed decorator arguments.
     pub arguments: DecoratorArguments,
 }
 
 /// Decorator arguments
 #[derive(Debug, Clone, Default)]
 pub struct DecoratorArguments {
+    /// Optional tool name override.
     pub name: Option<String>,
+    /// Optional tool description.
     pub description: Option<String>,
+    /// Optional category label.
     pub category: Option<String>,
+    /// Whether tool is destructive.
     pub destructive: Option<bool>,
+    /// Whether tool is read-only.
     pub read_only: Option<bool>,
 }
 
 /// Information about a function parameter
 #[derive(Debug, Clone)]
 pub struct ParameterInfo {
+    /// Parameter name.
     pub name: String,
+    /// Optional type annotation.
     pub type_annotation: Option<String>,
+    /// Optional default value.
     pub default_value: Option<String>,
 }

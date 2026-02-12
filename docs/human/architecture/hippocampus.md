@@ -79,13 +79,17 @@ Do not include any other text."""
     return [vector]
 ```
 
-### Hippocampus vs Cortex vs Amygdala
+### Functional Role in Omega Architecture
 
-| Component       | Type               | Purpose              | Data Source                  |
-| --------------- | ------------------ | -------------------- | ---------------------------- |
-| **Cortex**      | Knowledge          | Static documentation | `docs/`, `assets/knowledge/` |
-| **Hippocampus** | Memory             | Experience recall    | LanceDB vector store         |
-| **Amygdala**    | Emotional/Security | Threat detection     | Security scanner             |
+In the **Omega Architecture**, the Hippocampus serves as the long-term memory center, complementing the other functional systems:
+
+| System          | Role       | Analogy            | Data Source           |
+| :-------------- | :--------- | :----------------- | :-------------------- |
+| **Cortex**      | Scheduling | Thinking Brain     | Mission Task Graph    |
+| **Cerebellum**  | Perception | Motor Coordination | Codebase AST / Docs   |
+| **Hippocampus** | Memory     | Memory Center      | LanceDB (Experiences) |
+| **Evolution**   | Learning   | Adaptation         | Crystallized Skills   |
+| **Homeostasis** | Isolation  | Internal Balance   | Isolated Git Branches |
 
 ---
 

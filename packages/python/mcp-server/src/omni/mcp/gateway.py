@@ -17,6 +17,7 @@ Architecture:
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 from omni.foundation.config.logging import get_logger
@@ -62,7 +63,7 @@ class SkillChangeNotifier:
         Debounces notifications to avoid flooding clients.
         """
         async with self._lock:
-            now = asyncio.get_event_loop().time()
+            now = time.monotonic()
             time_since_last = now - self._last_notification
 
             # If within debounce window, cancel pending debounce and restart it

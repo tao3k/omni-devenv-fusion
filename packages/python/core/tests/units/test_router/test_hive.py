@@ -19,7 +19,6 @@ class TestHiveRouter:
         hive = HiveRouter(mock_semantic)
 
         assert hive._semantic is mock_semantic
-        assert hive._fallback is not None
 
     @pytest.mark.asyncio
     async def test_route_explicit_command(self):

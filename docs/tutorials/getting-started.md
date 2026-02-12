@@ -213,11 +213,11 @@ just test  # or: uv run pytest
 
 ## Next Steps
 
-| If you want to...        | Go to...                                                                                       |
-| ------------------------ | ---------------------------------------------------------------------------------------------- |
-| Understand v2.0 Layers   | [Trinity Architecture](https://www.google.com/search?q=../explanation/trinity-architecture.md) |
-| Create a Zero-Code Skill | [Skills Guide](https://www.google.com/search?q=../skills.md)                                   |
-| Debug Hot Reload         | [Hot Reload Guide](https://www.google.com/search?q=../developer/hot-reload.md)                 |
+| If you want to...        | Go to...                                             |
+| ------------------------ | ---------------------------------------------------- |
+| Understand v2.0 Layers   | [System Layering](../explanation/system-layering.md) |
+| Create a Zero-Code Skill | [Skills Guide](../skills.md)                         |
+| Debug Hot Reload         | [Hot Reload Guide](../developer/hot-reload.md)       |
 
 ---
 

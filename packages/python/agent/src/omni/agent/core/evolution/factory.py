@@ -74,9 +74,9 @@ async def {skill_name}(
 
 
 if __name__ == "__main__":
-    import asyncio
+    from omni.foundation.utils import run_async_blocking
 
-    asyncio.run({skill_name}())
+    run_async_blocking({skill_name}())
 '''
 
 SKILL_MD_TEMPLATE = """# {skill_name}

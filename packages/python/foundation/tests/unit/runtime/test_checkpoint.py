@@ -9,8 +9,26 @@ These tests verify:
 from __future__ import annotations
 
 import pytest
-from unittest.mock import patch, MagicMock
 from pathlib import Path
+
+
+@pytest.fixture(autouse=True)
+def isolated_checkpoint_store(tmp_path, monkeypatch):
+    """Isolate checkpoint DB path per test to avoid cross-test schema conflicts."""
+    checkpoint_db = tmp_path / "checkpoints.lance"
+
+    # Force checkpoint path to an isolated temp location.
+    monkeypatch.setattr(
+        "omni.foundation.config.database.get_checkpoint_db_path",
+        lambda: checkpoint_db,
+    )
+
+    # Reset per-process checkpoint store cache before and after each test.
+    import omni.foundation.checkpoint as checkpoint_module
+
+    checkpoint_module._checkpoint_store_cache.clear()
+    yield
+    checkpoint_module._checkpoint_store_cache.clear()
 
 
 class TestRustBindingsImport:

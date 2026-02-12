@@ -1,0 +1,3597 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_keyword_backend_quality.rs
+expression: report
+---
+{
+  "k": 5,
+  "lance_fts_details": [
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_0_0_exact_keyword",
+      "r_at_5": "0.3333",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "search ripgrep regex",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "0.5000",
+      "ndcg_at_5": "0.4702",
+      "p_at_5": "0.2000",
+      "query": "v4_0_1_intent_phrase",
+      "r_at_5": "0.3333",
+      "scene": "intent_phrase",
+      "success_at_1": "0.0000",
+      "text": "find text in code search symbols",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_0_2_bilingual_mix",
+      "r_at_5": "0.3333",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "search 中文 场景 find text in code",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_0_3_workflow_ambiguous",
+      "r_at_5": "0.3333",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run search workflow ripgrep",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.1065",
+      "p_at_5": "0.2000",
+      "query": "v4_0_4_tool_discovery",
+      "r_at_5": "0.3333",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for search regex",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_0_5_ops_short",
+      "r_at_5": "0.3333",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "search ripgrep",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "0.2000",
+      "ndcg_at_5": "0.2883",
+      "p_at_5": "0.2000",
+      "query": "v4_0_6_troubleshooting",
+      "r_at_5": "0.3333",
+      "scene": "troubleshooting",
+      "success_at_1": "0.0000",
+      "text": "fix issue with search and regex",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_0_7_planning",
+      "r_at_5": "0.3333",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using find text in code ripgrep",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_0_8_audit",
+      "r_at_5": "0.3333",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify search find text in code",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_0_9_automation",
+      "r_at_5": "0.3333",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate search ripgrep pipeline",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_1_0_exact_keyword",
+      "r_at_5": "0.6667",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "find files fd",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_1_1_intent_phrase",
+      "r_at_5": "0.6667",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "locate files discover directories",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_1_2_bilingual_mix",
+      "r_at_5": "0.6667",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "find 中文 场景 locate files",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "0.3333",
+      "ndcg_at_5": "0.5102",
+      "p_at_5": "0.4000",
+      "query": "v4_1_3_workflow_ambiguous",
+      "r_at_5": "0.6667",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "0.0000",
+      "text": "run find workflow files",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.5767",
+      "p_at_5": "0.4000",
+      "query": "v4_1_4_tool_discovery",
+      "r_at_5": "0.6667",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for find fd",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_1_5_ops_short",
+      "r_at_5": "0.6667",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "find files",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_1_6_troubleshooting",
+      "r_at_5": "0.3333",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with find and fd",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.6920",
+      "p_at_5": "0.4000",
+      "query": "v4_1_7_planning",
+      "r_at_5": "0.6667",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using locate files files",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_1_8_audit",
+      "r_at_5": "0.6667",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify find locate files",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_1_9_automation",
+      "r_at_5": "0.6667",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate find files pipeline",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_2_0_exact_keyword",
+      "r_at_5": "0.3333",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "replace refactor regex",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.3194",
+      "p_at_5": "0.2000",
+      "query": "v4_2_1_intent_phrase",
+      "r_at_5": "0.3333",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "mass edit code safe replacement",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.3194",
+      "p_at_5": "0.2000",
+      "query": "v4_2_2_bilingual_mix",
+      "r_at_5": "0.3333",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "replace 中文 场景 mass edit code",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_2_3_workflow_ambiguous",
+      "r_at_5": "0.3333",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run replace workflow refactor",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.5767",
+      "p_at_5": "0.4000",
+      "query": "v4_2_4_tool_discovery",
+      "r_at_5": "0.6667",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for replace regex",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_2_5_ops_short",
+      "r_at_5": "0.3333",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "replace refactor",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_2_6_troubleshooting",
+      "r_at_5": "0.3333",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with replace and regex",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7896",
+      "p_at_5": "0.4000",
+      "query": "v4_2_7_planning",
+      "r_at_5": "0.6667",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using mass edit code refactor",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.3194",
+      "p_at_5": "0.2000",
+      "query": "v4_2_8_audit",
+      "r_at_5": "0.3333",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify replace mass edit code",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_2_9_automation",
+      "r_at_5": "0.3333",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate replace refactor pipeline",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_0_exact_keyword",
+      "r_at_5": "0.3333",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "dependency crate symbol",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_1_intent_phrase",
+      "r_at_5": "0.3333",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "inspect external api crate symbol lookup",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_2_bilingual_mix",
+      "r_at_5": "0.3333",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "dependency 中文 场景 inspect external api",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_3_workflow_ambiguous",
+      "r_at_5": "0.3333",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run dependency workflow crate",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.8124",
+      "p_at_5": "0.4000",
+      "query": "v4_3_4_tool_discovery",
+      "r_at_5": "0.6667",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for dependency symbol",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_5_ops_short",
+      "r_at_5": "0.3333",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "dependency crate",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_6_troubleshooting",
+      "r_at_5": "0.3333",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with dependency and symbol",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_7_planning",
+      "r_at_5": "0.3333",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using inspect external api crate",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_8_audit",
+      "r_at_5": "0.3333",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify dependency inspect external api",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_9_automation",
+      "r_at_5": "0.3333",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate dependency crate pipeline",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_4_0_exact_keyword",
+      "r_at_5": "0.3333",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "knowledge zk hybrid",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search",
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "0.5000",
+      "ndcg_at_5": "0.5741",
+      "p_at_5": "0.4000",
+      "query": "v4_4_1_intent_phrase",
+      "r_at_5": "0.6667",
+      "scene": "intent_phrase",
+      "success_at_1": "0.0000",
+      "text": "find related notes semantic notebook search",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_4_2_bilingual_mix",
+      "r_at_5": "0.3333",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "knowledge 中文 场景 find related notes",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_4_3_workflow_ambiguous",
+      "r_at_5": "0.3333",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run knowledge workflow zk",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.zk_hybrid_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.8124",
+      "p_at_5": "0.4000",
+      "query": "v4_4_4_tool_discovery",
+      "r_at_5": "0.6667",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for knowledge hybrid",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_4_5_ops_short",
+      "r_at_5": "0.3333",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "knowledge zk",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_4_6_troubleshooting",
+      "r_at_5": "0.3333",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with knowledge and hybrid",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "0.5000",
+      "ndcg_at_5": "0.4702",
+      "p_at_5": "0.2000",
+      "query": "v4_4_7_planning",
+      "r_at_5": "0.3333",
+      "scene": "planning",
+      "success_at_1": "0.0000",
+      "text": "plan task using find related notes zk",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_4_8_audit",
+      "r_at_5": "0.3333",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify knowledge find related notes",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_4_9_automation",
+      "r_at_5": "0.3333",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate knowledge zk pipeline",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_0_exact_keyword",
+      "r_at_5": "0.5000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "git commit workflow",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_1_intent_phrase",
+      "r_at_5": "0.5000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "safe commit approved commit flow",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_2_bilingual_mix",
+      "r_at_5": "0.5000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "git 中文 场景 safe commit",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_3_workflow_ambiguous",
+      "r_at_5": "0.5000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run git workflow commit",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "v4_5_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for git workflow",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_5_ops_short",
+      "r_at_5": "0.5000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "git commit",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_6_troubleshooting",
+      "r_at_5": "0.5000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with git and workflow",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "0.5000",
+      "ndcg_at_5": "0.5788",
+      "p_at_5": "0.2000",
+      "query": "v4_5_7_planning",
+      "r_at_5": "0.5000",
+      "scene": "planning",
+      "success_at_1": "0.0000",
+      "text": "plan task using safe commit commit",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_8_audit",
+      "r_at_5": "0.5000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify git safe commit",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_9_automation",
+      "r_at_5": "0.5000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate git commit pipeline",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_0_exact_keyword",
+      "r_at_5": "0.5000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "crawl web chunk",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_1_intent_phrase",
+      "r_at_5": "0.5000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "extract web docs crawl urls",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_2_bilingual_mix",
+      "r_at_5": "0.5000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "crawl 中文 场景 extract web docs",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_3_workflow_ambiguous",
+      "r_at_5": "0.5000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run crawl workflow web",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "v4_6_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for crawl chunk",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_5_ops_short",
+      "r_at_5": "0.5000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "crawl web",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_6_troubleshooting",
+      "r_at_5": "0.5000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with crawl and chunk",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_7_planning",
+      "r_at_5": "0.5000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using extract web docs web",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_8_audit",
+      "r_at_5": "0.5000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify crawl extract web docs",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_9_automation",
+      "r_at_5": "0.5000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate crawl web pipeline",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_0_exact_keyword",
+      "r_at_5": "0.5000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "research repository analyze",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_1_intent_phrase",
+      "r_at_5": "0.5000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "analyze repo deep research",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [],
+      "mrr_rr": "0.0000",
+      "ndcg_at_5": "0.0000",
+      "p_at_5": "0.0000",
+      "query": "v4_7_2_bilingual_mix",
+      "r_at_5": "0.0000",
+      "scene": "bilingual_mix",
+      "success_at_1": "0.0000",
+      "text": "research 中文 场景 analyze repo",
+      "top1": ""
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_3_workflow_ambiguous",
+      "r_at_5": "0.5000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run research workflow repository",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.1310",
+      "p_at_5": "0.2000",
+      "query": "v4_7_4_tool_discovery",
+      "r_at_5": "0.5000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for research analyze",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_5_ops_short",
+      "r_at_5": "0.5000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "research repository",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [],
+      "mrr_rr": "0.0000",
+      "ndcg_at_5": "0.0000",
+      "p_at_5": "0.0000",
+      "query": "v4_7_6_troubleshooting",
+      "r_at_5": "0.0000",
+      "scene": "troubleshooting",
+      "success_at_1": "0.0000",
+      "text": "fix issue with research and analyze",
+      "top1": ""
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_7_planning",
+      "r_at_5": "0.5000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using analyze repo repository",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [],
+      "mrr_rr": "0.0000",
+      "ndcg_at_5": "0.0000",
+      "p_at_5": "0.0000",
+      "query": "v4_7_8_audit",
+      "r_at_5": "0.0000",
+      "scene": "audit",
+      "success_at_1": "0.0000",
+      "text": "audit and verify research analyze repo",
+      "top1": ""
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_9_automation",
+      "r_at_5": "0.5000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate research repository pipeline",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_0_exact_keyword",
+      "r_at_5": "0.5000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "writing polish lint",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_1_intent_phrase",
+      "r_at_5": "0.5000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "improve docs fix writing style",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [],
+      "mrr_rr": "0.0000",
+      "ndcg_at_5": "0.0000",
+      "p_at_5": "0.0000",
+      "query": "v4_8_2_bilingual_mix",
+      "r_at_5": "0.0000",
+      "scene": "bilingual_mix",
+      "success_at_1": "0.0000",
+      "text": "writing 中文 场景 improve docs",
+      "top1": ""
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_3_workflow_ambiguous",
+      "r_at_5": "0.5000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run writing workflow polish",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover",
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7098",
+      "p_at_5": "0.4000",
+      "query": "v4_8_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for writing lint",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_5_ops_short",
+      "r_at_5": "0.5000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "writing polish",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_6_troubleshooting",
+      "r_at_5": "0.5000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with writing and lint",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_7_planning",
+      "r_at_5": "0.5000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using improve docs polish",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [],
+      "mrr_rr": "0.0000",
+      "ndcg_at_5": "0.0000",
+      "p_at_5": "0.0000",
+      "query": "v4_8_8_audit",
+      "r_at_5": "0.0000",
+      "scene": "audit",
+      "success_at_1": "0.0000",
+      "text": "audit and verify writing improve docs",
+      "top1": ""
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_9_automation",
+      "r_at_5": "0.5000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate writing polish pipeline",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_0_exact_keyword",
+      "r_at_5": "0.5000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "nushell execute command",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_1_intent_phrase",
+      "r_at_5": "0.5000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "run shell safely structured command output",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_2_bilingual_mix",
+      "r_at_5": "0.5000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "nushell 中文 场景 run shell safely",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_3_workflow_ambiguous",
+      "r_at_5": "0.5000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run nushell workflow execute",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "v4_9_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for nushell command",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_5_ops_short",
+      "r_at_5": "0.5000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "nushell execute",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_6_troubleshooting",
+      "r_at_5": "0.5000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with nushell and command",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_7_planning",
+      "r_at_5": "0.5000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using run shell safely execute",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_8_audit",
+      "r_at_5": "0.5000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify nushell run shell safely",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_9_automation",
+      "r_at_5": "0.5000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate nushell execute pipeline",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_0_exact_keyword",
+      "r_at_5": "1.0000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "discover intent capability",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_1_intent_phrase",
+      "r_at_5": "1.0000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "find tool resolve capabilities",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_2_bilingual_mix",
+      "r_at_5": "1.0000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "discover 中文 场景 find tool",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_3_workflow_ambiguous",
+      "r_at_5": "1.0000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run discover workflow intent",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for discover capability",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_5_ops_short",
+      "r_at_5": "1.0000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "discover intent",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_6_troubleshooting",
+      "r_at_5": "1.0000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with discover and capability",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_7_planning",
+      "r_at_5": "1.0000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using find tool intent",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_8_audit",
+      "r_at_5": "1.0000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify discover find tool",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_9_automation",
+      "r_at_5": "1.0000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate discover intent pipeline",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_0_exact_keyword",
+      "r_at_5": "0.5000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "memory semantic search",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_1_intent_phrase",
+      "r_at_5": "0.5000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "retrieve prior insights search memory bank",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_2_bilingual_mix",
+      "r_at_5": "0.5000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "memory 中文 场景 retrieve prior insights",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_3_workflow_ambiguous",
+      "r_at_5": "0.5000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run memory workflow semantic",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "v4_11_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for memory search",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_5_ops_short",
+      "r_at_5": "0.5000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "memory semantic",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_6_troubleshooting",
+      "r_at_5": "0.5000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with memory and search",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_7_planning",
+      "r_at_5": "0.5000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using retrieve prior insights semantic",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_8_audit",
+      "r_at_5": "0.5000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify memory retrieve prior insights",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_9_automation",
+      "r_at_5": "0.5000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate memory semantic pipeline",
+      "top1": "memory.search_memory"
+    }
+  ],
+  "queries": 120,
+  "scene_summary": [
+    {
+      "lance_fts": {
+        "mean_ndcg_at_5": "0.6809",
+        "mean_p_at_5": "0.1833",
+        "mean_r_at_5": "0.4167"
+      },
+      "queries": 12,
+      "scene": "audit",
+      "tantivy": {
+        "mean_ndcg_at_5": "0.9635",
+        "mean_p_at_5": "0.4500",
+        "mean_r_at_5": "0.9722"
+      }
+    },
+    {
+      "lance_fts": {
+        "mean_ndcg_at_5": "0.8693",
+        "mean_p_at_5": "0.2167",
+        "mean_r_at_5": "0.5000"
+      },
+      "queries": 12,
+      "scene": "automation",
+      "tantivy": {
+        "mean_ndcg_at_5": "0.8882",
+        "mean_p_at_5": "0.2500",
+        "mean_r_at_5": "0.5556"
+      }
+    },
+    {
+      "lance_fts": {
+        "mean_ndcg_at_5": "0.6809",
+        "mean_p_at_5": "0.1833",
+        "mean_r_at_5": "0.4167"
+      },
+      "queries": 12,
+      "scene": "bilingual_mix",
+      "tantivy": {
+        "mean_ndcg_at_5": "0.9156",
+        "mean_p_at_5": "0.3000",
+        "mean_r_at_5": "0.6389"
+      }
+    },
+    {
+      "lance_fts": {
+        "mean_ndcg_at_5": "0.8693",
+        "mean_p_at_5": "0.2167",
+        "mean_r_at_5": "0.5000"
+      },
+      "queries": 12,
+      "scene": "exact_keyword",
+      "tantivy": {
+        "mean_ndcg_at_5": "0.8882",
+        "mean_p_at_5": "0.2500",
+        "mean_r_at_5": "0.5556"
+      }
+    },
+    {
+      "lance_fts": {
+        "mean_ndcg_at_5": "0.7966",
+        "mean_p_at_5": "0.2333",
+        "mean_r_at_5": "0.5278"
+      },
+      "queries": 12,
+      "scene": "intent_phrase",
+      "tantivy": {
+        "mean_ndcg_at_5": "0.8852",
+        "mean_p_at_5": "0.2500",
+        "mean_r_at_5": "0.5556"
+      }
+    },
+    {
+      "lance_fts": {
+        "mean_ndcg_at_5": "0.8693",
+        "mean_p_at_5": "0.2167",
+        "mean_r_at_5": "0.5000"
+      },
+      "queries": 12,
+      "scene": "ops_short",
+      "tantivy": {
+        "mean_ndcg_at_5": "0.8882",
+        "mean_p_at_5": "0.2500",
+        "mean_r_at_5": "0.5556"
+      }
+    },
+    {
+      "lance_fts": {
+        "mean_ndcg_at_5": "0.8006",
+        "mean_p_at_5": "0.2333",
+        "mean_r_at_5": "0.5278"
+      },
+      "queries": 12,
+      "scene": "planning",
+      "tantivy": {
+        "mean_ndcg_at_5": "0.9067",
+        "mean_p_at_5": "0.2833",
+        "mean_r_at_5": "0.6111"
+      }
+    },
+    {
+      "lance_fts": {
+        "mean_ndcg_at_5": "0.7271",
+        "mean_p_at_5": "0.3500",
+        "mean_r_at_5": "0.7917"
+      },
+      "queries": 12,
+      "scene": "tool_discovery",
+      "tantivy": {
+        "mean_ndcg_at_5": "0.7153",
+        "mean_p_at_5": "0.4333",
+        "mean_r_at_5": "0.9444"
+      }
+    },
+    {
+      "lance_fts": {
+        "mean_ndcg_at_5": "0.7380",
+        "mean_p_at_5": "0.1833",
+        "mean_r_at_5": "0.4306"
+      },
+      "queries": 12,
+      "scene": "troubleshooting",
+      "tantivy": {
+        "mean_ndcg_at_5": "0.8588",
+        "mean_p_at_5": "0.2500",
+        "mean_r_at_5": "0.5556"
+      }
+    },
+    {
+      "lance_fts": {
+        "mean_ndcg_at_5": "0.8329",
+        "mean_p_at_5": "0.2167",
+        "mean_r_at_5": "0.5000"
+      },
+      "queries": 12,
+      "scene": "workflow_ambiguous",
+      "tantivy": {
+        "mean_ndcg_at_5": "0.8852",
+        "mean_p_at_5": "0.2500",
+        "mean_r_at_5": "0.5556"
+      }
+    }
+  ],
+  "summary": {
+    "lance_fts": {
+      "mean_ndcg_at_5": "0.7865",
+      "mean_p_at_5": "0.2233",
+      "mean_r_at_5": "0.5111",
+      "mrr": "0.9294",
+      "success_at_1": "0.9083"
+    },
+    "tantivy": {
+      "mean_ndcg_at_5": "0.8795",
+      "mean_p_at_5": "0.2967",
+      "mean_r_at_5": "0.6500",
+      "mrr": "0.9958",
+      "success_at_1": "0.9917"
+    }
+  },
+  "tantivy_details": [
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_0_0_exact_keyword",
+      "r_at_5": "0.3333",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "search ripgrep regex",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_0_1_intent_phrase",
+      "r_at_5": "0.3333",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "find text in code search symbols",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.8688",
+      "p_at_5": "0.4000",
+      "query": "v4_0_2_bilingual_mix",
+      "r_at_5": "0.6667",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "search 中文 场景 find text in code",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_0_3_workflow_ambiguous",
+      "r_at_5": "0.3333",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run search workflow ripgrep",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.5510",
+      "p_at_5": "0.6000",
+      "query": "v4_0_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for search regex",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_0_5_ops_short",
+      "r_at_5": "0.3333",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "search ripgrep",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "0.5000",
+      "ndcg_at_5": "0.4702",
+      "p_at_5": "0.2000",
+      "query": "v4_0_6_troubleshooting",
+      "r_at_5": "0.3333",
+      "scene": "troubleshooting",
+      "success_at_1": "0.0000",
+      "text": "fix issue with search and regex",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9461",
+      "p_at_5": "0.6000",
+      "query": "v4_0_7_planning",
+      "r_at_5": "1.0000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using find text in code ripgrep",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.8688",
+      "p_at_5": "0.4000",
+      "query": "v4_0_8_audit",
+      "r_at_5": "0.6667",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify search find text in code",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_0_9_automation",
+      "r_at_5": "0.3333",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate search ripgrep pipeline",
+      "top1": "advanced_tools.smart_search"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9721",
+      "p_at_5": "0.6000",
+      "query": "v4_1_0_exact_keyword",
+      "r_at_5": "1.0000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "find files fd",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.8124",
+      "p_at_5": "0.4000",
+      "query": "v4_1_1_intent_phrase",
+      "r_at_5": "0.6667",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "locate files discover directories",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9721",
+      "p_at_5": "0.6000",
+      "query": "v4_1_2_bilingual_mix",
+      "r_at_5": "1.0000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "find 中文 场景 locate files",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9360",
+      "p_at_5": "0.6000",
+      "query": "v4_1_3_workflow_ambiguous",
+      "r_at_5": "1.0000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run find workflow files",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7364",
+      "p_at_5": "0.6000",
+      "query": "v4_1_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for find fd",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9721",
+      "p_at_5": "0.6000",
+      "query": "v4_1_5_ops_short",
+      "r_at_5": "1.0000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "find files",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9360",
+      "p_at_5": "0.6000",
+      "query": "v4_1_6_troubleshooting",
+      "r_at_5": "1.0000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with find and fd",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_1_7_planning",
+      "r_at_5": "0.6667",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using locate files files",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9500",
+      "p_at_5": "0.6000",
+      "query": "v4_1_8_audit",
+      "r_at_5": "1.0000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify find locate files",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.smart_find",
+        "advanced_tools.smart_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9721",
+      "p_at_5": "0.6000",
+      "query": "v4_1_9_automation",
+      "r_at_5": "1.0000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate find files pipeline",
+      "top1": "advanced_tools.smart_find"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_2_0_exact_keyword",
+      "r_at_5": "0.3333",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "replace refactor regex",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_2_1_intent_phrase",
+      "r_at_5": "0.6667",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "mass edit code safe replacement",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_2_2_bilingual_mix",
+      "r_at_5": "0.6667",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "replace 中文 场景 mass edit code",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_2_3_workflow_ambiguous",
+      "r_at_5": "0.3333",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run replace workflow refactor",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.5767",
+      "p_at_5": "0.4000",
+      "query": "v4_2_4_tool_discovery",
+      "r_at_5": "0.6667",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for replace regex",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_2_5_ops_short",
+      "r_at_5": "0.3333",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "replace refactor",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_2_6_troubleshooting",
+      "r_at_5": "0.3333",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with replace and regex",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace",
+        "advanced_tools.smart_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_2_7_planning",
+      "r_at_5": "0.6667",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using mass edit code refactor",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace",
+        "advanced_tools.smart_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9926",
+      "p_at_5": "0.6000",
+      "query": "v4_2_8_audit",
+      "r_at_5": "1.0000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify replace mass edit code",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "advanced_tools.batch_replace"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_2_9_automation",
+      "r_at_5": "0.3333",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate replace refactor pipeline",
+      "top1": "advanced_tools.batch_replace"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_0_exact_keyword",
+      "r_at_5": "0.3333",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "dependency crate symbol",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_1_intent_phrase",
+      "r_at_5": "0.3333",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "inspect external api crate symbol lookup",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_2_bilingual_mix",
+      "r_at_5": "0.3333",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "dependency 中文 场景 inspect external api",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_3_workflow_ambiguous",
+      "r_at_5": "0.3333",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run dependency workflow crate",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.5767",
+      "p_at_5": "0.4000",
+      "query": "v4_3_4_tool_discovery",
+      "r_at_5": "0.6667",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for dependency symbol",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_5_ops_short",
+      "r_at_5": "0.3333",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "dependency crate",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_6_troubleshooting",
+      "r_at_5": "0.3333",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with dependency and symbol",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_7_planning",
+      "r_at_5": "0.3333",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using inspect external api crate",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search",
+        "knowledge.zk_hybrid_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9220",
+      "p_at_5": "0.6000",
+      "query": "v4_3_8_audit",
+      "r_at_5": "1.0000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify dependency inspect external api",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7453",
+      "p_at_5": "0.2000",
+      "query": "v4_3_9_automation",
+      "r_at_5": "0.3333",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate dependency crate pipeline",
+      "top1": "knowledge.dependency_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search",
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_4_0_exact_keyword",
+      "r_at_5": "0.6667",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "knowledge zk hybrid",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search",
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.8688",
+      "p_at_5": "0.4000",
+      "query": "v4_4_1_intent_phrase",
+      "r_at_5": "0.6667",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "find related notes semantic notebook search",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search",
+        "knowledge.zk_hybrid_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9508",
+      "p_at_5": "0.6000",
+      "query": "v4_4_2_bilingual_mix",
+      "r_at_5": "1.0000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "knowledge 中文 场景 find related notes",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search",
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_4_3_workflow_ambiguous",
+      "r_at_5": "0.6667",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run knowledge workflow zk",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search",
+        "knowledge.zk_hybrid_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7142",
+      "p_at_5": "0.6000",
+      "query": "v4_4_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for knowledge hybrid",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search",
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_4_5_ops_short",
+      "r_at_5": "0.6667",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "knowledge zk",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search",
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9049",
+      "p_at_5": "0.4000",
+      "query": "v4_4_6_troubleshooting",
+      "r_at_5": "0.6667",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with knowledge and hybrid",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.zk_hybrid_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7911",
+      "p_at_5": "0.4000",
+      "query": "v4_4_7_planning",
+      "r_at_5": "0.6667",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using find related notes zk",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search",
+        "knowledge.zk_hybrid_search",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9508",
+      "p_at_5": "0.6000",
+      "query": "v4_4_8_audit",
+      "r_at_5": "1.0000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify knowledge find related notes",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "knowledge.dependency_search",
+        "knowledge.zk_hybrid_search"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9468",
+      "p_at_5": "0.4000",
+      "query": "v4_4_9_automation",
+      "r_at_5": "0.6667",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate knowledge zk pipeline",
+      "top1": "knowledge.zk_hybrid_search"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_0_exact_keyword",
+      "r_at_5": "0.5000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "git commit workflow",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_1_intent_phrase",
+      "r_at_5": "0.5000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "safe commit approved commit flow",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_2_bilingual_mix",
+      "r_at_5": "0.5000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "git 中文 场景 safe commit",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_3_workflow_ambiguous",
+      "r_at_5": "0.5000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run git workflow commit",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7098",
+      "p_at_5": "0.4000",
+      "query": "v4_5_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for git workflow",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_5_ops_short",
+      "r_at_5": "0.5000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "git commit",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_6_troubleshooting",
+      "r_at_5": "0.5000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with git and workflow",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_7_planning",
+      "r_at_5": "0.5000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using safe commit commit",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9738",
+      "p_at_5": "0.4000",
+      "query": "v4_5_8_audit",
+      "r_at_5": "1.0000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify git safe commit",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "git.smart_commit"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_5_9_automation",
+      "r_at_5": "0.5000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate git commit pipeline",
+      "top1": "git.smart_commit"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_0_exact_keyword",
+      "r_at_5": "0.5000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "crawl web chunk",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_1_intent_phrase",
+      "r_at_5": "0.5000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "extract web docs crawl urls",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_2_bilingual_mix",
+      "r_at_5": "0.5000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "crawl 中文 场景 extract web docs",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_3_workflow_ambiguous",
+      "r_at_5": "0.5000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run crawl workflow web",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7098",
+      "p_at_5": "0.4000",
+      "query": "v4_6_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for crawl chunk",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_5_ops_short",
+      "r_at_5": "0.5000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "crawl web",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_6_troubleshooting",
+      "r_at_5": "0.5000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with crawl and chunk",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_7_planning",
+      "r_at_5": "0.5000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using extract web docs web",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9738",
+      "p_at_5": "0.4000",
+      "query": "v4_6_8_audit",
+      "r_at_5": "1.0000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify crawl extract web docs",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "crawl4ai.crawl_url"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_6_9_automation",
+      "r_at_5": "0.5000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate crawl web pipeline",
+      "top1": "crawl4ai.crawl_url"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_0_exact_keyword",
+      "r_at_5": "0.5000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "research repository analyze",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_1_intent_phrase",
+      "r_at_5": "0.5000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "analyze repo deep research",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_2_bilingual_mix",
+      "r_at_5": "0.5000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "research 中文 场景 analyze repo",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_3_workflow_ambiguous",
+      "r_at_5": "0.5000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run research workflow repository",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7098",
+      "p_at_5": "0.4000",
+      "query": "v4_7_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for research analyze",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_5_ops_short",
+      "r_at_5": "0.5000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "research repository",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_6_troubleshooting",
+      "r_at_5": "0.5000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with research and analyze",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_7_planning",
+      "r_at_5": "0.5000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using analyze repo repository",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "v4_7_8_audit",
+      "r_at_5": "1.0000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify research analyze repo",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [
+        "researcher.git_repo_analyer"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_7_9_automation",
+      "r_at_5": "0.5000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate research repository pipeline",
+      "top1": "researcher.git_repo_analyer"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_0_exact_keyword",
+      "r_at_5": "0.5000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "writing polish lint",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_1_intent_phrase",
+      "r_at_5": "0.5000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "improve docs fix writing style",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_2_bilingual_mix",
+      "r_at_5": "0.5000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "writing 中文 场景 improve docs",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_3_workflow_ambiguous",
+      "r_at_5": "0.5000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run writing workflow polish",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover",
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.5897",
+      "p_at_5": "0.4000",
+      "query": "v4_8_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for writing lint",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_5_ops_short",
+      "r_at_5": "0.5000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "writing polish",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_6_troubleshooting",
+      "r_at_5": "0.5000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with writing and lint",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_7_planning",
+      "r_at_5": "0.5000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using improve docs polish",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover",
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9738",
+      "p_at_5": "0.4000",
+      "query": "v4_8_8_audit",
+      "r_at_5": "1.0000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify writing improve docs",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "writer.polish_text"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_8_9_automation",
+      "r_at_5": "0.5000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate writing polish pipeline",
+      "top1": "writer.polish_text"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_0_exact_keyword",
+      "r_at_5": "0.5000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "nushell execute command",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_1_intent_phrase",
+      "r_at_5": "0.5000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "run shell safely structured command output",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_2_bilingual_mix",
+      "r_at_5": "0.5000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "nushell 中文 场景 run shell safely",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_3_workflow_ambiguous",
+      "r_at_5": "0.5000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run nushell workflow execute",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.7098",
+      "p_at_5": "0.4000",
+      "query": "v4_9_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for nushell command",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_5_ops_short",
+      "r_at_5": "0.5000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "nushell execute",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_6_troubleshooting",
+      "r_at_5": "0.5000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with nushell and command",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_7_planning",
+      "r_at_5": "0.5000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using run shell safely execute",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9738",
+      "p_at_5": "0.4000",
+      "query": "v4_9_8_audit",
+      "r_at_5": "1.0000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify nushell run shell safely",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "omniCell.execute"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_9_9_automation",
+      "r_at_5": "0.5000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate nushell execute pipeline",
+      "top1": "omniCell.execute"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_0_exact_keyword",
+      "r_at_5": "1.0000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "discover intent capability",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_1_intent_phrase",
+      "r_at_5": "1.0000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "find tool resolve capabilities",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_2_bilingual_mix",
+      "r_at_5": "1.0000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "discover 中文 场景 find tool",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_3_workflow_ambiguous",
+      "r_at_5": "1.0000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run discover workflow intent",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for discover capability",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_5_ops_short",
+      "r_at_5": "1.0000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "discover intent",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_6_troubleshooting",
+      "r_at_5": "1.0000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with discover and capability",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_7_planning",
+      "r_at_5": "1.0000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using find tool intent",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_8_audit",
+      "r_at_5": "1.0000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify discover find tool",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.2000",
+      "query": "v4_10_9_automation",
+      "r_at_5": "1.0000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate discover intent pipeline",
+      "top1": "skill.discover"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_0_exact_keyword",
+      "r_at_5": "0.5000",
+      "scene": "exact_keyword",
+      "success_at_1": "1.0000",
+      "text": "memory semantic search",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_1_intent_phrase",
+      "r_at_5": "0.5000",
+      "scene": "intent_phrase",
+      "success_at_1": "1.0000",
+      "text": "retrieve prior insights search memory bank",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_2_bilingual_mix",
+      "r_at_5": "0.5000",
+      "scene": "bilingual_mix",
+      "success_at_1": "1.0000",
+      "text": "memory 中文 场景 retrieve prior insights",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_3_workflow_ambiguous",
+      "r_at_5": "0.5000",
+      "scene": "workflow_ambiguous",
+      "success_at_1": "1.0000",
+      "text": "run memory workflow semantic",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "1.0000",
+      "p_at_5": "0.4000",
+      "query": "v4_11_4_tool_discovery",
+      "r_at_5": "1.0000",
+      "scene": "tool_discovery",
+      "success_at_1": "1.0000",
+      "text": "discover right tool for memory search",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_5_ops_short",
+      "r_at_5": "0.5000",
+      "scene": "ops_short",
+      "success_at_1": "1.0000",
+      "text": "memory semantic",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_6_troubleshooting",
+      "r_at_5": "0.5000",
+      "scene": "troubleshooting",
+      "success_at_1": "1.0000",
+      "text": "fix issue with memory and search",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_7_planning",
+      "r_at_5": "0.5000",
+      "scene": "planning",
+      "success_at_1": "1.0000",
+      "text": "plan task using retrieve prior insights semantic",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory",
+        "skill.discover"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9828",
+      "p_at_5": "0.4000",
+      "query": "v4_11_8_audit",
+      "r_at_5": "1.0000",
+      "scene": "audit",
+      "success_at_1": "1.0000",
+      "text": "audit and verify memory retrieve prior insights",
+      "top1": "memory.search_memory"
+    },
+    {
+      "matched_relevant": [
+        "memory.search_memory"
+      ],
+      "mrr_rr": "1.0000",
+      "ndcg_at_5": "0.9173",
+      "p_at_5": "0.2000",
+      "query": "v4_11_9_automation",
+      "r_at_5": "0.5000",
+      "scene": "automation",
+      "success_at_1": "1.0000",
+      "text": "automate memory semantic pipeline",
+      "top1": "memory.search_memory"
+    }
+  ]
+}

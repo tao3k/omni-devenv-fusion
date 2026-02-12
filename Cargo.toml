@@ -11,9 +11,11 @@ members = [
     "packages/rust/crates/omni-io",
     "packages/rust/crates/omni-knowledge",
     "packages/rust/crates/omni-lance",
+    "packages/rust/crates/omni-macros",
     "packages/rust/crates/omni-scanner",
     "packages/rust/crates/omni-security",
     "packages/rust/crates/omni-sniffer",
+    "packages/rust/crates/omni-sandbox",
     "packages/rust/crates/omni-tags",
     "packages/rust/crates/omni-tokenizer",
     "packages/rust/crates/omni-tui",
@@ -43,6 +45,7 @@ uuid = { version = "1.11", features = ["v4"] }
 chrono = { version = "0.4.38", default-features = false }
 tracing = "0.1"
 globset = "0.4"
+rand = "0.8"
 
 # Git operations (libgit2 for performance)
 git2 = "0.20.3"
@@ -65,6 +68,9 @@ lance-arrow = "1.0"
 
 # Logging
 log = "0.4"
+
+# Parallel processing
+rayon = "1.11"
 
 # Performance optimization - Thin LTO for reduced memory
 [profile.release]

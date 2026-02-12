@@ -1,0 +1,63 @@
+servers:
+  retriever: local://retriever
+  generator: local://generator
+  evaluator: local://evaluator
+
+parameters:
+  query: "Why use typed languages?"
+  quality_threshold: 0.8
+  max_iterations: 3
+
+pipeline:
+  - retriever.hybrid_search:
+      input:
+        query: "$query"
+        collection: "knowledge"
+        top_k: 5
+      output:
+        - results
+  - generator.generate:
+      input:
+        topic: "$query"
+        context: "$results"
+      output:
+        - analysis
+  - loop:
+      max_iterations: 3
+      steps:
+        - generator.analyze:
+            input:
+              topic: "$query"
+              prior: "$analysis"
+            output:
+              - analysis
+        - evaluator.evaluate:
+            input:
+              analysis: "$analysis"
+              threshold: "$quality_threshold"
+            output:
+              - routing_reason
+              - quality_score
+        - branch:
+            router: check_quality
+            field: routing_reason
+            value_map:
+              complete:
+                - quality_threshold_reached
+                - improvement_failed
+              continue:
+                - continue_reflection
+                - quality_gates_failed
+            branches:
+              continue:
+                - generator.reflect:
+                    input:
+                      analysis: "$analysis"
+                    output:
+                      - critique
+              complete:
+                - generator.finalize:
+                    input:
+                      analysis: "$analysis"
+                    output:
+                      - final

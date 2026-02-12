@@ -10,6 +10,10 @@ metadata:
     - "context"
     - "rules"
     - "standards"
+    - "zk"
+    - "zettelkasten"
+    - "bidirectional links"
+    - "reasoning search"
     - "documentation"
     - "how to"
     - "explain"
@@ -187,6 +191,101 @@ Check knowledge base status.
 
 ```python
 @omni("knowledge.knowledge_status")
+```
+
+### ZK Search Commands (Reasoning-based)
+
+#### `zk_search`
+
+High-precision search using ZK bidirectional links (PageIndex-style reasoning).
+
+| Parameter        | Type | Default | Description               |
+| ---------------- | ---- | ------- | ------------------------- |
+| `query`          | str  | -       | Search query (required)   |
+| `max_results`    | int  | 10      | Maximum results           |
+| `max_iterations` | int  | 3       | Reasoning loop iterations |
+
+**Example:**
+
+```python
+@omni("knowledge.zk_search", {"query": "agent skills progressive disclosure", "max_results": 5})
+```
+
+**How it works:**
+
+1. Direct keyword search in titles/tags
+2. LLM-style reasoning via bidirectional link traversal
+3. Results ranked by relevance and link distance
+
+#### `zk_toc`
+
+Get Table of Contents for LLM context (all notes overview).
+
+| Parameter | Type | Default | Description             |
+| --------- | ---- | ------- | ----------------------- |
+| `limit`   | int  | 100     | Maximum notes to return |
+
+**Example:**
+
+```python
+@omni("knowledge.zk_toc", {"limit": 50})
+```
+
+#### `zk_hybrid_search`
+
+Hybrid search combining ZK reasoning + Vector search fallback.
+
+| Parameter     | Type | Default | Description             |
+| ------------- | ---- | ------- | ----------------------- |
+| `query`       | str  | -       | Search query (required) |
+| `max_results` | int  | 10      | Maximum results         |
+| `use_hybrid`  | bool | true    | Use vector fallback     |
+
+**Example:**
+
+```python
+@omni("knowledge.zk_hybrid_search", {"query": "architecture MCP", "use_hybrid": true})
+```
+
+#### `zk_stats`
+
+Get knowledge base statistics.
+
+**Example:**
+
+```python
+@omni("knowledge.zk_stats")
+```
+
+#### `zk_links`
+
+Find notes linked to/from a specific note.
+
+| Parameter   | Type | Default | Description             |
+| ----------- | ---- | ------- | ----------------------- |
+| `note_id`   | str  | -       | Note ID (required)      |
+| `direction` | str  | "both"  | "to", "from", or "both" |
+
+**Example:**
+
+```python
+@omni("knowledge.zk_links", {"note_id": "architecture", "direction": "both"})
+```
+
+#### `zk_find_related`
+
+Find notes related to a given note using ZK's --related flag.
+
+| Parameter      | Type | Default | Description                 |
+| -------------- | ---- | ------- | --------------------------- |
+| `note_id`      | str  | -       | Starting note ID (required) |
+| `max_distance` | int  | 2       | Maximum link distance       |
+| `limit`        | int  | 20      | Maximum results             |
+
+**Example:**
+
+```python
+@omni("knowledge.zk_find_related", {"note_id": "agent-skills", "max_distance": 2})
 ```
 
 ## Core Concepts

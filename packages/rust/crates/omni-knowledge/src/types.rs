@@ -9,20 +9,28 @@ use std::collections::HashMap;
 #[serde(rename_all = "snake_case")]
 pub enum KnowledgeCategory {
     #[serde(rename = "patterns")]
+    /// Reusable pattern knowledge.
     Pattern,
     #[serde(rename = "solutions")]
+    /// Problem-solution knowledge.
     Solution,
     #[serde(rename = "errors")]
+    /// Error diagnosis and fixes.
     Error,
     #[serde(rename = "techniques")]
+    /// Techniques and methods.
     Technique,
     #[serde(rename = "notes")]
+    /// Free-form note content.
     Note,
     #[serde(rename = "references")]
+    /// Reference material.
     Reference,
     #[serde(rename = "architecture")]
+    /// Architecture design and decisions.
     Architecture,
     #[serde(rename = "workflows")]
+    /// Process and workflow guidance.
     Workflow,
 }
 

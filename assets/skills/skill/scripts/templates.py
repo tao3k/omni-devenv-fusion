@@ -25,7 +25,7 @@ def get_template_dirs(skill_name: str) -> dict[str, Path]:
     """
     project_root = get_project_root()
 
-    templates_config = get_setting("assets.templates_dir")
+    templates_config = get_setting("assets.templates_dir") or "assets/templates"
     user_templates_root = project_root / templates_config
     user_skill_templates = user_skill_templates = user_templates_root / skill_name
 

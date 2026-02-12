@@ -236,7 +236,7 @@ class ContextManager:
             "turn_count": self._turn_count,
             "system_messages": len(self.system_prompts),
             "total_messages": len(messages),
-            "estimated_tokens": self.pruner.estimate_tokens(messages),
+            "estimated_tokens": self.pruner.count_messages(messages),
             "pruner_config": {
                 "max_tokens": self.pruner.config.max_tokens,
                 "retained_turns": self.pruner.config.retained_turns,

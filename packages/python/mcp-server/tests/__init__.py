@@ -1,1 +1,0 @@
-"""omni.mcp test package."""

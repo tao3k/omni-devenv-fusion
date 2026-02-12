@@ -1,122 +1,109 @@
-# Omni-Edit vs Omni-AST: 技术职责对比
+# Omni-Edit vs Omni-AST: Technical Responsibilities
 
-> 基于代码库的结构分析，`omni-edit` 和 `omni-ast` 是 Omni-Dev Fusion 架构中两个职责截然不同但紧密协作的 Rust Crate。
+> Based on codebase analysis, `omni-edit` and `omni-ast` are two Rust crates in the Omni-Dev Fusion architecture with distinct but closely collaborating responsibilities.
 
-简单来说：**`omni-ast` 是"眼睛和大脑"（负责理解代码结构），而 `omni-edit` 是"手术刀"（负责精准修改文本）。**
-
----
-
-## 1. Omni-AST (Abstract Syntax Tree Engine)
-
-**定位：代码结构分析与理解引擎**
-
-它的核心任务是**"读懂"**代码，而不是把代码看作一堆字符。它利用 AST（抽象语法树）来解析代码的语法结构。
-
-### 核心职责
-
-- **解析 (Parsing)**：使用 `tree-sitter` 将源代码解析为语法树。
-- **提取 (Extraction)**：识别并提取函数、类、导入（Imports）、装饰器等高层语义结构。
-- **定位 (Navigation)**：回答"`User` 类定义在哪里？"或者"`main` 函数的结束行是多少？"这类问题。
-- **多语言支持**：通过 `lang.rs` 和适配器（如 `python.rs`）支持不同编程语言的语法差异。
-
-### 输入与输出
-
-| 类型         | 描述                                                                                                |
-| ------------ | --------------------------------------------------------------------------------------------------- |
-| **输入**     | 源代码字符串                                                                                        |
-| **输出**     | 结构化数据（如 `FunctionItem`, `ClassItem`），包含名称、参数、文档字符串、字节范围（Byte Ranges）等 |
-| **底层技术** | `tree-sitter`                                                                                       |
-
-### 核心模块
-
-```
-packages/rust/crates/omni-ast/src/
-├── lib.rs           # 主入口和公共 API
-├── lang.rs          # 语言检测和选择
-├── extractor.rs     # 符号提取器 (TagExtractor)
-├── patterns.rs      # ast-grep 模式定义
-├── types.rs         # SymbolKind, Symbol, SearchMatch 等类型
-└── error.rs         # 错误处理
-```
+Simply put: **`omni-ast` is the "eyes and brain" (responsible for understanding code structure), while `omni-edit` is the "scalpel" (responsible for precise text modification).**
 
 ---
 
-## 2. Omni-Edit (Text Editing Engine)
+## 🔍 Omni-AST
 
-**定位：原子化文本操作与编辑引擎**
+**Positioning: Code Structure Analysis and Understanding Engine**
 
-它的核心任务是**"修改"**文本，确保编辑操作是安全、原子（Atomic）且可逆的。它并不关心文本是 Python 代码还是小说，它只关心行号、字节偏移和字符串替换。
+Its core task is to **"understand"** the code, rather than seeing it as a pile of characters. It uses AST (Abstract Syntax Tree) to parse the grammatical structure of the code.
 
-### 核心职责
+### Core Responsibilities
 
-- **缓冲区管理 (Buffer Management)**：高效地加载和操作内存中的文本内容。
-- **原子操作 (Atomic Operations)**：支持事务性的编辑（Transaction），例如"同时修改第10行和第50行，要么都成功，要么都失败"。
-- **差异计算 (Diffing)**：生成 Unified Diff 补丁，用于展示修改预览。
-- **应用补丁 (Applying Edits)**：执行具体的 Insert, Delete, Replace 操作。
+- **Parsing**: Uses `tree-sitter` to parse source code into a syntax tree.
+- **Extraction**: Identifies and extracts high-level semantic structures such as functions, classes, imports, and decorators.
+- **Navigation**: Answers questions like "Where is the `User` class defined?" or "What is the end line of the `main` function?".
+- **Multi-language Support**: Supports syntax differences of different programming languages through `lang.rs` and adapters (such as `python.rs`).
 
-### 输入与输出
+### Input and Output
 
-| 类型         | 描述                                                                       |
-| ------------ | -------------------------------------------------------------------------- |
-| **输入**     | 源代码字符串 + 编辑指令（如 `Replace(start=10, end=20, text="new_code")`） |
-| **输出**     | 修改后的新代码字符串、Diff 文本                                            |
-| **底层技术** | 自定义的 Rope 或行向量结构（用于高效文本处理），类似于文本编辑器的后端逻辑 |
+| Type                | Description                                                                                                    |
+| :------------------ | :------------------------------------------------------------------------------------------------------------- |
+| **Input**           | Source code string                                                                                             |
+| **Output**          | Structured data (e.g., `FunctionItem`, `ClassItem`), including name, parameters, docstrings, byte ranges, etc. |
+| **Underlying Tech** | `tree-sitter`                                                                                                  |
 
-### 核心模块
+### Core Modules
 
-```
-packages/rust/crates/omni-edit/src/
-├── lib.rs           # 主入口和公共 API
-├── editor.rs        # StructuralEditor 核心实现
-├── batch.rs         # 批量编辑引擎 (The Ouroboros)
-├── types.rs         # EditConfig, EditLocation, EditResult
-├── capture.rs       # 变量捕获替换 ($NAME, $$$)
-├── diff.rs          # Unified Diff 生成
-└── error.rs         # EditError
-```
+- `lib.rs`: Main entry and public API.
+- `lang.rs`: Language detection and selection.
+- `extractor.rs`: Symbol extractor (`TagExtractor`).
+- `patterns.rs`: `ast-grep` pattern definitions.
+- `types.rs`: Types such as `SymbolKind`, `Symbol`, `SearchMatch`.
+- `error.rs`: Error handling.
 
 ---
 
-## 核心区别对比表
+## 🛠️ Omni-Edit
 
-| 特性           | omni-ast (理解层)                 | omni-edit (操作层)                 |
-| -------------- | --------------------------------- | ---------------------------------- |
-| **视角**       | **结构视角** (函数、类、变量)     | **文本视角** (行、列、字节、字符)  |
-| **能力**       | Read-Only (主要负责分析和查询)    | Read/Write (主要负责增删改)        |
-| **典型操作**   | "找到函数 `run` 的起始和结束位置" | "将第 5 行到第 10 行替换为 `pass`" |
-| **错误类型**   | 解析错误 (Syntax Error)           | 越界错误 (Index Out of Bounds)     |
-| **依赖**       | `tree-sitter`                     | `similar` (用于 Diff), 标准库 I/O  |
-| **Rust Crate** | `packages/rust/crates/omni-ast`   | `packages/rust/crates/omni-edit`   |
+**Positioning: Atomic Text Operation and Editing Engine**
+
+Its core task is to **"modify"** text, ensuring that editing operations are safe, atomic, and reversible. It doesn't care if the text is Python code or a novel; it only cares about line numbers, byte offsets, and string replacements.
+
+### Core Responsibilities
+
+- **Buffer Management**: Efficiently loads and operates on text content in memory.
+- **Atomic Operations**: Supports transactional editing (Transactions), such as "modify line 10 and line 50 at the same time, either both succeed or both fail".
+- **Diffing**: Generates Unified Diff patches for showing modification previews.
+- **Applying Edits**: Executes specific Insert, Delete, and Replace operations.
+
+### Input and Output
+
+| Type                | Description                                                                                                 |
+| :------------------ | :---------------------------------------------------------------------------------------------------------- |
+| **Input**           | Source code string + editing instructions (e.g., `Replace(start=10, end=20, text="new_code")`)              |
+| **Output**          | Modified new code string, Diff text                                                                         |
+| **Underlying Tech** | Custom Rope or line vector structure (for efficient text processing), similar to text editor backend logic. |
+
+### Core Modules
+
+- `lib.rs`: Main entry and public API.
+- `editor.rs`: Core implementation of `StructuralEditor`.
+- `batch.rs`: Batch editing engine (The Ouroboros).
+- `types.rs`: `EditConfig`, `EditLocation`, `EditResult`.
+- `capture.rs`: Variable capture and replacement (`$NAME`, `$$$`).
+- `diff.rs`: Unified Diff generation.
+- `error.rs`: `EditError`.
 
 ---
 
-## 它们如何协作？ (The Workflow)
+## Core Comparison Table
 
-在 **Structural Refactoring** 场景中，两者是这样配合的：
+| Feature               | omni-ast (Understanding Layer)                 | omni-edit (Operation Layer)                     |
+| :-------------------- | :--------------------------------------------- | :---------------------------------------------- |
+| **Perspective**       | **Structural** (Functions, Classes, Variables) | **Textual** (Lines, Columns, Bytes, Characters) |
+| **Capability**        | Read-Only (Analysis and Queries)               | Read/Write (CRUD)                               |
+| **Typical Operation** | "Find start and end of function `run`"         | "Replace lines 5 to 10 with `pass`"             |
+| **Error Types**       | Parsing Error (Syntax Error)                   | Out of Bounds (Index Out of Bounds)             |
+| **Dependencies**      | `tree-sitter`                                  | `similar` (for Diff), Standard Library I/O      |
 
-### 场景：将所有 `print(x)` 改成 `logger.info(x)`
+---
 
-1. **用户指令**："把所有 `print(x)` 改成 `logger.info(x)`"
+## The Workflow
 
-2. **Step 1 (`omni-ast`)**：
-   - Agent 调用 `omni-ast`
-   - `omni-ast` 解析代码，找到所有 `print` 函数调用的 AST 节点
-   - 返回位置信息列表：
-     ```
-     [{start_byte: 100, end_byte: 110, content: "print(a)"}, ...]
-     ```
+In **Structural Refactoring** scenarios, the two collaborate as follows:
 
-3. **Step 2 (Python 逻辑层)**：
-   - Python 层的 Skill 接收到位置信息
-   - 生成替换文本 `logger.info(a)`
-   - 构建 `BatchEdit` 请求
+### Scenario: Change all `print(x)` to `logger.info(x)`
 
-4. **Step 3 (`omni-edit`)**：
-   - Agent 将源代码和 `BatchEdit` 请求传给 `omni-edit`
-   - `omni-edit` 检查修改是否冲突（例如重叠的范围）
-   - `omni-edit` 执行替换，生成最终的代码字符串
+1. **User Instruction**: "Change all `print(x)` to `logger.info(x)`"
+2. **Step 1 (`omni-ast`)**:
+   - Agent calls `omni-ast`.
+   - `omni-ast` parses code, finding all AST nodes for `print` function calls.
+   - Returns a list of position information.
+3. **Step 2 (Python Logic Layer)**:
+   - The Skill in the Python layer receives the position information.
+   - Generates replacement text `logger.info(a)`.
+   - Constructs a `BatchEdit` request.
+4. **Step 3 (`omni-edit`)**:
+   - Agent passes source code and `BatchEdit` request to `omni-edit`.
+   - `omni-edit` checks for conflicts (e.g., overlapping ranges).
+   - `omni-edit` executes replacements, generating the final code string.
 
-### 时序图
+### Sequence Diagram
 
 ```
 ┌─────────┐     ┌──────────────┐     ┌─────────────┐     ┌─────────┐
@@ -143,14 +130,12 @@ packages/rust/crates/omni-edit/src/
      │<────────────────│                     │                 │
 ```
 
----
+## Summary
 
-## 总结
+| Question                      | Answer                                                        |
+| :---------------------------- | :------------------------------------------------------------ |
+| What does `omni-ast` answer?  | **Where** - "Where to change?" (finding target locations)     |
+| What does `omni-edit` answer? | **How** - "How to change?" (executing specific operations)    |
+| Relationship?                 | `omni-ast` provides coordinates, `omni-edit` executes changes |
 
-| 问题                       | 答案                                      |
-| -------------------------- | ----------------------------------------- |
-| `omni-ast` 回答什么问题？  | **Where** - "改哪里？"（找到目标位置）    |
-| `omni-edit` 回答什么问题？ | **How** - "怎么改？"（执行具体操作）      |
-| 两者关系？                 | `omni-ast` 提供坐标，`omni-edit` 执行修改 |
-
-**`omni-ast` 告诉我们改哪里，`omni-edit` 负责怎么改。**
+**`omni-ast` tells us where to change, and `omni-edit` is responsible for how to change.**

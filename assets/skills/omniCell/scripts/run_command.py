@@ -9,7 +9,7 @@ Replaces bash for agent workflows.
 from typing import Any
 
 from omni.foundation.api.decorators import skill_command
-from omni.core.skills.runtime.omni_cell import ActionType, CellResult, get_runner
+from omni.core.skills.runtime.omni_cell import ActionType, SysQueryResult, get_runner
 
 
 @skill_command(
@@ -53,12 +53,11 @@ async def execute(
     action = ActionType(intent) if intent in ["observe", "mutate"] else runner.classify(command)
 
     # Execute via omniCell
-    result: CellResult = await runner.run(command, action=action, ensure_structured=True)
+    result: SysQueryResult = await runner.run(command, action=action, ensure_structured=True)
 
     # Convert to dict for JSON serialization
     return {
         "status": result.status,
         "data": result.data,
-        "metadata": result.metadata,
-        "security_check": result.security_check,
+        "action": result.action,
     }

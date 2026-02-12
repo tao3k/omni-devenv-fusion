@@ -12,10 +12,25 @@ from omni.core.omni_tool import get_omni_tool_list_entry
 
 @skill_command(
     name="list_tools",
-    category="view",
+    category="debug",  # Changed from "view" to "debug" - signals diagnostic use only
+    read_only=True,  # This tool only reads/returns information, no modifications
+    idempotent=True,  # Same input always returns same output
     description="""
+    [DIAGNOSTIC/DEBUG ONLY] Intentionally limited-use tool for skill/tool exploration.
+    DO NOT use during normal task workflows. Only request when debugging or learning.
+
     List all registered MCP tools with names, descriptions, and usage information.
     Applies overrides from settings.yaml.
+
+    When to use:
+    - Exploring available omni commands during debugging
+    - Checking if a specific tool exists
+    - Generating tool inventory for documentation
+
+    When NOT to use:
+    - As part of normal task completion
+    - When you already know the tool you need
+    - In automated workflows (use specific tool calls instead)
 
     Args:
         - compact: bool = false - If true, shows minimal output with tool names only

@@ -5,12 +5,11 @@ This module registers all fixtures, markers, and hooks for the Omni Test Kit.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 import pytest
 
 from omni.test_kit.decorators import load_test_cases
-from omni.test_kit import asserts
+from omni.test_kit.skill import ensure_skills_import_path
+from omni.foundation.config.dirs import get_skills_dir
 
 # Register fixtures from submodules
 pytest_plugins = [
@@ -24,19 +23,9 @@ pytest_plugins = [
 def pytest_load_initial_conftests(early_config, parser, args):
     """Hook to set up environment before tests start.
 
-    Adds assets/skills to sys.path to allow direct imports in skill tests.
+    Adds configured skills directory to sys.path for skill tests.
     """
-    current = Path(__file__).resolve()
-    root = None
-    for parent in current.parents:
-        if (parent / "assets" / "skills").exists():
-            root = parent
-            break
-
-    if root:
-        skills_dir = root / "assets" / "skills"
-        if str(skills_dir) not in sys.path:
-            sys.path.insert(0, str(skills_dir))
+    ensure_skills_import_path(get_skills_dir())
 
 
 def pytest_generate_tests(metafunc):

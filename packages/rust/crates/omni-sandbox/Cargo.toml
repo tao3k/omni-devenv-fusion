@@ -1,0 +1,33 @@
+[package]
+name = "omni-sandbox"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# PyO3 for Python bindings
+pyo3 = { workspace = true, features = ["experimental-async"] }
+
+# Async execution
+tokio = { workspace = true, features = ["process", "io-util", "time"] }
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Async trait for trait objects
+async-trait = "0.1"
+
+# Unix process limits
+nix = "0.29"
+
+# Time handling
+chrono = { workspace = true }
+
+# Binary path detection
+which = "6.0"
+
+[dev-dependencies]
+tempfile = { workspace = true }

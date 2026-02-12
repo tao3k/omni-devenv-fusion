@@ -54,9 +54,6 @@ class HippocampusTrace(BaseModel):
     nu_pattern: str = Field(default="", description="Core Nu command pattern: ls|where|save")
     tags: list[str] = Field(default_factory=list, description="Tags for categorization")
 
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
-
 
 class ExperienceMetadata(BaseModel):
     """Experience metadata for multi-dimensional filtered retrieval.

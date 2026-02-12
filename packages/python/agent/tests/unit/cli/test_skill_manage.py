@@ -159,34 +159,34 @@ description: A skill
         assert "Skill Structure Check" in result.output
 
 
-class TestSkillInstallDeprecated:
-    """Tests for deprecated 'omni skill install' command."""
+class TestSkillInstallUnavailable:
+    """Tests for 'omni skill install' availability messaging."""
 
     @pytest.fixture
     def runner(self):
         return CliRunner()
 
-    def test_install_shows_deprecated(self, runner):
-        """Test that install command shows deprecation message."""
+    def test_install_shows_unavailable(self, runner):
+        """Test that install command shows unavailable message."""
         result = runner.invoke(app, ["skill", "install", "https://github.com/example/skill"])
 
         assert result.exit_code == 0
-        assert "Deprecated" in result.output or "deprecated" in result.output.lower()
+        assert "Unavailable" in result.output or "not available" in result.output.lower()
 
 
-class TestSkillUpdateDeprecated:
-    """Tests for deprecated 'omni skill update' command."""
+class TestSkillUpdateUnavailable:
+    """Tests for 'omni skill update' availability messaging."""
 
     @pytest.fixture
     def runner(self):
         return CliRunner()
 
-    def test_update_shows_deprecated(self, runner):
-        """Test that update command shows deprecation message."""
+    def test_update_shows_unavailable(self, runner):
+        """Test that update command shows unavailable message."""
         result = runner.invoke(app, ["skill", "update", "some_skill"])
 
         assert result.exit_code == 0
-        assert "Deprecated" in result.output or "deprecated" in result.output.lower()
+        assert "Unavailable" in result.output or "not available" in result.output.lower()
 
 
 if __name__ == "__main__":

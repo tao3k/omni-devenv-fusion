@@ -9,34 +9,62 @@ Omni Vector provides vector storage and similarity search capabilities for the O
 ## Features
 
 - Disk-based vector storage (no server required)
-- Similarity search with cosine similarity
-- CRUD operations for vector records
-- Schema validation
-- Incremental indexing
+- Lance-backed vector similarity search
+- Scanner tuning via `SearchOptions`
+- CRUD + merge-insert (upsert) operations
+- Versioning / snapshot (time travel) APIs
+- Schema evolution helpers
 
 ## Usage
 
 ```rust
-use omni_vector::{VectorStore, PyVectorRecord};
+use omni_vector::{KeywordSearchBackend, SearchOptions, VectorStore};
 
-let store = VectorStore::new("./vectors.lance")?;
-let record = PyVectorRecord {
-    id: "doc1".to_string(),
-    vector: vec![0.1, 0.2, 0.3],
-    metadata: serde_json::json!({"source": "docs/readme.md"}),
-};
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut store = VectorStore::new("./vectors", Some(3)).await?;
 
-store.add(record)?;
-let results = store.search(&vec![0.1, 0.2, 0.3], 5)?;
+    store
+        .add_documents(
+            "skills",
+            vec!["doc1".to_string()],
+            vec![vec![0.1, 0.2, 0.3]],
+            vec!["example document".to_string()],
+            vec![serde_json::json!({"source":"docs/readme.md"}).to_string()],
+        )
+        .await?;
+
+    let results = store
+        .search_optimized(
+            "skills",
+            vec![0.1, 0.2, 0.3],
+            5,
+            SearchOptions {
+                where_filter: Some(r#"{"source":"docs/readme.md"}"#.to_string()),
+                ..SearchOptions::default()
+            },
+        )
+        .await?;
+
+    println!("results={}", results.len());
+
+    // Optional: switch keyword backend for hybrid search.
+    store.set_keyword_backend(KeywordSearchBackend::LanceFts)?;
+    store.create_fts_index("skills").await?;
+
+    Ok(())
+}
 ```
 
 ## Architecture
 
 ```
 omni-vector/
-├── lib.rs          # Main API
-├── skill.rs        # Skill-specific vector operations
-└── scanner.rs      # Vector index scanning
+├── src/lib.rs                # Main exports / module wiring
+├── src/ops/                  # Core CRUD + admin + writer operations
+├── src/search/               # search_optimized + hybrid fusion + search_fts
+├── src/keyword/              # keyword backend abstraction (Tantivy / Lance FTS)
+└── tests/                    # snapshots + data-layer + perf guard
 ```
 
 ## Integration

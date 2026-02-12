@@ -27,14 +27,12 @@ Example:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from omni_core_rs.tokenizer import (
-    PyContextPruner as RustContextPruner,
-    py_count_tokens,
-    py_truncate,
-    py_truncate_middle,
-)
+from omni_core_rs import PyContextPruner as RustContextPruner
+
+# Import from omni_core_rs directly (all exports are in main namespace)
+from omni_core_rs import py_count_tokens, py_truncate_middle
 
 logger = logging.getLogger(__name__)
 
@@ -82,10 +80,10 @@ class ContextPruner:
 
     def __init__(
         self,
-        config: Optional[PruningConfig] = None,
-        window_size: Optional[int] = None,
-        max_tool_output: Optional[int] = None,
-        max_context_tokens: Optional[int] = None,
+        config: PruningConfig | None = None,
+        window_size: int | None = None,
+        max_tool_output: int | None = None,
+        max_context_tokens: int | None = None,
     ) -> None:
         """Initialize the ContextPruner.
 
@@ -129,7 +127,7 @@ class ContextPruner:
             f"max_tokens={self.max_context_tokens}"
         )
 
-    def prune(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    def prune(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         """Prune messages based on token limit.
 
         Uses the default "recent" strategy which keeps system messages
@@ -165,7 +163,7 @@ class ContextPruner:
         return system_msgs + pruned_other
 
     def get_summary_candidates(
-        self, messages: List[Dict[str, str]], max_candidates: int = 5
+        self, messages: list[dict[str, str]], max_candidates: int = 5
     ) -> list[dict[str, Any]]:
         """Get messages that are good candidates for summarization.
 
@@ -203,7 +201,7 @@ class ContextPruner:
         """
         return py_count_tokens(text)
 
-    def count_messages(self, messages: List[Dict[str, str]]) -> int:
+    def count_messages(self, messages: list[dict[str, str]]) -> int:
         """Count tokens in a list of messages.
 
         Args:
@@ -216,7 +214,21 @@ class ContextPruner:
             [{"role": m.get("role", ""), "content": m.get("content", "")} for m in messages]
         )
 
-    def compress_messages(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    def segment(
+        self,
+        messages: list[dict[str, str]],
+        system_messages: list[dict[str, str]] | None = None,
+    ) -> tuple[list[dict[str, str]], list[dict[str, str]], list[dict[str, str]]]:
+        """Split context into system, summarize-candidate, and recent buckets."""
+        system = list(system_messages or [])
+        retain = max(0, int(self.config.retained_turns)) * 2
+        if retain <= 0:
+            return system, list(messages), []
+        if len(messages) <= retain:
+            return system, [], list(messages)
+        return system, list(messages[:-retain]), list(messages[-retain:])
+
+    def compress_messages(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         """Compress message history while preserving important information.
 
         Strategy:
@@ -253,10 +265,10 @@ class ContextPruner:
 
     def prune_for_retry(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         error: str,
         max_tokens: int = 6000,
-    ) -> List[Dict[str, str]]:
+    ) -> list[dict[str, str]]:
         """Prune messages for AutoFix retry.
 
         Creates a compressed context for retrying after failure.
@@ -289,7 +301,7 @@ class ContextPruner:
         recovery_msg = {"role": "user", "content": lesson}
 
         # Check token count
-        all_msgs = system_msgs + [recovery_msg] + compressed
+        all_msgs = [*system_msgs, recovery_msg, *compressed]
         current_tokens = self.count_messages(all_msgs)
 
         if current_tokens > max_tokens:
@@ -305,9 +317,9 @@ class ContextPruner:
             )
             compressed = [{"role": "compressed", "content": truncated_content}]
 
-        return system_msgs + [recovery_msg] + compressed
+        return [*system_msgs, recovery_msg, *compressed]
 
-    def estimate_compression_ratio(self, messages: List[Dict[str, str]]) -> float:
+    def estimate_compression_ratio(self, messages: list[dict[str, str]]) -> float:
         """Estimate the compression ratio achieved.
 
         Args:
@@ -328,7 +340,7 @@ class ContextPruner:
 
 def create_pruner_for_model(
     model: str = "gpt-4o",
-    window_size: Optional[int] = None,
+    window_size: int | None = None,
 ) -> ContextPruner:
     """Factory function to create a pruner optimized for a specific model.
 

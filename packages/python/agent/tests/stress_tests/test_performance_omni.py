@@ -27,12 +27,13 @@ class TestOmniPerformance:
 
         for _ in range(iterations):
             start = time.perf_counter()
-            result = await git_skill.execute("status")
+            # `git.status` was removed; use a stable existing command path.
+            result = await git_skill.execute("smart_commit", action="status")
             elapsed = (time.perf_counter() - start) * 1000
             latencies.append(elapsed)
 
         avg_latency = sum(latencies) / len(latencies)
-        print("\n[Performance] Git Status Dispatch Latency:")
+        print("\n[Performance] Git Smart-Commit Status Dispatch Latency:")
         print(f"   Average: {avg_latency:.1f}ms")
         print(f"   Min: {min(latencies):.1f}ms")
         print(f"   Max: {max(latencies):.1f}ms")

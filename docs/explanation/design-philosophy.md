@@ -1,7 +1,7 @@
 # Design Philosophy
 
 > **Status**: Historical document - Core principles still valid, but superseded by current Trinity Architecture
-> **See Also**: `trinity-architecture.md` for current architecture
+> **See Also**: `system-layering.md` for current architecture
 
 ---
 

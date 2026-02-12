@@ -30,8 +30,7 @@ omni.foundation.services.memory/
 │   ├── project_memory.py      # ProjectMemory main class
 │   └── utils.py               # Shared utilities
 └── stores/
-    ├── lancedb.py             # LanceDB storage (default)
-    └── file.py                # File-based storage (legacy)
+    └── lancedb.py             # LanceDB storage (single backend)
 ```
 
 ### Key Classes

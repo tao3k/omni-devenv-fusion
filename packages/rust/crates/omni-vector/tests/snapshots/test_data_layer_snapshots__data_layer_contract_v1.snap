@@ -1,0 +1,53 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_data_layer_snapshots.rs
+expression: view
+---
+{
+  "fragments": [
+    {
+      "id": 0,
+      "num_data_files": 1,
+      "num_rows": 1,
+      "physical_rows": 2
+    },
+    {
+      "id": 1,
+      "num_data_files": 1,
+      "num_rows": 2,
+      "physical_rows": 2
+    }
+  ],
+  "merge_stats": {
+    "deleted": 0,
+    "inserted": 1,
+    "updated": 1
+  },
+  "search_results": [
+    {
+      "content": "alpha-old",
+      "distance": "2.000000",
+      "id": "tool.alpha",
+      "kind": "seed",
+      "rank": 1
+    },
+    {
+      "content": "beta-new",
+      "distance": "0.000000",
+      "id": "tool.beta",
+      "kind": "merged",
+      "rank": 20
+    },
+    {
+      "content": "gamma-new",
+      "distance": "2.000000",
+      "id": "tool.gamma",
+      "kind": "merged",
+      "rank": 30
+    }
+  ],
+  "table": {
+    "fragment_count": 2,
+    "num_rows": 3,
+    "versions": 3
+  }
+}

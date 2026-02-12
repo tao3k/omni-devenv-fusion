@@ -23,8 +23,6 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
 use walkdir::WalkDir;
 
 /// Represents a sniffer rule with multiple glob patterns.
@@ -235,6 +233,10 @@ impl SnifferEngine {
     /// * `root_path` - Root directory to scan
     /// * `max_depth` - Maximum directory depth to traverse
     /// * `num_workers` - Number of rayon workers (None = default)
+    ///
+    /// # Performance
+    ///
+    /// Uses thread-local collection to avoid lock contention in parallel processing.
     pub fn sniff_path_with_workers(
         &self,
         root_path: &str,
@@ -245,11 +247,6 @@ impl SnifferEngine {
         if !root.exists() || !root.is_dir() {
             return Vec::new();
         }
-
-        // Thread-safe set for collecting results
-        let detected: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
-        let file_count = Arc::new(AtomicUsize::new(0));
-        let match_count = Arc::new(AtomicUsize::new(0));
 
         // Collect all entries first (WalkDir is single-threaded iterator)
         let entries: Vec<_> = WalkDir::new(root)
@@ -273,45 +270,55 @@ impl SnifferEngine {
                 .ok();
         }
 
-        // Parallel pattern matching
-        entries.par_iter().for_each(|entry| {
-            if let Ok(relative) = entry.path().strip_prefix(root) {
-                // Convert to String for globset matching
-                let relative_str = relative.to_string_lossy().into_owned();
-                let matches = self.glob_set.matches(&relative_str);
+        // Parallel pattern matching - collect results locally per thread, no locks in parallel section
+        let detected: Vec<String> = entries
+            .par_iter()
+            .filter_map(|entry| {
+                if let Ok(relative) = entry.path().strip_prefix(root) {
+                    let relative_str = relative.to_string_lossy().into_owned();
+                    let matches = self.glob_set.matches(&relative_str);
 
-                if !matches.is_empty() {
-                    let mut set = detected.lock().unwrap();
-                    for idx in matches {
-                        if let Some(rule_id) = self.pattern_to_rule.get(idx) {
-                            set.insert(rule_id.clone());
+                    if !matches.is_empty() {
+                        // Collect matched rule IDs locally
+                        let mut local_matches = Vec::new();
+                        for idx in matches {
+                            if let Some(rule_id) = self.pattern_to_rule.get(idx) {
+                                local_matches.push(rule_id.clone());
+                            }
                         }
+                        return Some(local_matches);
                     }
-                    match_count.fetch_add(1, Ordering::Relaxed);
                 }
-                file_count.fetch_add(1, Ordering::Relaxed);
-            }
-        });
+                None
+            })
+            .flatten()
+            .collect();
 
-        let set = detected.lock().unwrap();
-        let mut result: Vec<String> = set.iter().cloned().collect();
+        // Deduplicate while preserving order
+        let mut seen = std::collections::HashSet::new();
+        let mut result: Vec<String> = detected
+            .into_iter()
+            .filter(|id| seen.insert(id.clone()))
+            .collect();
+
         result.sort();
-
         result
     }
 
     /// Sniff with scoring (returns context IDs sorted by weight).
     ///
     /// Contexts detected by more specific patterns (higher weight) appear first.
+    ///
+    /// # Performance
+    ///
+    /// Uses thread-local collection to avoid lock contention in parallel processing.
     pub fn sniff_path_with_scores(&self, root_path: &str, max_depth: usize) -> Vec<(String, f32)> {
+        use rayon::prelude::*;
+
         let root = Path::new(root_path);
         if !root.exists() || !root.is_dir() {
             return Vec::new();
         }
-
-        // Track scores per context
-        let scores: Arc<Mutex<HashMap<String, f32>>> = Arc::new(Mutex::new(HashMap::new()));
-        let file_count = Arc::new(AtomicUsize::new(0));
 
         // Collect entries
         let entries: Vec<_> = WalkDir::new(root)
@@ -321,29 +328,43 @@ impl SnifferEngine {
             .filter(|e| e.file_type().is_file())
             .collect();
 
-        // Parallel matching with scoring
-        entries.par_iter().for_each(|entry| {
-            if let Ok(relative) = entry.path().strip_prefix(root) {
-                // Convert to String for globset matching
-                let relative_str = relative.to_string_lossy().into_owned();
-                let matches = self.glob_set.matches(&relative_str);
+        if entries.is_empty() {
+            return Vec::new();
+        }
 
-                if !matches.is_empty() {
-                    let mut set = scores.lock().unwrap();
-                    for idx in matches {
-                        if let Some(rule_id) = self.pattern_to_rule.get(idx) {
-                            let weight = self.rule_weights.get(idx).copied().unwrap_or(1.0);
-                            *set.entry(rule_id.clone()).or_insert(0.0) += weight;
+        // Parallel matching with scoring - collect thread-local scores
+        let thread_scores: Vec<std::collections::HashMap<String, f32>> = entries
+            .par_iter()
+            .map(|entry| {
+                let mut local_scores = std::collections::HashMap::new();
+
+                if let Ok(relative) = entry.path().strip_prefix(root) {
+                    let relative_str = relative.to_string_lossy().into_owned();
+                    let matches = self.glob_set.matches(&relative_str);
+
+                    if !matches.is_empty() {
+                        for idx in matches {
+                            if let Some(rule_id) = self.pattern_to_rule.get(idx) {
+                                let weight = self.rule_weights.get(idx).copied().unwrap_or(1.0);
+                                *local_scores.entry(rule_id.clone()).or_insert(0.0) += weight;
+                            }
                         }
                     }
                 }
-                file_count.fetch_add(1, Ordering::Relaxed);
-            }
-        });
+                local_scores
+            })
+            .collect();
 
-        let set = scores.lock().unwrap();
-        let mut result: Vec<(String, f32)> =
-            set.iter().map(|(id, score)| (id.clone(), *score)).collect();
+        // Merge thread-local scores
+        let mut merged_scores = std::collections::HashMap::new();
+        for local in thread_scores {
+            for (id, weight) in local {
+                *merged_scores.entry(id).or_insert(0.0) += weight;
+            }
+        }
+
+        // Convert to sorted vector
+        let mut result: Vec<(String, f32)> = merged_scores.into_iter().collect();
 
         // Sort by score descending
         result.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -375,6 +396,3 @@ impl SnifferEngine {
         false
     }
 }
-
-// Import HashMap for scoring
-use std::collections::HashMap;

@@ -159,3 +159,39 @@ async fn test_delete_regression_sql_like_patterns() {
         "All paths with SQL-like special chars should be deleted"
     );
 }
+
+#[tokio::test]
+async fn test_replace_documents_rebuilds_table_snapshot() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("test_replace_docs");
+
+    let mut store = VectorStore::new(db_path.to_str().unwrap(), Some(1536))
+        .await
+        .unwrap();
+
+    store
+        .add_documents(
+            "skills",
+            vec!["id1".to_string(), "id2".to_string()],
+            vec![vec![0.1; 1536], vec![0.2; 1536]],
+            vec!["content1".to_string(), "content2".to_string()],
+            vec!["{}".to_string(), "{}".to_string()],
+        )
+        .await
+        .unwrap();
+    assert_eq!(store.count("skills").await.unwrap(), 2);
+
+    store
+        .replace_documents(
+            "skills",
+            vec!["id3".to_string()],
+            vec![vec![0.3; 1536]],
+            vec!["content3".to_string()],
+            vec!["{}".to_string()],
+        )
+        .await
+        .unwrap();
+
+    // Old snapshot should be fully replaced.
+    assert_eq!(store.count("skills").await.unwrap(), 1);
+}

@@ -4,6 +4,9 @@ tracer.py - Execution Trace Collection for OmniCell
 Collects execution traces from OmniCell and feeds them to the Harvester
 for skill crystallization.
 
+UltraRAG-style Integration:
+    OmniCell → ExecutionTracer (fine-grained) → TraceCollector (harvest) → Harvester → Factory → Immune → Skill Registry
+
 Integration: OmniCell → Tracer → Harvester → Factory → Immune → Skill Registry
 """
 
@@ -200,3 +203,68 @@ class TraceCollector:
     def trace_count(self) -> int:
         """Get the total number of stored traces."""
         return len(list(self.trace_dir.glob("*.json")))
+
+    async def record_detailed(
+        self,
+        trace: Any,  # ExecutionTrace from omni.tracer
+        task_description: str | None = None,
+    ) -> str:
+        """Record a detailed execution trace (UltraRAG-style).
+
+        Extracts commands/outputs from the detailed trace and saves
+        in the legacy format for harvester compatibility.
+
+        Args:
+            trace: ExecutionTrace from omni.tracer
+            task_description: Optional human-readable description
+
+        Returns:
+            Trace ID
+        """
+        # Extract commands and outputs from trace steps
+        commands = []
+        outputs = []
+
+        for step in trace.steps.values():
+            if step.step_type.value.startswith("tool_"):
+                # Tool calls become commands
+                if step.input_data:
+                    cmd = f"{step.name}: {step.input_data}"
+                    commands.append(cmd)
+                if step.output_data:
+                    outputs.append(f"{step.name}: {step.output_data}")
+
+        # Generate task description from trace
+        if task_description is None:
+            task_description = (
+                trace.user_query or f"Traced execution with {trace.step_count()} steps"
+            )
+
+        # Record in legacy format
+        trace_id = await self.record(
+            task_id=trace.trace_id,
+            task_description=task_description,
+            commands=commands,
+            outputs=outputs,
+            success=trace.success,
+            duration_ms=trace.duration_ms or 0,
+            metadata={
+                "trace_id": trace.trace_id,
+                "step_count": trace.step_count(),
+                "thinking_steps": trace.thinking_step_count(),
+                "memory_pool_summary": trace.memory_pool.summary(),
+                "detailed_trace_available": True,
+            },
+        )
+
+        # Optionally save detailed trace separately
+        try:
+            from omni.tracer import TraceStorage
+
+            storage = TraceStorage()
+            storage.save(trace)
+            logger.debug("detailed_trace_saved", trace_id=trace.trace_id)
+        except Exception as e:
+            logger.warning(f"Failed to save detailed trace: {e}")
+
+        return trace_id

@@ -1,12 +1,12 @@
-# Schema Singularity: Rust as Single Source of Truth
+# Schema Singularity: Unified Type System
 
-> **Version:** 1.0
-> **Status:** Active
-> **Philosophy:** "Type Once, Use Everywhere"
+> Philosophy: One Source of Truth, Zero Drift
 
-## 1. Problem Statement
+The Schema Singularity is our architectural commitment to ensuring that types are defined **once** in Rust and automatically synchronized across Python and the LLM.
 
-In Agentic OS development, **Context Drift** is a silent killer:
+---
+
+## 1. The Problem: Context Drift
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -24,17 +24,19 @@ In Agentic OS development, **Context Drift** is a silent killer:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-When any layer changes independently, the system breaks silently.
+---
 
-## 2. Solution: Schema Singularity
+## 2. The Solution: Rust as SSOT
 
-**Establish Rust (`omni-types`) as the Single Source of Truth (SSOT).** All other layers dynamically retrieve schemas from Rust at runtime.
+We use Rust as the **Single Source of Truth (SSOT)**. All shared data structures are defined in the `omni-types` crate.
+
+### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Rust (Single Source of Truth)                │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │ omni-types: JsonSchema 派生的结构体                       │   │
+│  │ omni-types: JsonSchema derived structs                    │   │
 │  │  - Skill, SkillDefinition, TaskBrief                     │   │
 │  │  - AgentResult, AgentContext, VectorSearchResult         │   │
 │  │  - EnvironmentSnapshot                                   │   │
@@ -50,335 +52,109 @@ When any layer changes independently, the system breaks silently.
 │                    Python (Schema Consumer)                     │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │ RustSchemaRegistry: FFI + Cache                         │   │
-│  │  - 自动从 Rust 获取权威 Schema                           │   │
-│  │  - 缓存避免重复 FFI 调用                                 │   │
-│  │  - 类型安全保证                                          │   │
+│  │  - Automatically fetch authoritative Schema from Rust    │   │
+│  │  - Cache to avoid duplicate FFI calls                    │   │
+│  │  - Type safety guarantee                                 │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                            │                                    │
 │                            ▼                                    │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │ ToolContextBuilder: LLM 格式转换                         │   │
+│  │ ToolContextBuilder: LLM Format Conversion                │   │
 │  │  - to_openai_tools() → OpenAI Function Calling          │   │
 │  │  - to_anthropic_tools() → Anthropic Tool Format         │   │
 │  └─────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+---
+
 ## 3. Implementation Details
 
-### 3.1 Rust Layer (`omni-types`)
+### Rust: Defining Types
 
-**Dependencies:**
-
-```toml
-# Cargo.toml (workspace)
-[workspace.dependencies]
-schemars = "0.8.21"
-```
-
-**Struct Definition with JsonSchema:**
+We use `schemars` to generate JSON Schema from Rust structs.
 
 ```rust
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Skill definition with generic metadata container.
-/// This enables schema-driven metadata evolution without recompiling Rust.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(from = "SkillDefinitionHelper", into = "SkillDefinitionHelper")]
-pub struct SkillDefinition {
-    /// Unique identifier for the skill (e.g., "git", "writer")
-    pub name: String,
-    /// Semantic description used for vector embedding generation
-    pub description: String,
-    /// Generic metadata container for schema-defined fields
-    pub metadata: serde_json::Value,
-    /// Routing keywords for semantic search
-    #[serde(default)]
-    pub routing_keywords: Vec<String>,
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct TaskBrief {
+    /// The unique identifier for the task
+    pub id: String,
+    /// Detailed description of what needs to be done
+    pub goal: String,
+    /// Priority level (1-10)
+    pub priority: u8,
 }
 ```
 
-**Schema Registry:**
-
-```rust
-/// Get JSON Schema for a registered type.
-/// This enables Python to dynamically retrieve authoritative schemas from Rust.
-pub fn get_schema_json(type_name: &str) -> Result<String, SchemaError> {
-    let schema = match type_name {
-        "Skill" => schemars::schema_for!(Skill),
-        "SkillDefinition" => schemars::schema_for!(SkillDefinition),
-        "TaskBrief" => schemars::schema_for!(TaskBrief),
-        "AgentResult" => schemars::schema_for!(AgentResult),
-        "AgentContext" => schemars::schema_for!(AgentContext),
-        "VectorSearchResult" => schemars::schema_for!(VectorSearchResult),
-        "EnvironmentSnapshot" => schemars::schema_for!(EnvironmentSnapshot),
-        "OmniTool" => schemars::schema_for!(SkillDefinition), // Alias
-        _ => return Err(SchemaError::UnknownType(type_name.to_string())),
-    };
-    serde_json::to_string_pretty(&schema).map_err(|e| {
-        SchemaError::UnknownType(format!("Serialization failed: {e}"))
-    })
-}
-```
-
-### 3.2 Python Bindings
-
-**Rust FFI (`bindings/python/src/schema.rs`):**
-
-```rust
-use pyo3::prelude::*;
-use omni_types::SchemaError;
-
-/// Get JSON Schema for a registered type.
-#[pyfunction]
-#[pyo3(signature = (type_name))]
-pub fn py_get_schema_json(type_name: &str) -> PyResult<String> {
-    match omni_types::get_schema_json(type_name) {
-        Ok(schema) => Ok(schema),
-        Err(SchemaError::UnknownType(name)) => Err(pyo3::exceptions::PyValueError::new_err(
-            format!("Unknown type: {}. Available: {:?}", name, omni_types::get_registered_types())
-        )),
-    }
-}
-
-/// Get list of all registered type names.
-#[pyfunction]
-pub fn py_get_registered_types() -> Vec<&'static str> {
-    omni_types::get_registered_types()
-}
-```
-
-### 3.3 Python Core
-
-**RustSchemaRegistry with Caching:**
+### Python: Validating Types
 
 ```python
-# omni/core/context/tools.py
+from omni.foundation.bridge.rust_types import validate_schema
 
-from omni_core_rs import py_get_schema_json
-
-class RustSchemaRegistry:
-    """
-    Cache for Rust-generated JSON Schemas to avoid repetitive FFI calls.
-
-    This establishes Rust as the Single Source of Truth (SSOT) for type definitions.
-    Python and LLM consumers retrieve authoritative schemas dynamically.
-    """
-
-    _cache: dict[str, dict[str, Any]] = {}
-
-    @classmethod
-    def get(cls, type_name: str) -> dict[str, Any]:
-        """Get JSON Schema for a type from Rust SSOT."""
-        if type_name not in cls._cache:
-            schema_json = py_get_schema_json(type_name)
-            cls._cache[type_name] = json.loads(schema_json)
-        return cls._cache[type_name]
-
-    @classmethod
-    def clear(cls) -> None:
-        """Clear the schema cache (useful for testing)."""
-        cls._cache.clear()
-```
-
-## 4. Usage Examples
-
-### 4.1 Get Schema from Rust SSOT
-
-```python
-from omni.core.context.tools import get_rust_schema, list_available_schemas
-
-# List all available type schemas
-schemas = list_available_schemas()
-print(schemas)  # ['Skill', 'SkillDefinition', 'TaskBrief', ...]
-
-# Get authoritative schema
-schema = get_rust_schema('SkillDefinition')
-print(schema['properties']['name']['description'])
-# "Unique identifier for the skill (e.g., 'git', 'writer')"
-```
-
-### 4.2 Convert Tools to OpenAI Format
-
-```python
-from omni.core.context.tools import ToolContextBuilder
-from omni.core.skills.registry.holographic import ToolMetadata
-
-# ToolMetadata from HolographicRegistry
-metadata = ToolMetadata(
-    name='read_file',
-    description='Read a file from disk',
-    module='/path/to/file.py',
-    args=[{'name': 'path', 'type': 'str', 'description': 'File path'}],
-    return_type='str'
-)
-
-# Convert to OpenAI Function Calling format
-tools = ToolContextBuilder.to_openai_tools([metadata])
-# Returns:
-# [{
-#     "type": "function",
-#     "function": {
-#         "name": "read_file",
-#         "description": "Read a file from disk",
-#         "parameters": {
-#             "type": "object",
-#             "properties": {
-#                 "path": {"type": "string", "description": "File path"}
-#             },
-#             "required": ["path"]
-#         }
-#     }
-# }]
-```
-
-### 4.3 Validate Tool Output (Future Strict Mode)
-
-```python
-import jsonschema
-from omni.core.context.tools import RustSchemaRegistry
-
-# Get schema for validation
-schema = RustSchemaRegistry.get("SkillDefinition")
-
-# Validate execution result against schema
+data = {"id": "task-1", "goal": "Fix bug", "priority": 5}
 try:
-    jsonschema.validate(
-        instance={"name": "test", "description": "..."},
-        schema=schema
-    )
+    validate_schema("TaskBrief", data)
     print("✓ Validation passed")
-except jsonschema.ValidationError as e:
+except ValidationError as e:
     print(f"✗ Validation failed: {e.message}")
 ```
 
-## 5. Available Schemas
+---
 
-| Type Name             | Description               | Rust Struct                       |
-| :-------------------- | :------------------------ | :-------------------------------- |
-| `Skill`               | Basic skill definition    | `omni_types::Skill`               |
-| `SkillDefinition`     | Full skill with metadata  | `omni_types::SkillDefinition`     |
-| `TaskBrief`           | Orchestrator task brief   | `omni_types::TaskBrief`           |
-| `AgentResult`         | Agent execution result    | `omni_types::AgentResult`         |
-| `AgentContext`        | Agent execution context   | `omni_types::AgentContext`        |
-| `VectorSearchResult`  | Vector search hit         | `omni_types::VectorSearchResult`  |
-| `EnvironmentSnapshot` | Live environment state    | `omni_types::EnvironmentSnapshot` |
-| `OmniTool`            | Alias for SkillDefinition | -                                 |
+## 4. Best Practices
 
-## 6. Benefits
+1. **Rust First**: Always define shared structures in Rust first.
+2. **Never Hardcode**: Never manually define JSON schemas in Python strings.
+3. **Docstrings Matter**: Rust docstrings become JSON Schema descriptions, which the LLM reads.
+4. **Validation**: Use the bridge validation in Python tests to ensure data integrity.
 
-### 6.1 Strict Typing
+---
 
-- LanceDB storage structure and LLM Schema are identical because they come from the same Rust struct
-- No manual synchronization required
+## 5. Compliance Checklist
 
-### 6.2 Zero Maintenance
+- [ ] Struct derives `JsonSchema`, `Serialize`, and `Deserialize`.
+- [ ] Every field has a docstring (description for LLM).
+- [ ] Type is registered in `omni-types` registry.
+- [ ] Python bridge has been updated to include the new type.
 
-- No code generation scripts
-- Schema is retrieved at runtime via FFI
-- Changes to Rust struct automatically propagate to Python/LLM
+---
 
-### 6.3 Rust Vector Integration
+## 6. Phase 2: Vector/Router Common Schema Contract
 
-- `search_hybrid()` returns `SearchResult` with proper structure
-- Data is already serialized standard JSON, no transformation needed
+**Goal:** One contract for tool_search, vector search, and hybrid search; no legacy `keywords`; CI fails on field drift.
 
-### 6.4 Developer Experience
+### Contract consistency (P0)
 
-```python
-# Before: Manual sync with potential drift
-class Skill(BaseModel):
-    name: str
-    description: str
-    # ... manually keep in sync with Rust
+- **Legacy field:** `keywords` is forbidden in all vector/router payloads. Use `routing_keywords` (tool_search only).
+- **Parsers:** `parse_tool_search_payload`, `parse_vector_payload`, and `parse_hybrid_payload` all reject payloads that contain the `keywords` field.
+- **Shared schemas:** `packages/shared/schemas/`:
+  - `omni.vector.tool_search.v1.schema.json` — tool search result (canonical field: `routing_keywords`)
+  - `omni.vector.search.v1.schema.json` — single vector search result (`content` = document body; `keywords` forbidden)
+  - `omni.vector.hybrid.v1.schema.json` — single hybrid result (same rule)
 
-# After: Dynamic schema from Rust SSOT
-schema = get_rust_schema('SkillDefinition')  # Always authoritative
-```
+### E2E snapshot matrix (P0)
 
-## 7. Architecture Rules
+Snapshots under `packages/python/foundation/tests/unit/services/snapshots/` lock the following shapes; tests validate them against the JSON schemas so CI fails on drift:
 
-### 7.1 Adding New Types
+| Snapshot                                   | Schema                        | Purpose                                          |
+| ------------------------------------------ | ----------------------------- | ------------------------------------------------ |
+| `tool_router_result_contract_v1.json`      | Tool router result (Pydantic) | Route CLI output shape                           |
+| `route_test_with_stats_contract_v1.json`   | Route test payload            | `omni route test --json` (query, stats, results) |
+| `vector_payload_contract_v1.json`          | omni.vector.search.v1         | Rust bridge vector search output                 |
+| `hybrid_payload_contract_v1.json`          | omni.vector.hybrid.v1         | Rust bridge hybrid output                        |
+| `db_search_vector_result_contract_v1.json` | list of search.v1             | Db search vector response shape                  |
+| `db_search_hybrid_result_contract_v1.json` | list of hybrid.v1             | Db search hybrid response shape                  |
 
-1. Define struct in `omni-types` with `JsonSchema` derive
-2. Add to `get_schema_json()` match arms
-3. Export in `bindings/python/src/schema.rs` (if needed for Python)
-4. Python auto-discovers via `py_get_registered_types()`
+Tests: `test_contract_consistency.py`, `test_vector_schema.py` (snapshot vs schema validation).
 
-### 7.2 Modifying Existing Types
+---
 
-**Never** modify types directly in Python. Always:
+## Related Documentation
 
-1. Change the Rust struct in `omni-types`
-2. Rebuild: `uv sync --reinstall-package omni-core-rs`
-3. Python automatically gets updated schema
-
-### 7.3 Forbidden Patterns
-
-```python
-# ❌ FORBIDDEN: Manual schema definition in Python
-MANUAL_SCHEMA = {
-    "type": "object",
-    "properties": {"name": {"type": "string"}}
-}
-
-# ✅ CORRECT: Dynamic schema from Rust SSOT
-from omni.core.context.tools import get_rust_schema
-schema = get_rust_schema('SkillDefinition')
-```
-
-## 8. File References
-
-| Layer  | File Path                                                        | Purpose                       |
-| :----- | :--------------------------------------------------------------- | :---------------------------- |
-| Rust   | `packages/rust/crates/omni-types/src/lib.rs`                     | Type definitions + JsonSchema |
-| Rust   | `packages/rust/bindings/python/src/schema.rs`                    | Python FFI bindings           |
-| Rust   | `packages/rust/bindings/python/src/lib.rs`                       | Module exports                |
-| Python | `packages/python/core/src/omni/core/context/tools.py`            | Schema registry + converters  |
-| Tests  | `packages/python/core/tests/integration/test_reactive_loader.py` | Schema Singularity tests      |
-
-## 9. Performance Considerations
-
-- **Cache Hit:** Schema retrieval is O(1) after first FFI call
-- **Cache Miss:** Single FFI call + JSON parsing (~0.5ms)
-- **Memory:** Cached schemas consume minimal memory (~1KB per type)
-- **Benchmark:** For 8 registered types, total cache memory < 10KB
-
-```python
-# Benchmark schema retrieval
-import time
-
-start = time.perf_counter()
-for _ in range(1000):
-    schema = get_rust_schema('SkillDefinition')  # Cached after first call
-elapsed = time.perf_counter() - start
-print(f"1000 retrievals: {elapsed*1000:.2f}ms ({elapsed*1000/1000:.4f}ms each)")
-# Output: ~0.00ms each (fully cached)
-```
-
-## 10. Future Extensions
-
-### 10.1 Strict Mode Validation
-
-Add runtime validation of tool inputs/outputs against Rust schemas:
-
-```python
-ToolContextBuilder.validate_tool_output("read_file", {"path": "/test"})
-```
-
-### 10.2 Multi-Language Bindings
-
-The same `get_schema_json()` can be exposed to:
-
-- Node.js (via napi-rs)
-- Go (via cgo)
-- TypeScript (via wasm-bindgen)
-
-### 10.3 Schema Evolution
-
-Support schema versioning for backward compatibility:
-
-```rust
-pub fn get_schema_json(type_name: &str, version: Option<u32>) -> Result<String, SchemaError>
-```
+- [Vector/Router Common Schema Contract](vector-router-schema-contract.md) — Field definitions, version rules, no-keywords policy
+- [Trinity System Layers](../explanation/system-layering.md)
+- [MCP Tool Schema](mcp-tool-schema.md)
+- [Rust-Python Bridge](../explanation/rust-python-bridge.md)

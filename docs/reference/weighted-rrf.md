@@ -66,16 +66,17 @@ if name_lower.contains(&query_lower) {
 }
 ```
 
-### 4. Confidence Calibration (Python)
+### 4. Confidence Calibration (Rust Binding)
 
-Maps raw RRF scores to user-friendly confidence levels:
+Raw RRF scores are calibrated in Rust payload emission:
 
-| RRF Score | Confidence | Final Score | Trigger Condition    |
-| --------- | ---------- | ----------- | -------------------- |
-| >= 1.0    | very_high  | 0.99        | Exact Match Boost    |
-| > 0.3     | high       | 0.85        | Strong RRF Consensus |
-| > 0.1     | medium     | 0.60        | Weak Consensus       |
-| <= 0.1    | low        | 0.40        | Single Stream Match  |
+| Condition                   | Confidence | Final Score Formula                          |
+| --------------------------- | ---------- | -------------------------------------------- |
+| `score >= high_threshold`   | `high`     | `min(high_cap, high_base + score*scale)`     |
+| `score >= medium_threshold` | `medium`   | `min(medium_cap, medium_base + score*scale)` |
+| otherwise                   | `low`      | `max(low_floor, score)`                      |
+
+The profile is configured from `settings.yaml` (`router.search.*`) and passed to Rust.
 
 ## Configuration
 
@@ -134,9 +135,8 @@ packages/rust/crates/omni-vector/
 └── search.rs               # Hybrid Search caller
     └── hybrid_search()     # Uses apply_weighted_rrf
 
-packages/python/core/src/omni/core/router/
-└── hybrid_search.py        # Python confidence calibration
-    └── _calibrate_confidence()  # Score mapping
+packages/rust/bindings/python/src/vector/
+└── search_ops.rs           # Canonical payload shaping + confidence/final-score emission
 ```
 
 ## Usage Examples
@@ -149,16 +149,19 @@ from omni.core.router.hybrid_search import HybridSearch
 search = HybridSearch()
 results = await search.search("git commit", limit=5)
 
-# Results include confidence
+# Results include canonical confidence/final_score from Rust payload
 for r in results:
-    print(f"{r['id']}: score={r['score']:.3f}, confidence={r['confidence']}")
+    print(
+        f"{r['id']}: raw={r['score']:.3f}, final={r['final_score']:.3f}, "
+        f"confidence={r['confidence']}"
+    )
 ```
 
 Output:
 
 ```
-git.commit: score=1.10, confidence=very_high
-git.status: score=0.35, confidence=high
+git.commit: raw=1.10, final=0.95, confidence=high
+git.status: raw=0.35, final=0.35, confidence=low
 ```
 
 ### View Algorithm Parameters

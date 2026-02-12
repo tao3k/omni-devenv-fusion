@@ -41,7 +41,7 @@ def test_import() -> bool:
 
         print("[PASS] RustLanceCheckpointSaver imported successfully")
 
-        from omni.foundation.config.dirs import get_checkpoints_db_path
+        from omni.foundation.config.database import get_checkpoint_db_path
 
         print("[PASS] Config dirs imported successfully")
 

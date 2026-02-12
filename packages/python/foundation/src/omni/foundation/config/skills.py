@@ -134,16 +134,6 @@ class _SkillDirCallable:
 
         return result
 
-    def __getattr__(self, name: str) -> Path:
-        """Attribute access for skill names (for backwards compatibility).
-
-        Usage:
-            SKILLS_DIR.git  # -> Path("assets/skills/git")
-        """
-        if name.startswith("_"):
-            raise AttributeError(f"'_SkillDirCallable' object has no attribute '{name}'")
-        return self(name)
-
     def definition_file(self, skill: str | None = None) -> Path:
         """Get the definition file path for a skill (from settings.yaml assets.definition_file).
 
@@ -324,14 +314,6 @@ class SkillPathBuilder:
     def definition(self, skill_name: str) -> Path:
         """Get the definition file for a skill (uses settings.yaml definition_file)."""
         return self._skills_base / skill_name / SKILLS_DIR.definition_file()
-
-    def manifest(self, skill_name: str) -> Path:
-        """Get the SKILL.md for a skill (legacy alias for definition())."""
-        return self._skills_base / skill_name / SKILLS_DIR.definition_file()
-
-    def tools(self, skill_name: str) -> Path:
-        """Get the commands.py for a skill (legacy alias, use scripts_commands instead)."""
-        return self._skills_base / skill_name / "scripts" / "commands.py"
 
     def scripts_commands(self, skill_name: str) -> Path:
         """Get the scripts/commands.py for a skill (new standard)."""

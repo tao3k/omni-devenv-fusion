@@ -1,0 +1,25 @@
+# Branch Pipeline Test - Conditional Routing
+# Route based on quality assessment
+servers:
+  generator: builtin
+  router: builtin
+
+parameters:
+  topic: "$topic"
+  quality_threshold: 0.8
+
+pipeline:
+  - generator.analyze
+  - router.check_quality
+  - branch:
+      router: check_quality
+      branches:
+        high_quality:
+          - generator.finalize
+        low_quality:
+          - generator.improve
+          - generator.finalize
+
+runtime:
+  checkpointer:
+    type: memory

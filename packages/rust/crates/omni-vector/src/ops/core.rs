@@ -3,13 +3,12 @@ impl VectorStore {
     pub async fn new(path: &str, dimension: Option<usize>) -> Result<Self, VectorStoreError> {
         let base_path = PathBuf::from(path);
         if path != ":memory:" {
+            // Only create the parent directory, not the table directory itself
+            // The table directory will be created when we actually write data
             if let Some(parent) = base_path.parent() {
                 if !parent.exists() {
                     std::fs::create_dir_all(parent)?;
                 }
-            }
-            if !base_path.exists() {
-                std::fs::create_dir_all(&base_path)?;
             }
         }
 
@@ -18,6 +17,7 @@ impl VectorStore {
             datasets: Arc::new(Mutex::new(DashMap::new())),
             dimension: dimension.unwrap_or(DEFAULT_DIMENSION),
             keyword_index: None,
+            keyword_backend: KeywordSearchBackend::Tantivy,
         })
     }
 
@@ -27,7 +27,24 @@ impl VectorStore {
         dimension: Option<usize>,
         enable_keyword_index: bool,
     ) -> Result<Self, VectorStoreError> {
+        Self::new_with_keyword_backend(
+            path,
+            dimension,
+            enable_keyword_index,
+            KeywordSearchBackend::Tantivy,
+        )
+        .await
+    }
+
+    /// Create a new VectorStore with explicit keyword backend selection.
+    pub async fn new_with_keyword_backend(
+        path: &str,
+        dimension: Option<usize>,
+        enable_keyword_index: bool,
+        keyword_backend: KeywordSearchBackend,
+    ) -> Result<Self, VectorStoreError> {
         let mut store = Self::new(path, dimension).await?;
+        store.keyword_backend = keyword_backend;
         if enable_keyword_index && path != ":memory:" {
             store.enable_keyword_index()?;
         }
@@ -39,12 +56,11 @@ impl VectorStore {
         if self.base_path.as_os_str() == ":memory:" {
             PathBuf::from(format!(":memory:_{}", table_name))
         } else {
-            // Check if base_path already ends with the table's .lance directory
+            // Check if base_path already ends with .lance (any table directory)
             // This handles cases where the storage path is passed as "xxx.lance"
             // instead of the parent directory
-            let expected_suffix = format!("{}.lance", table_name);
-            if self.base_path.ends_with(&expected_suffix) {
-                // base_path is already the table directory, use it directly
+            if self.base_path.to_string_lossy().ends_with(".lance") {
+                // base_path is already a table directory, use it directly
                 self.base_path.clone()
             } else {
                 // Append table_name.lance to base_path
@@ -86,8 +102,12 @@ impl VectorStore {
         ]))
     }
 
-    /// Enable the Tantivy-based keyword index for hybrid search.
+    /// Enable keyword support for hybrid search.
     pub fn enable_keyword_index(&mut self) -> Result<(), VectorStoreError> {
+        if self.keyword_backend == KeywordSearchBackend::LanceFts {
+            // Lance FTS path does not require in-memory Tantivy index object.
+            return Ok(());
+        }
         if self.keyword_index.is_some() {
             return Ok(());
         }
@@ -97,6 +117,18 @@ impl VectorStore {
             ));
         }
         self.keyword_index = Some(Arc::new(KeywordIndex::new(&self.base_path)?));
+        Ok(())
+    }
+
+    /// Switch keyword backend at runtime.
+    pub fn set_keyword_backend(
+        &mut self,
+        backend: KeywordSearchBackend,
+    ) -> Result<(), VectorStoreError> {
+        self.keyword_backend = backend;
+        if backend == KeywordSearchBackend::Tantivy {
+            self.enable_keyword_index()?;
+        }
         Ok(())
     }
 }

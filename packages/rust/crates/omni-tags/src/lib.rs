@@ -1,5 +1,3 @@
-#![allow(clippy::doc_markdown)]
-
 //! omni-tags - High-Performance Code Symbol Extraction for Omni DevEnv
 //!
 //! Features:
@@ -45,8 +43,39 @@ mod types;
 pub use error::{SearchError, TagError};
 pub use extractor::TagExtractor;
 pub use patterns::{
-    JS_CLASS_PATTERN, JS_FN_PATTERN, PYTHON_ASYNC_DEF_PATTERN, PYTHON_CLASS_PATTERN,
-    PYTHON_DEF_PATTERN, RUST_ENUM_PATTERN, RUST_FN_PATTERN, RUST_IMPL_PATTERN, RUST_STRUCT_PATTERN,
-    RUST_TRAIT_PATTERN, TS_INTERFACE_PATTERN,
+    ALL_PATTERNS,
+    GO_FN,
+    GO_STRUCT,
+    JAVA_CLASS,
+    JAVA_METHOD,
+    JS_CLASS,
+    // Legacy aliases for backwards compatibility
+    JS_CLASS_PATTERN,
+    JS_FN,
+    JS_FN_PATTERN,
+    PYTHON_ASYNC_DEF,
+    PYTHON_ASYNC_DEF_PATTERN,
+    PYTHON_CLASS,
+    PYTHON_CLASS_PATTERN,
+    PYTHON_DEF,
+    PYTHON_DEF_PATTERN,
+    RUST_ENUM,
+    RUST_ENUM_PATTERN,
+    RUST_FN,
+    RUST_FN_PATTERN,
+    RUST_IMPL,
+    RUST_IMPL_PATTERN,
+    RUST_STRUCT,
+    RUST_STRUCT_PATTERN,
+    RUST_TRAIT,
+    RUST_TRAIT_PATTERN,
+    TS_INTERFACE,
+    TS_INTERFACE_PATTERN,
+    go,
+    java,
+    javascript,
+    python,
+    rust,
+    typescript,
 };
 pub use types::{SearchConfig, SearchMatch, SearchResult, Symbol, SymbolKind};

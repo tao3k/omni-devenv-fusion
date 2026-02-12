@@ -2,8 +2,6 @@
 //!
 //! Contains: index_skill_tools, list_all_tools
 
-#![allow(dead_code)]
-
 use omni_vector::VectorStore;
 use pyo3::prelude::*;
 
@@ -20,7 +18,7 @@ pub(crate) fn index_skill_tools_async(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(path, Some(dimension), enable_kw)
+        let mut store = VectorStore::new_with_keyword_index(path, Some(dimension), enable_kw)
             .await
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         store
@@ -32,6 +30,30 @@ pub(crate) fn index_skill_tools_async(
             .await
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         Ok(count as usize)
+    })
+}
+
+pub(crate) fn index_skill_tools_dual_async(
+    path: &str,
+    dimension: usize,
+    enable_kw: bool,
+    base_path: &str,
+    skills_table: &str,
+    router_table: &str,
+) -> PyResult<(usize, usize)> {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+    rt.block_on(async {
+        let mut store = VectorStore::new_with_keyword_index(path, Some(dimension), enable_kw)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        store
+            .index_skill_tools_dual(base_path, skills_table, router_table)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     })
 }
 

@@ -27,6 +27,9 @@ _utils_module = None
 _runtime_module = None
 _config_module = None
 _checkpoint_module = None
+_rag_module = None
+_embedding_server_module = None
+_embedding_client_module = None
 
 
 def __getattr__(name: str):
@@ -38,7 +41,10 @@ def __getattr__(name: str):
         _utils_module, \
         _runtime_module, \
         _config_module, \
-        _checkpoint_module
+        _checkpoint_module, \
+        _rag_module, \
+        _embedding_server_module, \
+        _embedding_client_module
 
     if name == "__version__":
         return _get_version()
@@ -189,5 +195,61 @@ def __getattr__(name: str):
         if _api_module is None:
             _api_module = __import__("omni.foundation.api", fromlist=[""])
         return _api_module
+
+    # Lazy load rag module (RAG-Anything integration)
+    if name in (
+        "get_rag_adapter",
+        "create_rag_adapter",
+        "OmniRAGAdapter",
+        "DocumentParser",
+        "parse_document",
+        "parse_documents_batch",
+        "RAGConfig",
+        "get_rag_config",
+        "get_parser",
+        "is_knowledge_graph_enabled",
+        "is_multimodal_enabled",
+        "Chunk",
+        "SemanticChunker",
+        "SentenceChunker",
+        "ParagraphChunker",
+        "SlidingWindowChunker",
+        "create_chunker",
+        "chunk_text",
+        "Entity",
+        "Relation",
+        "EntityMention",
+        "ExtractedChunk",
+        "EntityType",
+        "RelationType",
+        "KnowledgeGraphExtractor",
+        "KnowledgeGraphStore",
+        "get_graph_extractor",
+        "get_graph_store",
+    ):
+        if _rag_module is None:
+            _rag_module = __import__("omni.rag", fromlist=[""])
+        return getattr(_rag_module, name)
+
+    # Lazy load embedding_server module
+    if name in (
+        "EmbeddingHTTPServer",
+        "get_embedding_server",
+        "start_embedding_server",
+        "stop_embedding_server",
+    ):
+        if _embedding_server_module is None:
+            _embedding_server_module = __import__("omni.foundation.embedding_server", fromlist=[""])
+        return getattr(_embedding_server_module, name)
+
+    # Lazy load embedding_client module
+    if name in (
+        "EmbeddingClient",
+        "get_embedding_client",
+        "close_embedding_client",
+    ):
+        if _embedding_client_module is None:
+            _embedding_client_module = __import__("omni.foundation.embedding_client", fromlist=[""])
+        return getattr(_embedding_client_module, name)
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

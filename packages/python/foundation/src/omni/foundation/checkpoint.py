@@ -51,7 +51,7 @@ def _get_store() -> Any:
     This cache is per-process, so each new CLI invocation creates a new
     Python-side wrapper, but the underlying LanceDB data is persistent.
     """
-    from omni.foundation.config.dirs import get_checkpoint_db_path
+    from omni.foundation.config.database import get_checkpoint_db_path
 
     db_path = str(get_checkpoint_db_path())
 
@@ -73,7 +73,7 @@ def _get_store() -> Any:
 
 def _get_table_name(workflow_type: str) -> str:
     """Get the full table name for a workflow type."""
-    from omni.foundation.config.dirs import get_checkpoint_table_name
+    from omni.foundation.config.database import get_checkpoint_table_name
 
     return get_checkpoint_table_name(workflow_type)
 

@@ -8,7 +8,6 @@ Powered by ContextManager (The Token Diet)
 from __future__ import annotations
 
 import argparse
-import asyncio
 
 from rich.box import ROUNDED
 from rich.console import Console
@@ -16,6 +15,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from omni.foundation.utils.asyncio import run_async_blocking
 from omni.foundation.utils.common import setup_import_paths
 
 setup_import_paths()
@@ -206,7 +206,7 @@ def main():
     args, _ = parser.parse_known_args()
 
     if args.task:
-        asyncio.run(run_task(args.task, args.steps))
+        run_async_blocking(run_task(args.task, args.steps))
     else:
         console.print("[yellow]Interactive mode: Use `omni` without arguments[/yellow]")
         console.print("[dim]For interactive mode: Run `omni` in a REPL setup[/dim]")

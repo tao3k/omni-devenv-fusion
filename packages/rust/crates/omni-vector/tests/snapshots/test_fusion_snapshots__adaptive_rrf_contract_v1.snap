@@ -1,0 +1,24 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_fusion_snapshots.rs
+expression: view
+---
+[
+  {
+    "keyword_score": "2.800000",
+    "rrf_score": "1.180000",
+    "tool_name": "git.commit",
+    "vector_score": "0.950000"
+  },
+  {
+    "keyword_score": "2.000000",
+    "rrf_score": "0.799333",
+    "tool_name": "git.status",
+    "vector_score": "0.790000"
+  },
+  {
+    "keyword_score": "0.000000",
+    "rrf_score": "0.327077",
+    "tool_name": "filesystem.read",
+    "vector_score": "0.510000"
+  }
+]

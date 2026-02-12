@@ -1,5 +1,3 @@
-#![allow(clippy::doc_markdown, clippy::uninlined_format_args)]
-
 //! High-performance environment sniffer for Omni DevEnv.
 //!
 //! Uses libgit2 for fast git operations and provides environment snapshots.

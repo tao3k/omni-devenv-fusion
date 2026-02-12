@@ -5,10 +5,13 @@ High-performance memory grid for storing and retrieving episodic/semantic memory
 Uses Rust-powered vector store for embeddings and similarity search.
 """
 
+import structlog
 from pathlib import Path
 from typing import Any
 
 from .bindings import RustBindings
+
+log = structlog.get_logger("omni.skill.memory.neural_matrix")
 
 
 class NeuralMatrix:
@@ -27,19 +30,23 @@ class NeuralMatrix:
             dimension: Vector dimension (default: 1536 for OpenAI Ada-002)
         """
         self._skill_cwd = Path(skill_cwd)
-        self._db_path = self._skill_cwd / ".memory_db"
         self._dimension = dimension
         self._store = None
+
+        # Use unified database path API for consistency
+        from omni.foundation.config.database import get_memory_db_path
+
+        self._db_path = get_memory_db_path()
 
         # Initialize Rust vector store
         store_cls = RustBindings.get_store_class()
         if store_cls:
-            self._db_path.mkdir(parents=True, exist_ok=True)
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
             try:
-                self._store = store_cls(str(self._db_path), dimension)
-                print(f"Neural Matrix initialized with Rust backend at {self._db_path}")
+                self._store = store_cls(str(self._db_path), dimension, enable_keyword_index=True)
+                log.info("Neural Matrix initialized", db_path=str(self._db_path))
             except Exception as e:
-                print(f"Failed to initialize Neural Matrix: {e}")
+                log.error("Failed to initialize Neural Matrix", error=str(e))
                 self._store = None
 
     @property
@@ -123,7 +130,7 @@ class NeuralMatrix:
                 for r in results
             ]
         except Exception as e:
-            print(f"Recall error: {e}")
+            log.error("Recall error", error=str(e))
             return []
 
     def stats(self) -> dict[str, Any]:

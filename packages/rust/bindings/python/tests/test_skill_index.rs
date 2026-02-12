@@ -11,7 +11,7 @@ use tempfile::TempDir;
 /// This is the core deduplication logic reused by PyVectorStore::get_skill_index.
 #[test]
 fn test_build_index_entry_deduplicates_tools() {
-    use skills_scanner::{SkillMetadata, SkillScanner, ToolRecord};
+    use omni_scanner::{SkillMetadata, SkillScanner, ToolRecord};
 
     let temp_dir = TempDir::new().unwrap();
     let skill_path = temp_dir.path().join("test_skill");
@@ -108,7 +108,7 @@ fn test_build_index_entry_deduplicates_tools() {
 /// Test that build_index_entry preserves order of first occurrences.
 #[test]
 fn test_build_index_entry_preserves_order() {
-    use skills_scanner::{SkillMetadata, SkillScanner, ToolRecord};
+    use omni_scanner::{SkillMetadata, SkillScanner, ToolRecord};
 
     let temp_dir = TempDir::new().unwrap();
     let skill_path = temp_dir.path().join("test_skill");
@@ -173,7 +173,7 @@ fn test_build_index_entry_preserves_order() {
 /// Test that empty tools list works correctly.
 #[test]
 fn test_build_index_entry_empty_tools() {
-    use skills_scanner::{SkillMetadata, SkillScanner};
+    use omni_scanner::{SkillMetadata, SkillScanner};
 
     let temp_dir = TempDir::new().unwrap();
     let skill_path = temp_dir.path().join("test_skill");
@@ -244,7 +244,7 @@ def unique_tool():
     fs::write(skill_path.join("scripts").join("test.py"), script).unwrap();
 
     // Use the Rust skill scanner directly to test
-    use skills_scanner::{SkillScanner, ToolsScanner};
+    use omni_scanner::{SkillScanner, ToolsScanner};
 
     let skill_scanner = SkillScanner::new();
     let script_scanner = ToolsScanner::new();
@@ -281,7 +281,7 @@ def unique_tool():
 /// Test scan_paths function - scanning virtual files without filesystem access.
 #[test]
 fn test_scan_paths_virtual_files() {
-    use skills_scanner::ToolsScanner;
+    use omni_scanner::ToolsScanner;
 
     let scanner = ToolsScanner::new();
     let files = vec![
@@ -317,7 +317,7 @@ def tool_b(value: int) -> int:
 /// Test scan_paths skips __init__.py and private files.
 #[test]
 fn test_scan_paths_skips_special_files() {
-    use skills_scanner::ToolsScanner;
+    use omni_scanner::ToolsScanner;
 
     let scanner = ToolsScanner::new();
     let files = vec![
@@ -363,7 +363,7 @@ def public_tool():
 /// Test scan_paths with keywords and intents.
 #[test]
 fn test_scan_paths_with_metadata() {
-    use skills_scanner::ToolsScanner;
+    use omni_scanner::ToolsScanner;
 
     let scanner = ToolsScanner::new();
     let files = vec![(
@@ -393,7 +393,7 @@ def test_tool():
 /// Test parse_content function - parsing single script content directly.
 #[test]
 fn test_parse_content_single_tool() {
-    use skills_scanner::ToolsScanner;
+    use omni_scanner::ToolsScanner;
 
     let scanner = ToolsScanner::new();
     let content = r#"
@@ -416,7 +416,7 @@ def my_tool(param: str) -> str:
 /// Test parse_content produces consistent file hashes.
 #[test]
 fn test_parse_content_file_hash() {
-    use skills_scanner::ToolsScanner;
+    use omni_scanner::ToolsScanner;
 
     let scanner = ToolsScanner::new();
     let content = r#"
@@ -453,7 +453,7 @@ def tool():
 /// Test scan_paths empty list returns empty results.
 #[test]
 fn test_scan_paths_empty_list() {
-    use skills_scanner::ToolsScanner;
+    use omni_scanner::ToolsScanner;
 
     let scanner = ToolsScanner::new();
     let files: Vec<(String, String)> = Vec::new();

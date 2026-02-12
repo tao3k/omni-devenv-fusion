@@ -2,8 +2,7 @@
 """
 ProjectMemory - Unified memory interface.
 
-Provides a unified interface for project memory operations supporting
-both LanceDB and file-based storage backends.
+Provides a unified interface for project memory operations backed by LanceDB.
 """
 
 from __future__ import annotations
@@ -18,7 +17,6 @@ import structlog
 from omni.foundation.services.memory.core.interface import (
     STORAGE_MODE_LANCE,
     MemoryStore,
-    StorageMode,
 )
 
 log = structlog.get_logger("mcp-core.memory")
@@ -66,7 +64,6 @@ def init_memory_dir(dir_path: Path | None = None) -> bool:
 # =============================================================================
 
 # Lazy imports for optional dependencies
-_LANCE_DB_AVAILABLE = True
 try:
     from omni.foundation.services.memory.stores.lancedb import LanceDBMemoryStore
 
@@ -75,20 +72,13 @@ except ImportError:
     LANCE_DB_AVAILABLE = False
     LanceDBMemoryStore = None  # type: ignore
 
-try:
-    from omni.foundation.services.memory.stores.file import FileMemoryStore
 
-    FileMemoryStore = FileMemoryStore
-except ImportError:
-    FileMemoryStore = None  # type: ignore
-
-
-def _create_store(storage_mode: StorageMode, dir_path: Path) -> MemoryStore:
-    """Create a memory store based on the storage mode."""
-    if storage_mode == STORAGE_MODE_LANCE and LANCE_DB_AVAILABLE and LanceDBMemoryStore:
-        return LanceDBMemoryStore()
-    # Fallback to file mode
-    return FileMemoryStore(dir_path)
+def _create_store(dir_path: Path) -> MemoryStore:
+    """Create the LanceDB-backed memory store."""
+    if not (LANCE_DB_AVAILABLE and LanceDBMemoryStore):
+        raise RuntimeError("LanceDB memory backend is required but unavailable")
+    db_path = str(dir_path / "memory.lance")
+    return LanceDBMemoryStore(db_path=db_path)
 
 
 # =============================================================================
@@ -99,26 +89,24 @@ def _create_store(storage_mode: StorageMode, dir_path: Path) -> MemoryStore:
 class ProjectMemory:
     """Provides unified interface for project memory operations.
 
-    Supports both LanceDB and legacy file-based storage modes.
+    Uses LanceDB as the single storage backend.
     """
 
     def __init__(
         self,
         dir_path: Path | None = None,
-        storage_mode: StorageMode = STORAGE_MODE_LANCE,
     ):
         """Initialize ProjectMemory.
 
         Args:
-            dir_path: Path for file-based storage (ignored in LanceDB mode).
-            storage_mode: Storage backend ("lance" or "file").
+            dir_path: Base directory for LanceDB files and local context artifacts.
         """
-        self._storage_mode = storage_mode
+        self._storage_mode = STORAGE_MODE_LANCE
         self._file_dir_path = dir_path or MEMORY_DIR
 
-        self._store: MemoryStore = _create_store(storage_mode, self._file_dir_path)
+        self._store: MemoryStore = _create_store(self._file_dir_path)
 
-        # Initialize file directories if needed
+        # Initialize local context directories used by spec-path helpers.
         init_memory_dir(self._file_dir_path)
 
     @property
@@ -129,7 +117,7 @@ class ProjectMemory:
     @property
     def is_lance_mode(self) -> bool:
         """Check if using LanceDB storage."""
-        return self._storage_mode == STORAGE_MODE_LANCE and LANCE_DB_AVAILABLE
+        return self._storage_mode == STORAGE_MODE_LANCE
 
     # =====================================================================
     # Decision Operations
@@ -145,6 +133,17 @@ class ProjectMemory:
         status: str = "open",
     ) -> dict[str, Any]:
         """Add a new architectural decision."""
+        if not title.strip():
+            return {"success": False, "id": None, "error": "Title is required"}
+        if content and not (problem or solution or rationale):
+            try:
+                parsed = json.loads(content)
+                if isinstance(parsed, dict):
+                    problem = str(parsed.get("problem", problem))
+                    solution = str(parsed.get("solution", solution))
+                    rationale = str(parsed.get("rationale", rationale))
+            except Exception:
+                pass
         return self._store.add_decision(
             title=title,
             content=content,
@@ -174,6 +173,8 @@ class ProjectMemory:
         assignee: str = "Claude",
     ) -> dict[str, Any]:
         """Add a new task to the backlog."""
+        if not title.strip():
+            return {"success": False, "id": None, "error": "Title is required"}
         return self._store.add_task(
             title=title,
             content=content,
@@ -279,16 +280,13 @@ class ProjectMemory:
     # =====================================================================
 
     def migrate_from_file(self, source_dir: Path | None = None) -> dict[str, Any]:
-        """Migrate from file-based storage to LanceDB.
+        """Import records from markdown export directories into LanceDB.
 
         Args:
-            source_dir: Source directory with file-based memory. Defaults to file_dir_path.
+            source_dir: Source directory containing `decisions/*.md` and `tasks/*.md`.
 
         Returns:
-            Dict with migration statistics.
+            Dict with import statistics.
         """
-        if not self.is_lance_mode:
-            return {"error": "Cannot migrate: not in LanceDB mode"}
-
         source = source_dir or self._file_dir_path
         return self._store.migrate_from_file(source)

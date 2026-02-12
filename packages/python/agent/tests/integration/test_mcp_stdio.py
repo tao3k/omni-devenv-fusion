@@ -203,6 +203,28 @@ class TestMCPProtocolHandlers:
         assert 'name="sys_query"' in source
         assert 'name="sys_exec"' in source
 
+    def test_call_tool_resolves_alias_before_validation(self):
+        """Alias resolution must happen before validate_tool_args() call."""
+        from omni.agent.mcp_server.server import AgentMCPServer
+        import inspect
+
+        source = inspect.getsource(AgentMCPServer._register_handlers)
+        alias_line = source.find("real_command = self._alias_to_real.get(name, name)")
+        validate_line = source.find(
+            "validation_errors = validate_tool_args(real_command, arguments)"
+        )
+        assert alias_line != -1
+        assert validate_line != -1
+        assert alias_line < validate_line
+
+    def test_server_uses_logger_warning_not_warn(self):
+        """Deprecated logger.warn() should not appear in handler registration."""
+        from omni.agent.mcp_server.server import AgentMCPServer
+        import inspect
+
+        source = inspect.getsource(AgentMCPServer._register_handlers)
+        assert "logger.warn(" not in source
+
 
 class TestMCPProtocolCompliance:
     """Test MCP protocol compliance for tool schema."""
@@ -339,7 +361,7 @@ class TestSkillPathResolutionIntegration:
         from omni.foundation.config.skills import SKILLS_DIR
 
         store = get_vector_store()
-        tools = await store.list_all_tools()
+        tools = store.list_all_tools()
 
         # Skip if no tools in database
         if len(tools) == 0:
@@ -467,6 +489,143 @@ class TestSkillPathResolutionIntegration:
         assert response.get("id") is not None, (
             "Response id is null. JSON-RPC 2.0 requires non-null id for request responses."
         )
+
+
+class TestEmbeddingHttpServiceSharing:
+    """Test embedding HTTP service sharing mechanism for multiple stdio MCP instances.
+
+    These tests verify:
+    1. Port detection works correctly
+    2. Multiple instances can share a single embedding service
+    3. Only the first instance starts the server
+    4. Subsequent instances connect to existing service
+    """
+
+    import random
+
+    def _get_random_port(self) -> int:
+        """Get a random port in the valid range (1024-65535)."""
+        return 1024 + self.random.randint(0, 64511)
+
+    @pytest.mark.asyncio
+    async def test_check_embedding_service_detects_used_port(self):
+        """Test that _check_embedding_service returns True for a port in use."""
+        import socket
+        from omni.agent.cli.commands.mcp import _check_embedding_service
+
+        test_port = self._get_random_port()
+
+        # Create and bind a server socket (blocking, not async)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("127.0.0.1", test_port))
+        sock.listen(1)
+
+        try:
+            # Now check should return True
+            result = await _check_embedding_service("127.0.0.1", test_port)
+            assert result is True, "Port in use should be detected"
+        finally:
+            sock.close()
+
+    @pytest.mark.asyncio
+    async def test_check_embedding_service_returns_false_for_free_port(self):
+        """Test that _check_embedding_service returns False for an unused port."""
+        from omni.agent.cli.commands.mcp import _check_embedding_service
+
+        test_port = self._get_random_port()
+        result = await _check_embedding_service("127.0.0.1", test_port)
+        assert result is False, "Free port should not be detected as in use"
+
+    @pytest.mark.asyncio
+    async def test_run_embedding_http_server_returns_false_when_service_exists(self):
+        """Test that _run_embedding_http_server returns False when service already exists."""
+        import socket
+        from omni.agent.cli.commands.mcp import _run_embedding_http_server
+        import omni.agent.cli.commands.mcp as mcp_module
+
+        test_port = self._get_random_port()
+
+        # Start a temporary server on this port
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("127.0.0.1", test_port))
+        sock.listen(1)
+
+        try:
+            # Set _i_started_server to False to simulate shared instance
+            mcp_module._i_started_server = False
+
+            # _run_embedding_http_server should return False
+            result = await _run_embedding_http_server("127.0.0.1", test_port)
+            assert result is False, "Should return False when service already exists"
+        finally:
+            sock.close()
+
+    @pytest.mark.asyncio
+    async def test_run_embedding_http_server_returns_true_when_starting_new(self):
+        """Test that _run_embedding_http_server returns True when starting new server."""
+        from omni.agent.cli.commands.mcp import (
+            _run_embedding_http_server,
+            _stop_embedding_http_server,
+        )
+        import omni.agent.cli.commands.mcp as mcp_module
+
+        test_port = self._get_random_port()
+
+        try:
+            result = await _run_embedding_http_server("127.0.0.1", test_port)
+            assert result is True, "Should return True when starting new server"
+            assert mcp_module._i_started_server is True, "_i_started_server should be True"
+
+            # Verify server is actually running by checking the port
+            is_running = await mcp_module._check_embedding_service("127.0.0.1", test_port)
+            assert is_running is True, "Server should be running on the port"
+        finally:
+            # Cleanup - stop the server we started
+            await _stop_embedding_http_server()
+
+    @pytest.mark.asyncio
+    async def test_i_started_server_flag_controls_shutdown(self):
+        """Test that _i_started_server flag controls whether we stop the server."""
+        import omni.agent.cli.commands.mcp as mcp_module
+        from omni.agent.cli.commands.mcp import _stop_embedding_http_server
+
+        # Test when we did NOT start the server
+        mcp_module._i_started_server = False
+        mcp_module._embedding_http_runner = None
+
+        # _stop_embedding_http_server should not raise and should return early
+        await _stop_embedding_http_server()
+
+        # Verify no error occurred (flag correctly prevented shutdown attempt)
+        assert True
+
+    @pytest.mark.asyncio
+    async def test_embedding_http_handler_accepts_requests(self):
+        """Test that the embedding HTTP handler processes requests correctly."""
+        from omni.agent.cli.commands.mcp import (
+            _run_embedding_http_server,
+            _stop_embedding_http_server,
+        )
+        import httpx
+        import omni.agent.cli.commands.mcp as mcp_module
+
+        test_port = self._get_random_port()
+        await _run_embedding_http_server("127.0.0.1", test_port)
+
+        try:
+            # Test health endpoint
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"http://127.0.0.1:{test_port}/health")
+                assert response.status_code == 200
+                data = response.json()
+                assert data.get("status") == "ok"
+        finally:
+            # Cleanup
+            await _stop_embedding_http_server()
+            # Verify flag was reset
+            assert mcp_module._i_started_server is False
 
 
 if __name__ == "__main__":

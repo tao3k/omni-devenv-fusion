@@ -13,10 +13,10 @@ Run with:
 
 from __future__ import annotations
 
-import pytest
 import asyncio
-import json
-from pathlib import Path
+import time
+
+import pytest
 
 
 @pytest.mark.asyncio
@@ -77,10 +77,20 @@ async def test_vector_store_concurrent_writes(temp_lancedb):
     tasks = [writer(i) for i in range(5)]
     await asyncio.gather(*tasks)
 
-    # Verify documents were written (search returns results)
-    results = await store.search("document", limit=100)
-    # Should have some results
-    assert len(results) >= 0  # At least no errors
+    # Verify documents were written using explicit search_tools API
+    query_vec = store._embedding_service.embed("document")
+    if query_vec and isinstance(query_vec[0], list):
+        query_vec = query_vec[0]
+
+    results = await store.search_tools(
+        table_name="concurrent_test",
+        query_vector=query_vec,
+        query_text="document",
+        limit=100,
+        threshold=0.0,
+    )
+    # At least no errors and valid list output.
+    assert isinstance(results, list)
 
 
 @pytest.mark.asyncio
@@ -127,7 +137,6 @@ async def test_high_frequency_writes(temp_lancedb):
     Target: > 100 writes/second.
     """
     from omni.langgraph.checkpoint.lance import RustLanceCheckpointSaver
-    import time
 
     saver = RustLanceCheckpointSaver(base_path=str(temp_lancedb))
     batch_size = 100

@@ -237,5 +237,5 @@ Injected into system prompts to guide LLM behavior:
 ## Related Documentation
 
 - [CCA Theory](./cognitive-scaffolding.md)
-- [Trinity Architecture](./trinity-architecture.md)
+- [Trinity Architecture](./system-layering.md)
 - [Tool Schema Extraction](./odf-rep-protocol.md)

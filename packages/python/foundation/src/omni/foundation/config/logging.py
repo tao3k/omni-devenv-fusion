@@ -24,6 +24,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from collections.abc import Callable
 from datetime import datetime
@@ -251,6 +252,7 @@ def _setup_log_filters(level: int) -> None:
 # Track whether logging has been configured
 _configured = False
 _force_colors = False  # Global flag for color forcing
+_verbose_level = logging.INFO  # Track verbose level for Rust integration
 
 
 def configure_logging(
@@ -267,13 +269,18 @@ def configure_logging(
         verbose: Enable verbose mode (DEBUG level)
         force: Force reconfiguration even if already configured
     """
-    global _configured
+    global _configured, _force_colors, _verbose_level
+
     if _configured and not force:
         return
 
     log_level = getattr(logging, level.upper(), logging.INFO)
     if verbose:
         log_level = logging.DEBUG
+
+    # Track for Rust integration
+    _verbose_level = log_level
+    os.environ["OMNI_LOG_LEVEL"] = logging.getLevelName(log_level)
 
     # Auto-detect colors if not specified
     if colors is None:
@@ -339,6 +346,24 @@ def setup_verbose_logging() -> None:
     configure_logging(level="DEBUG", verbose=True)
 
 
+def is_verbose() -> bool:
+    """Check if verbose/debug logging is enabled.
+
+    Returns:
+        True if DEBUG level logging is enabled
+    """
+    return _verbose_level <= logging.DEBUG
+
+
+def get_log_level() -> str:
+    """Get the current log level as a string.
+
+    Returns:
+        Log level name: DEBUG, INFO, WARNING, ERROR
+    """
+    return logging.getLevelName(_verbose_level)
+
+
 # =============================================================================
 # Convenience Logging Functions with Beautiful Output
 # =============================================================================
@@ -402,6 +427,8 @@ __all__ = [
     "configure_logging",
     "format_log",
     "get_logger",
+    "get_log_level",
+    "is_verbose",
     "log_banner",
     "log_data",
     "log_error",

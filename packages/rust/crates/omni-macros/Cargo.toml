@@ -1,0 +1,14 @@
+[package]
+name = "omni-macros"
+version = "0.1.0"
+edition = "2021"
+description = "Common macros for omni Rust crates"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
+proc-macro2 = "1.0"
+uuid = { version = "1.0", features = ["v4"] }

@@ -4,7 +4,7 @@ test_responses.py - Unit tests for unified response format
 Tests for ToolResponse class and ResponseStatus enum.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
@@ -129,9 +129,9 @@ class TestToolResponse:
 
     def test_timestamp_is_set(self):
         """Test that timestamp is automatically set."""
-        before = datetime.utcnow()
+        before = datetime.now(UTC)
         resp = ToolResponse.success()
-        after = datetime.utcnow()
+        after = datetime.now(UTC)
         assert before <= resp.timestamp <= after
 
     def test_timestamp_in_mcp_output(self):
