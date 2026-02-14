@@ -1,5 +1,7 @@
 # Retrieval Namespace
 
+For **when to use which search** (vector vs hybrid vs agentic), see [Search Systems: When to Use Which](./search-systems.md).
+
 This project uses a precise retrieval namespace:
 
 - `omni.rag.retrieval.interface`
@@ -50,6 +52,8 @@ This project uses a precise retrieval namespace:
   - optional: `score` (Rust-emitted normalized similarity used by Python facades)
 - Canonical tool-search payload contract (`omni.vector.tool_search.v1`):
   - required: `schema`, `name`, `description`, `score`, `tool_name`, `confidence`, `final_score`
+- **Agentic tool search** (`RustVectorStore.agentic_search`): same payload; optional `intent` (`"exact"` | `"semantic"` | `"hybrid"` | `"category"`) selects strategy (keyword-only, vector-only, or RRF). Optional `skill_name_filter` and `category_filter` restrict results to a given skill or category. See LanceDB roadmap § Agentic Search.
+- **Partitioned writes**: `add_documents_partitioned(table_name, partition_by, ids, vectors, contents, metadatas)`. When `partition_by` is `None`, the default partition column is taken from `vector.default_partition_column` in settings (e.g. `"skill_name"`).
 - Python parses both contracts through `omni.foundation.services.vector_schema`:
   - `parse_vector_payload(...)`
   - `parse_hybrid_payload(...)`

@@ -1,0 +1,19 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_scalar_index.rs
+assertion_line: 196
+expression: view
+---
+{
+  "bitmap": {
+    "column": "category",
+    "index_type": "bitmap"
+  },
+  "btree": {
+    "column": "skill_name",
+    "index_type": "btree"
+  },
+  "optimal_category": {
+    "column": "category",
+    "index_type": "bitmap"
+  }
+}

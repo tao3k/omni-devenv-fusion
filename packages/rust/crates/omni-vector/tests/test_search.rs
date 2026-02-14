@@ -15,6 +15,7 @@ async fn test_apply_keyword_boost_metadata_match() {
                 "routing_keywords": ["git", "commit", "version"]
             }),
             distance: 0.35, // Slightly worse vector similarity
+            ..Default::default()
         },
         VectorSearchResult {
             id: "file.save".to_string(),
@@ -23,6 +24,7 @@ async fn test_apply_keyword_boost_metadata_match() {
                 "routing_keywords": ["file", "save", "write"]
             }),
             distance: 0.3, // Better vector similarity
+            ..Default::default()
         },
     ];
 
@@ -50,6 +52,7 @@ async fn test_apply_keyword_boost_no_keywords() {
         content: "Execute git.commit".to_string(),
         metadata: serde_json::json!({"routing_keywords": ["git"]}),
         distance: 0.5,
+        ..Default::default()
     }];
 
     VectorStore::apply_keyword_boost(&mut results, &[]);
@@ -71,6 +74,7 @@ async fn test_apply_keyword_boost_multiple_keywords() {
                 "routing_keywords": ["git", "commit", "version"]
             }),
             distance: 0.4,
+            ..Default::default()
         },
         VectorSearchResult {
             id: "file.save".to_string(),
@@ -79,6 +83,7 @@ async fn test_apply_keyword_boost_multiple_keywords() {
                 "routing_keywords": ["file", "save"]
             }),
             distance: 0.3,
+            ..Default::default()
         },
     ];
 
@@ -258,7 +263,7 @@ async fn test_vector_distance_calculation() {
         skill_name: "test".to_string(),
         tool_name: "identical".to_string(),
         file_path: "".to_string(),
-        keywords: vec![],
+        routing_keywords: vec![],
         intents: vec![],
         category: "test".to_string(),
     };
@@ -273,7 +278,7 @@ async fn test_vector_distance_calculation() {
         skill_name: "test".to_string(),
         tool_name: "opposite".to_string(),
         file_path: "".to_string(),
-        keywords: vec![],
+        routing_keywords: vec![],
         intents: vec![],
         category: "test".to_string(),
     };
@@ -288,7 +293,7 @@ async fn test_vector_distance_calculation() {
         skill_name: "test".to_string(),
         tool_name: "orthogonal".to_string(),
         file_path: "".to_string(),
-        keywords: vec![],
+        routing_keywords: vec![],
         intents: vec![],
         category: "test".to_string(),
     };

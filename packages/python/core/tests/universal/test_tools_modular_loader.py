@@ -22,7 +22,9 @@ def nested_cmd(): return "ok"
     loader.load_all()
 
     assert "test_skill.nested_cmd" in loader.commands
-    assert loader.commands["test_skill.nested_cmd"]() == "ok"
+    out = loader.commands["test_skill.nested_cmd"]()
+    # MCP canonical result: content[].text
+    assert out.get("content") and out["content"][0].get("text") == "ok"
 
 
 def test_relative_import_support(tmp_path):
@@ -48,7 +50,8 @@ def reveal(): return get_secret()
     loader.load_all()
 
     assert "import_skill.reveal" in loader.commands
-    assert loader.commands["import_skill.reveal"]() == "42"
+    out = loader.commands["import_skill.reveal"]()
+    assert out.get("content") and out["content"][0].get("text") == "42"
 
 
 def test_namespace_collision_avoidance(tmp_path):
@@ -78,8 +81,10 @@ def cmd_b(): return "B"
 
     assert "collision_skill.cmd_a" in loader.commands
     assert "collision_skill.cmd_b" in loader.commands
-    assert loader.commands["collision_skill.cmd_a"]() == "A"
-    assert loader.commands["collision_skill.cmd_b"]() == "B"
+    out_a = loader.commands["collision_skill.cmd_a"]()
+    out_b = loader.commands["collision_skill.cmd_b"]()
+    assert out_a.get("content") and out_a["content"][0].get("text") == "A"
+    assert out_b.get("content") and out_b["content"][0].get("text") == "B"
 
 
 def test_module_cleanup_on_failure(tmp_path):

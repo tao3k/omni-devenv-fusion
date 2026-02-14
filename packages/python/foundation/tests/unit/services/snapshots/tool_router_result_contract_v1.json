@@ -1,5 +1,6 @@
 {
   "id": "advanced_tools.smart_find",
+  "name": "advanced_tools.smart_find",
   "description": "Find files by extension",
   "score": 0.88,
   "confidence": "high",
@@ -9,18 +10,18 @@
   "command": "smart_find",
   "file_path": "assets/skills/advanced_tools/scripts/search.py",
   "routing_keywords": ["find", "files", "directory"],
-  "input_schema": {
-    "type": "object"
-  },
+  "intents": ["Locate files"],
+  "category": "search",
+  "input_schema": { "type": "object" },
+  "vector_score": 0.81,
+  "keyword_score": 0.74,
   "payload": {
     "skill_name": "advanced_tools",
     "command": "smart_find",
     "type": "command",
     "description": "Find files by extension",
     "tool_name": "advanced_tools.smart_find",
-    "input_schema": {
-      "type": "object"
-    },
+    "input_schema": { "type": "object" },
     "metadata": {
       "skill_name": "advanced_tools",
       "command": "smart_find",
@@ -29,9 +30,7 @@
       "routing_keywords": ["find", "files", "directory"],
       "intents": ["Locate files"],
       "category": "search",
-      "input_schema": {
-        "type": "object"
-      }
+      "input_schema": { "type": "object" }
     }
   }
 }

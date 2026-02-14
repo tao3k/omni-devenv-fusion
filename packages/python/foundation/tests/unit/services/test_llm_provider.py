@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
+from omni.foundation.config.settings import get_setting
 from omni.foundation.services.llm.provider import (
     LLMConfig,
     LiteLLMProvider,
@@ -19,6 +20,10 @@ from omni.foundation.services.llm.provider import (
     get_llm_provider,
     reset_provider,
 )
+
+
+# Get the default model from settings for use in tests
+DEFAULT_MODEL = get_setting("inference.model", "MiniMax-M2.1")
 
 
 class TestLLMConfig:
@@ -82,7 +87,7 @@ class TestLiteLLMProvider:
         with patch("omni.foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
-                "inference.model": "MiniMax-M2.1",
+                "inference.model": DEFAULT_MODEL,
                 "inference.base_url": "https://api.minimax.io/anthropic",
                 "inference.api_key_env": "MINIMAX_API_KEY",
             }.get(key, default)
@@ -91,7 +96,7 @@ class TestLiteLLMProvider:
                 provider = LiteLLMProvider()
                 # Verify MiniMax detection works
                 assert "minimax" in provider.config.base_url.lower()
-                assert provider.config.model == "MiniMax-M2.1"
+                assert provider.config.model == DEFAULT_MODEL
 
     def test_provider_custom_settings(self):
         """Test LiteLLMProvider loads custom settings."""
@@ -116,7 +121,7 @@ class TestLiteLLMProvider:
         with patch("omni.foundation.config.settings.get_setting") as mock_setting:
             mock_setting.side_effect = lambda key, default=None: {
                 "inference.provider": "anthropic",
-                "inference.model": "MiniMax-M2.1",
+                "inference.model": DEFAULT_MODEL,
                 "inference.base_url": "https://api.minimax.io/anthropic",
                 "inference.api_key_env": "MINIMAX_API_KEY",
                 "inference.timeout": 60,

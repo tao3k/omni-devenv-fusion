@@ -55,7 +55,21 @@ in
                     final.setuptools
                   ];
                 });
-                # Fix hatchling editable build with editables
+                antlr4-python3-runtime = prev.antlr4-python3-runtime.overrideAttrs (old: {
+                  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
+                    final.setuptools
+                  ];
+                });
+                pylatexenc = prev.pylatexenc.overrideAttrs (old: {
+                  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
+                    final.setuptools
+                  ];
+                });
+                raganything = prev.raganything.overrideAttrs (old: {
+                  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [
+                    final.setuptools
+                  ];
+                });
                 hatchling = prev.hatchling.overrideAttrs (old: {
                   propagatedBuildInputs = (old.propagatedBuildInputs or [ ]) ++ [
                     final.editables

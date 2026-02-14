@@ -22,9 +22,11 @@ assets/skills/{skill_name}/
 │   └── commands.py    # All skill commands
 ├── README.md          # Human-readable documentation
 ├── templates/         # Jinja2 templates (cascading pattern)
-├── references/        # Additional documentation
+├── references/        # Per-tool or per-skill docs (YAML: metadata.for_tools)
 └── tests/             # Test files
 ```
+
+**Data hierarchy:** `SKILL.md` is the **top-level comprehensive** doc for the skill; **tools** come only from `scripts/`; **references/** hold detailed docs. In each reference markdown use frontmatter: `metadata.for_tools: <skill.command>` (and optionally `metadata.title`). See [Skill Data Hierarchy and References](../../docs/reference/skill-data-hierarchy-and-references.md).
 
 ## Pure MCP Server
 

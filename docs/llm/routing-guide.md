@@ -177,11 +177,7 @@ When uncertain:
 
 ### 3. Check Available Tools
 
-List available tools for current context:
-
-```python
-@omni("skill.list_tools")
-```
+List available tools: read the MCP resource `omni://skill/skill/list_tools` (use `list_resources` then `resources/read(uri)`).
 
 ### 4. Use Ghost Tools for Discovery
 

@@ -46,6 +46,90 @@ class HybridPayload(BaseModel):
             raise ValueError(f"Unsupported hybrid schema: {obj.schema_version}")
         return obj
 
+    @classmethod
+    def from_arrow_columns(
+        cls,
+        *,
+        ids: Any,
+        contents: Any,
+        scores: Any,
+        metadata: Any | None = None,
+        vector_score: Any | None = None,
+        keyword_score: Any | None = None,
+    ) -> list[HybridPayload]:
+        """Build list of HybridPayload from Arrow columns (no JSON parse)."""
+        import pyarrow as pa  # noqa: PLC0415
+
+        def _arr(x: Any) -> pa.Array:
+            return x.combine_chunks() if isinstance(x, pa.ChunkedArray) else x
+
+        ids_a = _arr(ids)
+        contents_a = _arr(contents)
+        scores_a = _arr(scores)
+        n = len(ids_a)
+        meta_a = _arr(metadata) if metadata is not None else None
+        vs_a = _arr(vector_score) if vector_score is not None else None
+        ks_a = _arr(keyword_score) if keyword_score is not None else None
+        out: list[HybridPayload] = []
+        for i in range(n):
+            mid = ids_a[i]
+            c = contents_a[i]
+            s = scores_a[i]
+            meta: dict[str, Any] = {}
+            if meta_a is not None and i < len(meta_a):
+                sv = meta_a[i]
+                if sv.is_valid and isinstance(sv.as_py(), str) and sv.as_py():
+                    try:
+                        meta = json.loads(sv.as_py())
+                    except json.JSONDecodeError:
+                        pass
+            vs = (
+                float(vs_a[i].as_py())
+                if vs_a is not None and i < len(vs_a) and vs_a[i].is_valid
+                else None
+            )
+            ks = (
+                float(ks_a[i].as_py())
+                if ks_a is not None and i < len(ks_a) and ks_a[i].is_valid
+                else None
+            )
+            id_val = mid.as_py() if mid.is_valid else "unknown"
+            content_val = c.as_py() if c.is_valid else ""
+            if not id_val:
+                id_val = "unknown"
+            out.append(
+                cls(
+                    id=id_val,
+                    content=content_val or " ",
+                    metadata=meta,
+                    score=float(s.as_py()) if s.is_valid else 0.0,
+                    vector_score=vs,
+                    keyword_score=ks,
+                    schema=HYBRID_SCHEMA_V1,
+                )
+            )
+        return out
+
+    @classmethod
+    def from_arrow_table(cls, table: Any) -> list[HybridPayload]:
+        """Build list of HybridPayload from a pyarrow Table (column names: id, content, score; optional: metadata, vector_score, keyword_score)."""
+        if table.num_rows == 0:
+            return []
+        cols = table.column_names
+        ids = table["id"] if "id" in cols else None
+        contents = table["content"] if "content" in cols else None
+        scores = table["score"] if "score" in cols else None
+        if ids is None or contents is None or scores is None:
+            raise ValueError("Arrow table must have columns: id, content, score")
+        return cls.from_arrow_columns(
+            ids=ids,
+            contents=contents,
+            scores=scores,
+            metadata=table["metadata"] if "metadata" in cols else None,
+            vector_score=table["vector_score"] if "vector_score" in cols else None,
+            keyword_score=table["keyword_score"] if "keyword_score" in cols else None,
+        )
+
     def to_search_result_fields(self) -> tuple[str, str, dict[str, Any], float]:
         metadata = dict(self.metadata)
         if self.vector_score is not None or self.keyword_score is not None:
@@ -75,6 +159,65 @@ class VectorPayload(BaseModel):
         if obj.schema_version != VECTOR_SCHEMA_V1:
             raise ValueError(f"Unsupported vector schema: {obj.schema_version}")
         return obj
+
+    @classmethod
+    def from_arrow_table(cls, table: Any) -> list[VectorPayload]:
+        """Build VectorPayload list from a pyarrow Table (search result batch contract).
+
+        Table must have columns: id, content, _distance, metadata (Utf8).
+        Optional: tool_name, file_path, routing_keywords, intents.
+        """
+        import pyarrow as pa  # noqa: PLC0415
+
+        if table.num_rows == 0:
+            return []
+        ids = table["id"] if "id" in table.column_names else None
+        contents = table["content"] if "content" in table.column_names else None
+        distances = table["_distance"] if "_distance" in table.column_names else None
+        metadata_col = table["metadata"] if "metadata" in table.column_names else None
+        if ids is None or contents is None or distances is None:
+            raise ValueError(
+                "Arrow table must have columns: id, content, _distance; optional: metadata"
+            )
+
+        def _col(arr: pa.Array | pa.ChunkedArray) -> pa.Array:
+            return arr.combine_chunks() if isinstance(arr, pa.ChunkedArray) else arr
+
+        ids_a = _col(ids)
+        contents_a = _col(contents)
+        distances_a = _col(distances)
+        metadata_a = _col(metadata_col) if metadata_col is not None else None
+
+        payloads: list[VectorPayload] = []
+        for i in range(table.num_rows):
+            sid = ids_a[i]
+            id_val = sid.as_py() if sid.is_valid else ""
+            scontent = contents_a[i]
+            content_val = scontent.as_py() if scontent.is_valid else ""
+            sdist = distances_a[i]
+            dist_val = float(sdist.as_py()) if sdist.is_valid else 0.0
+            meta: dict[str, Any] = {}
+            if metadata_a is not None:
+                smeta = metadata_a[i]
+                if smeta.is_valid:
+                    raw = smeta.as_py()
+                    if isinstance(raw, str) and raw:
+                        try:
+                            meta = json.loads(raw)
+                        except json.JSONDecodeError:
+                            pass
+            score = 1.0 / (1.0 + max(dist_val, 0.0))
+            payloads.append(
+                cls(
+                    id=id_val or "unknown",
+                    content=content_val or "",
+                    metadata=meta,
+                    distance=dist_val,
+                    score=score,
+                    schema=VECTOR_SCHEMA_V1,
+                )
+            )
+        return payloads
 
     def to_search_result_fields(self) -> tuple[str, str, dict[str, Any], float]:
         return self.id, self.content, dict(self.metadata), float(self.distance)
@@ -135,7 +278,160 @@ class ToolSearchPayload(BaseModel):
             raise ValueError(f"Unsupported tool search schema: {obj.schema_version}")
         return obj
 
+    @classmethod
+    def from_arrow_columns(
+        cls,
+        *,
+        ids: Any,
+        contents: Any,
+        scores: Any,
+        tool_name: Any | None = None,
+        file_path: Any | None = None,
+        routing_keywords: Any | None = None,
+        intents: Any | None = None,
+        metadata: Any | None = None,
+        skill_name: Any | None = None,
+        category: Any | None = None,
+        vector_score: Any | None = None,
+        keyword_score: Any | None = None,
+    ) -> list[ToolSearchPayload]:
+        """Build list of ToolSearchPayload from Arrow columns (no JSON parse).
+
+        Required: ids (-> name), contents (-> description), scores (-> score and final_score).
+        Optional columns map to same-named fields; metadata column (Utf8 JSON) can supply
+        input_schema, skill_name, category when not provided as columns.
+        """
+        import math
+        import pyarrow as pa  # noqa: PLC0415
+
+        def _arr(x: Any) -> pa.Array:
+            return x.combine_chunks() if isinstance(x, pa.ChunkedArray) else x
+
+        def _scalar(arr: pa.Array, i: int, default: str = "") -> str:
+            if i >= len(arr):
+                return default
+            s = arr[i]
+            return s.as_py() if s.is_valid else default
+
+        def _list_col(arr: pa.Array, i: int) -> list[str]:
+            if arr is None or i >= len(arr):
+                return []
+            s = arr[i]
+            if not s.is_valid:
+                return []
+            v = s.as_py()
+            return list(v) if isinstance(v, (list, tuple)) else []
+
+        ids_a = _arr(ids)
+        contents_a = _arr(contents)
+        scores_a = _arr(scores)
+        n = len(ids_a)
+        tn_a = _arr(tool_name) if tool_name is not None else None
+        fp_a = _arr(file_path) if file_path is not None else None
+        rk_a = _arr(routing_keywords) if routing_keywords is not None else None
+        in_a = _arr(intents) if intents is not None else None
+        meta_a = _arr(metadata) if metadata is not None else None
+        sn_a = _arr(skill_name) if skill_name is not None else None
+        cat_a = _arr(category) if category is not None else None
+        vs_a = _arr(vector_score) if vector_score is not None else None
+        ks_a = _arr(keyword_score) if keyword_score is not None else None
+
+        def _opt_float(arr: pa.Array | None, i: int) -> float | None:
+            if arr is None or i >= len(arr):
+                return None
+            s = arr[i]
+            if not s.is_valid:
+                return None
+            v = s.as_py()
+            if v is None or (isinstance(v, float) and math.isnan(v)):
+                return None
+            return float(v)
+
+        out: list[ToolSearchPayload] = []
+        for i in range(n):
+            meta: dict[str, Any] = {}
+            if meta_a is not None and i < len(meta_a):
+                sv = meta_a[i]
+                if sv.is_valid and isinstance(sv.as_py(), str) and sv.as_py():
+                    try:
+                        meta = json.loads(sv.as_py())
+                    except json.JSONDecodeError:
+                        pass
+            name_val = _scalar(ids_a, i) or _scalar(ids_a, i, "unknown")
+            if not name_val:
+                name_val = "unknown"
+            score_val = float(scores_a[i].as_py()) if scores_a[i].is_valid else 0.0
+            tool_val = _scalar(tn_a, i) if tn_a is not None else name_val
+            skill_val = _scalar(sn_a, i) if sn_a is not None else (meta.get("skill_name") or "")
+            cat_val = _scalar(cat_a, i) if cat_a is not None else (meta.get("category") or "")
+            input_schema = (
+                meta.get("input_schema") if isinstance(meta.get("input_schema"), dict) else {}
+            )
+            vs = _opt_float(vs_a, i) if vs_a is not None else None
+            ks = _opt_float(ks_a, i) if ks_a is not None else None
+            out.append(
+                cls(
+                    schema=TOOL_SEARCH_SCHEMA_V1,
+                    name=name_val,
+                    description=_scalar(contents_a, i),
+                    input_schema=input_schema,
+                    score=score_val,
+                    final_score=score_val,
+                    confidence="medium",
+                    skill_name=skill_val,
+                    tool_name=tool_val or name_val,
+                    file_path=_scalar(fp_a, i) if fp_a is not None else "",
+                    routing_keywords=_list_col(rk_a, i) if rk_a is not None else [],
+                    intents=_list_col(in_a, i) if in_a is not None else [],
+                    category=cat_val,
+                    vector_score=vs,
+                    keyword_score=ks,
+                )
+            )
+        return out
+
+    @classmethod
+    def from_arrow_table(cls, table: Any) -> list[ToolSearchPayload]:
+        """Build list of ToolSearchPayload from a pyarrow Table.
+
+        Required columns: id or name, content or description, score or final_score.
+        Optional: tool_name, file_path, routing_keywords, intents, metadata, skill_name, category.
+        """
+        if table.num_rows == 0:
+            return []
+        cols = table.column_names
+        ids = table["id"] if "id" in cols else (table["name"] if "name" in cols else None)
+        contents = (
+            table["content"]
+            if "content" in cols
+            else (table["description"] if "description" in cols else None)
+        )
+        scores = (
+            table["score"]
+            if "score" in cols
+            else (table["final_score"] if "final_score" in cols else None)
+        )
+        if ids is None or contents is None or scores is None:
+            raise ValueError(
+                "Arrow table must have columns: (id or name), (content or description), (score or final_score)"
+            )
+        return cls.from_arrow_columns(
+            ids=ids,
+            contents=contents,
+            scores=scores,
+            tool_name=table["tool_name"] if "tool_name" in cols else None,
+            file_path=table["file_path"] if "file_path" in cols else None,
+            routing_keywords=table["routing_keywords"] if "routing_keywords" in cols else None,
+            intents=table["intents"] if "intents" in cols else None,
+            metadata=table["metadata"] if "metadata" in cols else None,
+            skill_name=table["skill_name"] if "skill_name" in cols else None,
+            category=table["category"] if "category" in cols else None,
+            vector_score=table["vector_score"] if "vector_score" in cols else None,
+            keyword_score=table["keyword_score"] if "keyword_score" in cols else None,
+        )
+
     def to_router_result(self) -> dict[str, Any]:
+        """Build route_result_item dict aligned with omni.router.route_test.v1 (id, name, scores, intents, category; no schema/keywords)."""
         full_tool_name = self.tool_name.strip()
         if "." not in full_tool_name and self.skill_name:
             full_tool_name = f"{self.skill_name}.{full_tool_name}"
@@ -144,37 +440,30 @@ class ToolSearchPayload(BaseModel):
         command = (
             ".".join(full_tool_name.split(".")[1:]) if "." in full_tool_name else full_tool_name
         )
-        result = {
+        result: dict[str, Any] = {
+            "id": full_tool_name,
             "name": self.name,
             "description": self.description,
-            "input_schema": self.input_schema,
-            "score": float(self.score),
-            "final_score": float(self.final_score),
-            "confidence": self.confidence,
             "skill_name": self.skill_name,
             "tool_name": full_tool_name,
             "command": command,
             "file_path": self.file_path,
+            "score": float(self.score),
+            "final_score": float(self.final_score),
+            "confidence": self.confidence,
             "routing_keywords": list(self.routing_keywords),
             "intents": list(self.intents),
             "category": self.category,
-            "schema": self.schema_version,
+            "input_schema": self.input_schema,
             "payload": {
-                "skill_name": self.skill_name,
-                "command": command,
                 "type": "command",
                 "description": self.description,
-                "tool_name": full_tool_name,
-                "input_schema": dict(self.input_schema),
                 "metadata": {
-                    "skill_name": self.skill_name,
-                    "command": command,
                     "tool_name": full_tool_name,
-                    "file_path": self.file_path,
                     "routing_keywords": list(self.routing_keywords),
+                    "input_schema": dict(self.input_schema),
                     "intents": list(self.intents),
                     "category": self.category,
-                    "input_schema": dict(self.input_schema),
                 },
             },
         }
@@ -215,11 +504,12 @@ class ToolRouterPayload(BaseModel):
 
 
 class ToolRouterResult(BaseModel):
-    """Canonical router result passed to CLI and downstream orchestrators."""
+    """Canonical router result passed to CLI and downstream orchestrators (omni.router.route_test.v1 result item)."""
 
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(min_length=1)
+    name: str = ""
     description: str = ""
     score: float
     confidence: Literal["high", "medium", "low"]
@@ -229,15 +519,20 @@ class ToolRouterResult(BaseModel):
     command: str = ""
     file_path: str = ""
     routing_keywords: list[str] = Field(default_factory=list)
+    intents: list[str] = Field(default_factory=list)
+    category: str = ""
     input_schema: dict[str, Any] = Field(default_factory=dict)
     payload: ToolRouterPayload
+    vector_score: float | None = None
+    keyword_score: float | None = None
 
 
 def build_tool_router_result(payload: ToolSearchPayload, full_tool_name: str) -> dict[str, Any]:
-    """Build canonical router result dict from validated tool-search payload."""
+    """Build canonical router result dict from validated tool-search payload (route_test result item shape)."""
     command = ".".join(full_tool_name.split(".")[1:]) if "." in full_tool_name else full_tool_name
     result = ToolRouterResult(
-        id=payload.name,
+        id=full_tool_name,
+        name=payload.name,
         description=payload.description,
         score=float(payload.score),
         confidence=payload.confidence,
@@ -247,6 +542,8 @@ def build_tool_router_result(payload: ToolSearchPayload, full_tool_name: str) ->
         command=command,
         file_path=payload.file_path,
         routing_keywords=list(payload.routing_keywords),
+        intents=list(payload.intents),
+        category=payload.category,
         input_schema=dict(payload.input_schema),
         payload=ToolRouterPayload(
             skill_name=payload.skill_name,
@@ -266,8 +563,10 @@ def build_tool_router_result(payload: ToolSearchPayload, full_tool_name: str) ->
                 input_schema=dict(payload.input_schema),
             ),
         ),
+        vector_score=payload.vector_score,
+        keyword_score=payload.keyword_score,
     )
-    return result.model_dump()
+    return result.model_dump(exclude_none=True)
 
 
 class SearchOptionsContract(BaseModel):
@@ -302,6 +601,10 @@ class SearchOptionsContract(BaseModel):
         ge=1,
         le=1_000_000,
         description="Hard cap on scanned candidates before post-processing.",
+    )
+    projection: list[str] | None = Field(
+        default=None,
+        description="Columns to include in IPC output (e.g. id, content, _distance). Reduces payload for batch search.",
     )
 
     def to_options_json(self) -> str | None:
@@ -481,11 +784,43 @@ def _validate_tool_search_common_schema(raw: dict[str, Any]) -> None:
     raise ValueError(f"Common schema validation failed at {location}: {first.message}")
 
 
-def _common_schema_path(schema_name: str) -> Path:
-    from omni.foundation.config.paths import get_config_paths
+def get_shared_schemas_dir() -> Path:
+    """Return packages/shared/schemas directory (uses same resolution as _common_schema_path)."""
+    return _common_schema_path(_TOOL_SEARCH_COMMON_SCHEMA).parent
 
-    project_root = get_config_paths().project_root
-    return project_root / "packages" / "shared" / "schemas" / schema_name
+
+def _common_schema_path(schema_name: str) -> Path:
+    """Resolve path to a shared schema file. Uses project root, with fallback from __file__."""
+    # Prefer project root from config (respects PRJ_ROOT / git toplevel)
+    try:
+        from omni.foundation.config.paths import get_config_paths
+
+        project_root = get_config_paths().project_root
+        candidate = project_root / "packages" / "shared" / "schemas" / schema_name
+        if candidate.exists():
+            return candidate
+    except Exception:
+        pass
+    # Fallback: walk up from this file to find packages/shared/schemas (e.g. when cwd is pytest tmpdir)
+    anchor = Path(__file__).resolve()
+    fallback_path: Path | None = None
+    for parent in anchor.parents:
+        schema_dir = parent / "packages" / "shared" / "schemas"
+        if schema_dir.is_dir():
+            candidate = schema_dir / schema_name
+            fallback_path = candidate
+            if candidate.exists():
+                return candidate
+            break
+    # Return path for consistent error message; validator will raise if not exists
+    if fallback_path is not None:
+        return fallback_path
+    try:
+        from omni.foundation.config.paths import get_config_paths
+
+        return get_config_paths().project_root / "packages" / "shared" / "schemas" / schema_name
+    except Exception:
+        return anchor.parent / "packages" / "shared" / "schemas" / schema_name
 
 
 @lru_cache(maxsize=8)
@@ -545,6 +880,7 @@ __all__ = [
     "VECTOR_SCHEMA_V1",
     "HybridPayload",
     "SearchOptionsContract",
+    "get_shared_schemas_dir",
     "ToolRouterMetadata",
     "ToolRouterPayload",
     "ToolRouterResult",

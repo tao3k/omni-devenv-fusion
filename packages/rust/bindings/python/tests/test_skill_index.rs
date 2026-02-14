@@ -45,6 +45,8 @@ fn test_build_index_entry_deduplicates_tools() {
             category: "test".to_string(),
             annotations: Default::default(),
             parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: String::new(),
         },
         // Duplicate from another function with same tool name
         ToolRecord {
@@ -62,6 +64,8 @@ fn test_build_index_entry_deduplicates_tools() {
             category: "test".to_string(),
             annotations: Default::default(),
             parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: String::new(),
         },
         // Unique tool
         ToolRecord {
@@ -79,6 +83,8 @@ fn test_build_index_entry_deduplicates_tools() {
             category: "test".to_string(),
             annotations: Default::default(),
             parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: String::new(),
         },
     ];
 
@@ -142,6 +148,8 @@ fn test_build_index_entry_preserves_order() {
             category: "test".to_string(),
             annotations: Default::default(),
             parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: String::new(),
         },
         ToolRecord {
             tool_name: "test_skill.tool_a".to_string(),
@@ -158,6 +166,8 @@ fn test_build_index_entry_preserves_order() {
             category: "test".to_string(),
             annotations: Default::default(),
             parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: String::new(),
         },
     ];
 

@@ -11,6 +11,7 @@ Commands:
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -44,13 +45,29 @@ def _get_header_for_file(file_path: str, matches: list[dict]) -> str:
     return ""
 
 
+def _query_to_ripgrep_pattern(query: str) -> str:
+    """Turn a multi-word query into an OR pattern so any word can match.
+
+    Ripgrep treats the pattern as a whole; a phrase like 'project progress'
+    matches no line if the exact phrase is absent. Splitting into words and
+    joining with | lets lines containing any of the words match.
+    """
+    words = [w.strip() for w in query.split() if w.strip()]
+    if not words:
+        return query
+    if len(words) == 1:
+        return re.escape(words[0])
+    return "|".join(re.escape(w) for w in words)
+
+
 def _run_ripgrep(query: str, targets: list[str], root: Path) -> list[dict]:
     """Execute ripgrep search and return parsed results."""
     rg_exec = shutil.which("rg")
     if not rg_exec:
         raise RuntimeError("ripgrep (rg) not found in PATH.")
 
-    cmd = [rg_exec, "--json", "-t", "markdown", "-i", query] + targets
+    pattern = _query_to_ripgrep_pattern(query)
+    cmd = [rg_exec, "--json", "-t", "markdown", "-i", pattern] + targets
 
     try:
         process = subprocess.Popen(

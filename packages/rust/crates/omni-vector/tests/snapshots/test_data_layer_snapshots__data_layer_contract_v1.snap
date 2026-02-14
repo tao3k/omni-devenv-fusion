@@ -27,27 +27,27 @@ expression: view
       "content": "alpha-old",
       "distance": "2.000000",
       "id": "tool.alpha",
-      "kind": "seed",
-      "rank": 1
+      "kind": "",
+      "rank": 0
     },
     {
       "content": "beta-new",
       "distance": "0.000000",
       "id": "tool.beta",
-      "kind": "merged",
-      "rank": 20
+      "kind": "",
+      "rank": 0
     },
     {
       "content": "gamma-new",
       "distance": "2.000000",
       "id": "tool.gamma",
-      "kind": "merged",
-      "rank": 30
+      "kind": "",
+      "rank": 0
     }
   ],
   "table": {
     "fragment_count": 2,
     "num_rows": 3,
-    "versions": 3
+    "versions": 2
   }
 }

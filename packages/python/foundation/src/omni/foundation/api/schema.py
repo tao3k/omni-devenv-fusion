@@ -103,18 +103,16 @@ def _generate_tool_schema(
                 origin = getattr(annotation, "__origin__", None)
                 args = getattr(annotation, "__args__", ())
 
-        # 3. Handle Literal types - create enum
-        if origin is not None and hasattr(annotation, "__args__"):
-            # Literal["value1", "value2"] -> enum
+        # 3. Handle Literal types - use str as fallback to avoid Pydantic IsInstanceSchema warning
+        # Pydantic v2 cannot generate JSON schema for Literal types properly
+        if origin is not None and args:
             import typing
 
-            if getattr(annotation, "_name", None) == "Literal" or origin is typing.Literal:
-                literal_args = annotation.__args__
-                if all(isinstance(a, (str, int, float)) for a in literal_args):
-                    # Create a dynamic enum-like annotation
-                    annotation = type(
-                        f"Literal_{param_name}", (), {"__args__": literal_args, "_name": "Literal"}
-                    )
+            is_literal = getattr(annotation, "_name", None) == "Literal" or origin is typing.Literal
+            if is_literal:
+                # Skip Literal for schema generation - use str as fallback
+                # This avoids "Cannot generate a JsonSchema for core_schema.IsInstanceSchema" warning
+                annotation = str
 
         # 4. Handle list[...] and dict[...] generics
         if origin is not None:

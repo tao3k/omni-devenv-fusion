@@ -28,6 +28,7 @@ from omni.foundation.config.settings import get_settings
 # Command Imports
 from .commands import (
     register_completions_command,
+    register_dashboard_command,
     register_db_command,
     register_knowledge_command,
     register_mcp_command,
@@ -233,6 +234,7 @@ def main(
 
 # Register subcommands
 register_completions_command(app)
+register_dashboard_command(app)
 register_db_command(app)
 register_skill_command(app)
 register_mcp_command(app)

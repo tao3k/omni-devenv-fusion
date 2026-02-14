@@ -8,9 +8,17 @@ Tests the run command execution flow including:
 - Output formatting
 """
 
+import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+# Strip ANSI so assertions on Rich-rendered output work
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m|\x1b\[[?0-9;]*[a-zA-Z]")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_ESCAPE.sub("", text)
 
 
 class TestRunCommandExecution:
@@ -205,13 +213,14 @@ class TestRunCommandOutput:
         _print_session_report("test task", result, step_count, tool_counts, tokens)
 
         captured = capsys.readouterr()
+        out = _strip_ansi(captured.out)
         # Verify output contains key elements
-        assert "✨ CCA Session Report ✨" in captured.out
-        assert "Task: test task" in captured.out
-        assert "Steps" in captured.out
-        assert "Reflection & Outcome:" in captured.out
+        assert "✨ CCA Session Report ✨" in out
+        assert "Task: test task" in out or "test task" in out
+        assert "Steps" in out
+        assert "Reflection & Outcome:" in out
         # Verify dict output is rendered (as JSON)
-        assert '"success": true' in captured.out or "success" in captured.out
+        assert '"success": true' in out or "success" in out
 
     def test_session_report_with_markdown_output(self, capsys):
         """Verify _print_session_report renders markdown output correctly."""
@@ -228,10 +237,11 @@ class TestRunCommandOutput:
         _print_session_report("markdown task", result, step_count, tool_counts, tokens)
 
         captured = capsys.readouterr()
+        out = _strip_ansi(captured.out)
         # Verify output contains key elements
-        assert "✨ CCA Session Report ✨" in captured.out
-        assert "Overview" in captured.out
-        assert "Item 1" in captured.out
+        assert "✨ CCA Session Report ✨" in out
+        assert "Overview" in out
+        assert "Item 1" in out
 
     def test_session_report_panel_title(self, capsys):
         """Verify session report has correct panel title."""

@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omni.router.routing_search.v1.schema.json",
+  "title": "Routing Search Algorithm v1",
+  "description": "Per-value assignment: which value uses semantic (vector), keyword (BM25), or intent (strategy + rerank) search. Single source of truth for the routing algorithm; scenario validation and implementation MUST align to the canonical instance (snapshots/routing_search_canonical_v1.json). To change algorithm behaviour, update the canonical instance or introduce a new schema version.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "semantic", "keyword", "intent"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "omni.router.routing_search.v1",
+      "description": "Schema identifier; used to validate algorithm payloads."
+    },
+    "semantic": {
+      "type": "object",
+      "description": "Values used for vector (embedding) search. Defines what text is embedded per tool and matched at query time.",
+      "additionalProperties": false,
+      "required": ["embedding_source"],
+      "properties": {
+        "embedding_source": {
+          "type": "object",
+          "description": "Definition of the single blob per tool that is embedded and stored in the vector column.",
+          "additionalProperties": false,
+          "required": ["template", "fields"],
+          "properties": {
+            "template": {
+              "type": "string",
+              "description": "Template for the text to embed. Placeholders: {tool_name}, {description}, {intents} (joined)."
+            },
+            "fields": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Ordered list of source fields that feed the template (for validation)."
+            }
+          }
+        }
+      }
+    },
+    "keyword": {
+      "type": "object",
+      "description": "Fields and boosts for BM25 (Tantivy). Defines which values are indexed and queried for keyword search.",
+      "additionalProperties": false,
+      "required": ["fields"],
+      "properties": {
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "boost"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Tantivy field name (tool_name, description, category, keywords, intents)."
+              },
+              "boost": {
+                "type": "number",
+                "description": "Query parser boost for this field (e.g. 5.0 for tool_name)."
+              },
+              "in_query_parser": {
+                "type": "boolean",
+                "default": true,
+                "description": "If false, field is stored but not searched by default BM25 query (e.g. category)."
+              }
+            }
+          }
+        }
+      }
+    },
+    "intent": {
+      "type": "object",
+      "description": "Strategy selection (exact/semantic/hybrid) and rerank. Defines how query intent drives which branch runs and which values are used for rerank.",
+      "additionalProperties": false,
+      "required": ["strategies", "rerank_fields"],
+      "properties": {
+        "strategies": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["keyword_only", "vector_only", "hybrid"]
+          },
+          "description": "Map from intent name (exact, semantic, hybrid) to search branch."
+        },
+        "category_filter_values": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional category values used for intent-based filtering (e.g. file_discovery)."
+        },
+        "rerank_fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tool metadata fields used for metadata_alignment_boost and file_discovery_boost after RRF."
+        }
+      }
+    }
+  }
+}

@@ -6,6 +6,7 @@ to omni-vector's search_tools for vector search + keyword rescue.
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -29,6 +30,28 @@ class TestHybridSearchRustNative:
 
         # Verify it has the store reference
         assert search._store is not None
+
+    def test_default_uses_skills_database_path(self):
+        """HybridSearch() with no storage_path must use get_vector_db_path().
+
+        Ensures route test and sync/reindex use the same skills store root
+        (get_vector_db_path(); get_database_path('skills') is not used for store root).
+        """
+        from omni.core.router.hybrid_search import HybridSearch
+
+        with (
+            patch(
+                "omni.foundation.config.dirs.get_vector_db_path",
+                return_value=Path("/cache/omni-vector"),
+            ) as mock_get_path,
+            patch(
+                "omni.foundation.bridge.rust_vector.get_vector_store",
+            ) as mock_get_store,
+        ):
+            search = HybridSearch()
+
+        mock_get_path.assert_called_once()
+        mock_get_store.assert_called_once_with("/cache/omni-vector")
 
     def test_fixed_weights(self):
         """Test that weights are fixed (no configurable weights in Rust-native)."""
@@ -107,26 +130,26 @@ class TestHybridSearchWithMockedStore:
             )
         ]
 
-        with patch.object(
-            MagicMock(), "search_tools", new_callable=AsyncMock, return_value=mock_results
-        ):
-            # We need to patch the store's search_tools
-            search = HybridSearch()
-            _stub_embed(search)
-            search._store.search_tools = AsyncMock(return_value=mock_results)
+        # Use a store mock without agentic_search so the code path uses search_tools.
+        search = HybridSearch()
+        _stub_embed(search)
+        mock_store = MagicMock(spec=["search_tools"])
+        mock_store.search_tools = AsyncMock(return_value=mock_results)
+        search._store = mock_store
 
-            results = await search.search("git commit")
+        results = await search.search("git commit")
 
-            # Verify store was called
-            search._store.search_tools.assert_called_once()
+        # Verify store was called
+        search._store.search_tools.assert_called_once()
 
-            # Verify results format
-            assert len(results) == 1
-            assert results[0]["id"] == "git.commit"
-            assert results[0]["skill_name"] == "git"
-            assert results[0]["command"] == "commit"
-            assert results[0]["confidence"] == "high"
-            assert results[0]["final_score"] == 0.97
+        # Verify results format (final_score is re-calibrated by Python-side
+        # _recalibrate_confidence using the profile formula after all boosts)
+        assert len(results) == 1
+        assert results[0]["id"] == "git.commit"
+        assert results[0]["skill_name"] == "git"
+        assert results[0]["command"] == "commit"
+        assert results[0]["confidence"] == "high"
+        assert results[0]["final_score"] >= 0.90  # high_base floor from profile
 
     @pytest.mark.asyncio
     async def test_search_with_limit(self):
@@ -135,11 +158,13 @@ class TestHybridSearchWithMockedStore:
 
         search = HybridSearch()
         _stub_embed(search)
-        search._store.search_tools = AsyncMock(return_value=[])
+        mock_store = MagicMock(spec=["search_tools"])
+        mock_store.search_tools = AsyncMock(return_value=[])
+        search._store = mock_store
 
         await search.search("test", limit=5)
 
-        # Verify limit was passed
+        # Verify limit was passed (agentic_search path would use same kwargs)
         call_args = search._store.search_tools.call_args
         assert call_args.kwargs.get("limit") == 5
 
@@ -150,7 +175,9 @@ class TestHybridSearchWithMockedStore:
 
         search = HybridSearch()
         _stub_embed(search)
-        search._store.search_tools = AsyncMock(return_value=[])
+        mock_store = MagicMock(spec=["search_tools"])
+        mock_store.search_tools = AsyncMock(return_value=[])
+        search._store = mock_store
 
         await search.search("test", min_score=0.7)
 
@@ -165,7 +192,9 @@ class TestHybridSearchWithMockedStore:
 
         search = HybridSearch()
         _stub_embed(search)
-        search._store.search_tools = AsyncMock(return_value=[])
+        mock_store = MagicMock(spec=["search_tools"])
+        mock_store.search_tools = AsyncMock(return_value=[])
+        search._store = mock_store
 
         profile = {
             "high_threshold": 0.81,
@@ -178,18 +207,20 @@ class TestHybridSearchWithMockedStore:
         assert call_args.kwargs.get("confidence_profile") == profile
 
     @pytest.mark.asyncio
-    async def test_search_with_rerank_override(self):
-        """Rerank override should be forwarded to Rust bridge."""
+    async def test_hybrid_search_always_reranks(self):
+        """Hybrid search always passes rerank=True to the store (no override)."""
         from omni.core.router.hybrid_search import HybridSearch
 
         search = HybridSearch()
         _stub_embed(search)
-        search._store.search_tools = AsyncMock(return_value=[])
+        mock_store = MagicMock(spec=["search_tools"])
+        mock_store.search_tools = AsyncMock(return_value=[])
+        search._store = mock_store
 
-        await search.search("test", rerank=False)
+        await search.search("test")
 
         call_args = search._store.search_tools.call_args
-        assert call_args.kwargs.get("rerank") is False
+        assert call_args.kwargs.get("rerank") is True
 
     @pytest.mark.asyncio
     async def test_search_passes_query_for_keyword_rescue(self):
@@ -198,13 +229,45 @@ class TestHybridSearchWithMockedStore:
 
         search = HybridSearch()
         _stub_embed(search)
-        search._store.search_tools = AsyncMock(return_value=[])
+        mock_store = MagicMock(spec=["search_tools"])
+        mock_store.search_tools = AsyncMock(return_value=[])
+        search._store = mock_store
 
         await search.search("git commit message")
 
         # Verify query_text was passed (triggers keyword rescue in Rust)
         call_args = search._store.search_tools.call_args
+        assert call_args is not None
         assert "git commit message" in str(call_args)
+
+    @pytest.mark.asyncio
+    async def test_search_intent_override_passed_to_agentic(self):
+        """When intent_override is set, it is passed to agentic_search instead of rule-based intent."""
+        from omni.core.router.hybrid_search import HybridSearch
+
+        mock_results = [
+            make_tool_search_payload(
+                score=0.9,
+                final_score=0.88,
+                tool_name="commit",
+                skill_name="git",
+                file_path="git/scripts/commit.py",
+                routing_keywords=["git", "commit"],
+                input_schema="{}",
+            )
+        ]
+        search = HybridSearch()
+        _stub_embed(search)
+        mock_store = MagicMock(spec=["agentic_search"])
+        mock_store.agentic_search = AsyncMock(return_value=mock_results)
+        search._store = mock_store
+
+        await search.search("git commit", limit=3, intent_override="semantic")
+
+        mock_store.agentic_search.assert_called_once()
+        call_kwargs = mock_store.agentic_search.call_args.kwargs
+        assert call_kwargs.get("intent") == "semantic"
+        assert call_kwargs.get("limit") == 3
 
 
 class TestHybridSearchIntegration:
@@ -233,7 +296,9 @@ class TestHybridSearchIntegration:
 
         search = HybridSearch()
         _stub_embed(search)
-        search._store.search_tools = AsyncMock(return_value=mock_results)
+        mock_store = MagicMock(spec=["search_tools"])
+        mock_store.search_tools = AsyncMock(return_value=mock_results)
+        search._store = mock_store
 
         results = await search.search("run python")
 
@@ -259,6 +324,11 @@ class TestHybridSearchIntegration:
         assert result["payload"]["metadata"]["tool_name"] == "python.run"
         assert result["payload"]["metadata"]["routing_keywords"] == ["python", "run", "execute"]
         assert result["payload"]["metadata"]["input_schema"]["type"] == "object"
+        # Score breakdown from Rust is passed through for explain/transparency
+        assert "vector_score" in result
+        assert "keyword_score" in result
+        assert result["vector_score"] == 0.81
+        assert result["keyword_score"] == 0.74
 
     @pytest.mark.asyncio
     async def test_empty_results_on_error(self):
@@ -267,7 +337,9 @@ class TestHybridSearchIntegration:
 
         search = HybridSearch()
         _stub_embed(search)
-        search._store.search_tools = AsyncMock(return_value=[])
+        mock_store = MagicMock(spec=["search_tools"])
+        mock_store.search_tools = AsyncMock(return_value=[])
+        search._store = mock_store
 
         results = await search.search("nonexistent_tool_xyz")
 
@@ -280,11 +352,13 @@ class TestHybridSearchIntegration:
 
         search = HybridSearch()
         _stub_embed(search)
-        search._store.search_tools = AsyncMock(
+        mock_store = MagicMock(spec=["search_tools"])
+        mock_store.search_tools = AsyncMock(
             return_value=[
                 {"name": "git.commit", "score": 0.9},  # missing schema/tool_name
             ]
         )
+        search._store = mock_store
         results = await search.search("git commit")
         assert results == []
 
@@ -295,7 +369,8 @@ class TestHybridSearchIntegration:
 
         search = HybridSearch()
         _stub_embed(search)
-        search._store.search_tools = AsyncMock(
+        mock_store = MagicMock(spec=["search_tools"])
+        mock_store.search_tools = AsyncMock(
             return_value=[
                 {
                     "schema": "omni.vector.tool_search.v1",
@@ -328,9 +403,275 @@ class TestHybridSearchIntegration:
                 },
             ]
         )
+        search._store = mock_store
         results = await search.search("find python files")
         assert len(results) == 1
         assert results[0]["id"] == "advanced_tools.smart_find"
+
+
+class TestQueryDecomposition:
+    """Test intent/parameter decomposition for dual-signal search.
+
+    Ensures keyword search receives intent-focused text (parameter tokens stripped)
+    while embedding search keeps the full query for semantic understanding.
+    """
+
+    def test_extract_keyword_text_strips_github_url(self):
+        """'research github url' → keyword text should be 'research'."""
+        from omni.core.router.hybrid_search import _extract_keyword_text
+
+        assert _extract_keyword_text("research github url").strip() == "research"
+
+    def test_extract_keyword_text_strips_plain_url_and_stops(self):
+        """'help me fetch url' → keyword text strips 'url' and stop words, keeps 'fetch'."""
+        from omni.core.router.hybrid_search import _extract_keyword_text
+
+        result = _extract_keyword_text("help me fetch url")
+        assert "url" not in result.lower()
+        assert "help" not in result.lower()
+        assert "fetch" in result.lower()
+
+    def test_extract_keyword_text_preserves_intent_words(self):
+        """'git commit with message' → stop words removed, intent words kept."""
+        from omni.core.router.hybrid_search import _extract_keyword_text
+
+        result = _extract_keyword_text("git commit with message")
+        assert "git" in result
+        assert "commit" in result
+        assert "message" in result
+
+    def test_extract_keyword_text_fallback_when_all_stripped(self):
+        """If stripping leaves nothing, return original query."""
+        from omni.core.router.hybrid_search import _extract_keyword_text
+
+        # "url" alone → strip leaves empty → fallback to original
+        assert _extract_keyword_text("url") == "url"
+
+    def test_extract_keyword_text_strips_link_and_stops(self):
+        """'open link to project' → strips 'link' and stop words, keeps 'open', 'project'."""
+        from omni.core.router.hybrid_search import _extract_keyword_text
+
+        result = _extract_keyword_text("open link to project")
+        assert "link" not in result.lower()
+        assert "to" not in result.split()
+        assert "open" in result.lower()
+        assert "project" in result.lower()
+
+    def test_detect_param_types_url(self):
+        """Detect URL param type from normalized query."""
+        from omni.core.router.hybrid_search import _detect_param_types
+
+        assert "url" in _detect_param_types("research github url")
+        assert "url" in _detect_param_types("crawl url")
+        assert "url" not in _detect_param_types("git commit")
+
+    def test_detect_param_types_path(self):
+        """Detect path param type from query with file path."""
+        from omni.core.router.hybrid_search import _detect_param_types
+
+        assert "path" in _detect_param_types("find files in /src/main")
+
+    def test_match_param_type_url_in_schema(self):
+        """Schema with 'url' or 'repo_url' param matches URL type."""
+        from omni.core.router.hybrid_search import _match_param_type_to_schema
+
+        schema_with_url = {"properties": {"url": {"type": "string"}}}
+        schema_with_repo_url = {"properties": {"repo_url": {"type": "string"}}}
+        schema_without = {"properties": {"message": {"type": "string"}}}
+
+        assert _match_param_type_to_schema("url", schema_with_url) is True
+        assert _match_param_type_to_schema("url", schema_with_repo_url) is True
+        assert _match_param_type_to_schema("url", schema_without) is False
+
+    def test_param_schema_boost_applied(self):
+        """Tools with matching parameter types in schema get a score boost."""
+        from omni.core.router.hybrid_search import _apply_param_schema_boost
+
+        results = [
+            {
+                "id": "a",
+                "score": 1.0,
+                "final_score": 1.0,
+                "input_schema": '{"properties": {"url": {"type": "string"}}}',
+            },
+            {
+                "id": "b",
+                "score": 0.9,
+                "final_score": 0.9,
+                "input_schema": '{"properties": {"name": {"type": "string"}}}',
+            },
+        ]
+        boosted = _apply_param_schema_boost(results, ["url"])
+        score_a = next(r["score"] for r in boosted if r["id"] == "a")
+        score_b = next(r["score"] for r in boosted if r["id"] == "b")
+        assert score_a > 1.0  # boosted
+        assert score_b == 0.9  # not boosted
+
+
+class TestDualSignalSearchIntegration:
+    """Test that search() passes intent-focused text to keyword engine."""
+
+    @pytest.mark.asyncio
+    async def test_search_sends_intent_text_to_keyword_engine(self):
+        """When query contains URL tokens, keyword search receives stripped text."""
+        from omni.core.router.hybrid_search import HybridSearch
+
+        search = HybridSearch()
+        _stub_embed(search)
+        mock_store = MagicMock(spec=["agentic_search", "get_search_profile"])
+        mock_store.agentic_search = AsyncMock(return_value=[])
+        mock_store.get_search_profile = MagicMock(
+            return_value={
+                "semantic_weight": 1.0,
+                "keyword_weight": 1.5,
+                "rrf_k": 10,
+            }
+        )
+        search._store = mock_store
+
+        await search.search("research github url", skip_translation=True)
+
+        # agentic_search should have been called with stripped keyword text
+        call_kwargs = mock_store.agentic_search.call_args
+        query_text_sent = call_kwargs.kwargs.get("query_text") or call_kwargs[1].get("query_text")
+        assert "url" not in query_text_sent.lower()
+        assert "research" in query_text_sent.lower()
+
+    @pytest.mark.asyncio
+    async def test_search_passes_full_query_for_non_url(self):
+        """When query has no URL tokens, keyword text is the full query."""
+        from omni.core.router.hybrid_search import HybridSearch
+
+        search = HybridSearch()
+        _stub_embed(search)
+        mock_store = MagicMock(spec=["agentic_search", "get_search_profile"])
+        mock_store.agentic_search = AsyncMock(return_value=[])
+        mock_store.get_search_profile = MagicMock(
+            return_value={
+                "semantic_weight": 1.0,
+                "keyword_weight": 1.5,
+                "rrf_k": 10,
+            }
+        )
+        search._store = mock_store
+
+        await search.search("git commit with message", skip_translation=True)
+
+        call_kwargs = mock_store.agentic_search.call_args
+        query_text_sent = call_kwargs.kwargs.get("query_text") or call_kwargs[1].get("query_text")
+        # "with" is a stop word, removed; intent words kept
+        assert "git" in query_text_sent
+        assert "commit" in query_text_sent
+        assert "message" in query_text_sent
+
+
+class TestRecalibrateConfidence:
+    """Test _recalibrate_confidence with hybrid absolute + relative thresholds."""
+
+    @pytest.fixture()
+    def balanced_profile(self) -> dict:
+        return {
+            "high_threshold": 0.75,
+            "medium_threshold": 0.50,
+            "high_base": 0.90,
+            "high_scale": 0.05,
+            "high_cap": 0.99,
+            "medium_base": 0.60,
+            "medium_scale": 0.30,
+            "medium_cap": 0.89,
+            "low_floor": 0.10,
+        }
+
+    def test_score_above_high_threshold_and_relative(self, balanced_profile):
+        """Score >= high_threshold and within HIGH_RATIO of top → high."""
+        from omni.core.router.hybrid_search import _recalibrate_confidence
+
+        results = [
+            {"score": 1.5, "confidence": "low", "final_score": 0.0},
+            {"score": 1.2, "confidence": "low", "final_score": 0.0},
+        ]
+        recalibrated = _recalibrate_confidence(results, balanced_profile)
+        assert recalibrated[0]["confidence"] == "high"
+        assert recalibrated[1]["confidence"] == "high"
+
+    def test_high_absolute_but_low_relative_downgrades(self, balanced_profile):
+        """Score passes absolute high but is far below top → downgraded to medium."""
+        from omni.core.router.hybrid_search import _recalibrate_confidence
+
+        results = [
+            {"score": 2.0, "confidence": "low", "final_score": 0.0},
+            {
+                "score": 0.8,
+                "confidence": "low",
+                "final_score": 0.0,
+            },  # 0.8 >= 0.75 but 0.8 < 2.0 * 0.65 = 1.3
+        ]
+        recalibrated = _recalibrate_confidence(results, balanced_profile)
+        assert recalibrated[0]["confidence"] == "high"
+        assert recalibrated[1]["confidence"] == "medium"  # downgraded by relative check
+
+    def test_medium_tier_assignment(self, balanced_profile):
+        """Score in medium absolute range and within medium relative range."""
+        from omni.core.router.hybrid_search import _recalibrate_confidence
+
+        results = [
+            {"score": 1.0, "confidence": "low", "final_score": 0.0},
+            {"score": 0.6, "confidence": "low", "final_score": 0.0},
+        ]
+        recalibrated = _recalibrate_confidence(results, balanced_profile)
+        assert recalibrated[0]["confidence"] == "high"
+        # 0.6 >= 0.50 (medium abs) but 0.6 < 1.0 * 0.65 = 0.65 (not rel high)
+        # 0.6 >= 1.0 * 0.40 = 0.40 (rel medium) → medium
+        assert recalibrated[1]["confidence"] == "medium"
+
+    def test_low_tier_both_checks(self, balanced_profile):
+        """Score below both absolute and relative medium thresholds → low."""
+        from omni.core.router.hybrid_search import _recalibrate_confidence
+
+        results = [
+            {"score": 1.5, "confidence": "low", "final_score": 0.0},
+            {"score": 0.3, "confidence": "low", "final_score": 0.0},
+        ]
+        recalibrated = _recalibrate_confidence(results, balanced_profile)
+        assert recalibrated[1]["confidence"] == "low"
+
+    def test_clear_winner_promotion(self, balanced_profile):
+        """#1 far ahead of #2 gets promoted even if relative check fails."""
+        from omni.core.router.hybrid_search import _recalibrate_confidence
+
+        results = [
+            {"score": 0.6, "confidence": "low", "final_score": 0.0},  # abs=medium, but only result
+            {"score": 0.3, "confidence": "low", "final_score": 0.0},
+        ]
+        # 0.6 >= medium_threshold (0.5) and gap=0.3 >= CLEAR_WINNER_GAP (0.15)
+        recalibrated = _recalibrate_confidence(results, balanced_profile)
+        assert recalibrated[0]["confidence"] == "high"
+
+    def test_final_score_uses_tier_formula(self, balanced_profile):
+        """Final_score is re-computed per tier using profile formula."""
+        from omni.core.router.hybrid_search import _recalibrate_confidence
+
+        results = [
+            {"score": 0.9, "confidence": "low", "final_score": 0.0},
+        ]
+        recalibrated = _recalibrate_confidence(results, balanced_profile)
+        assert recalibrated[0]["confidence"] == "high"
+        # final = min(0.90 + 0.9 * 0.05, 0.99) = 0.945
+        assert abs(recalibrated[0]["final_score"] - 0.945) < 0.001
+
+    def test_empty_results_passthrough(self, balanced_profile):
+        """Empty list returns empty list."""
+        from omni.core.router.hybrid_search import _recalibrate_confidence
+
+        assert _recalibrate_confidence([], balanced_profile) == []
+
+    def test_slash_in_keyword_text_is_normalized(self):
+        """Slashes between intent words are replaced with spaces for Tantivy."""
+        from omni.core.router.hybrid_search import _extract_keyword_text
+
+        assert "analyze" in _extract_keyword_text("analyze/research")
+        assert "research" in _extract_keyword_text("analyze/research")
+        assert "/" not in _extract_keyword_text("analyze/research")
 
 
 if __name__ == "__main__":

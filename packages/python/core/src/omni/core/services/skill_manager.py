@@ -102,12 +102,12 @@ class SkillManager:
 
         # Embedding service (singleton pattern)
         self.embedding_service = embedding_service or get_embedding_service()
-        # Get dimension from settings (lazy load only when actually embedding)
-        from omni.foundation.config.settings import get_setting
+        # Get effective dimension (considers truncate_dim from settings.yaml)
+        from omni.foundation.services.index_dimension import get_effective_embedding_dimension
 
-        embedding_dimension = get_setting("embedding.dimension", 1024)
+        embedding_dimension = get_effective_embedding_dimension()
 
-        # Initialize Rust Vector Store with dimension from settings
+        # Initialize Rust Vector Store with effective dimension
         self.vector_store = PyVectorStore(db_path, embedding_dimension, False)
 
         # Initialize Pipeline Components
@@ -195,7 +195,7 @@ class SkillManager:
         try:
             self._last_notify_time = now
             logger.info(
-                f"🔔 _notify_updates called with {len(self._on_update_callbacks)} callbacks"
+                f"[hot-reload] Notifying MCP clients ({len(self._on_update_callbacks)} callbacks)"
             )
 
             for i, callback in enumerate(self._on_update_callbacks):
@@ -275,7 +275,7 @@ class SkillManager:
             # Always set callback (even if empty list) - future callbacks will be added to _on_update_callbacks
             self.watcher.set_on_change_callback(self._notify_updates)
             await self.watcher.start()
-            logger.info("⚡ Live-Wire Skill Watcher started")
+            logger.info("[hot-reload] Live-Wire watcher started")
 
     async def shutdown(self):
         """Gracefully shutdown the skill system."""

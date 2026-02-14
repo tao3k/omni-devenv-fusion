@@ -16,6 +16,7 @@ fn create_temp_db() -> (tempfile::TempDir, PathBuf) {
 /// Helper to add a tool to the store for testing.
 async fn add_test_tool(store: &VectorStore, id: &str, skill_name: &str, tool_name: &str) {
     let metadata = serde_json::json!({
+        "type": "command",
         "skill_name": skill_name,
         "tool_name": tool_name,
         "command": tool_name,
@@ -54,10 +55,15 @@ fn add_to_keyword_index(store: &VectorStore, name: &str, description: &str, cate
 async fn test_drop_table_clears_keyword_index_for_skills() {
     // Create store with keyword index
     let (_temp_dir, db_path) = create_temp_db();
-    let mut store =
-        VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(1024), true)
-            .await
-            .unwrap();
+    let mut store = VectorStore::new_with_keyword_index(
+        db_path.to_str().unwrap(),
+        Some(1024),
+        true,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     // Add initial tools to both LanceDB and keyword index
     add_test_tool(&store, "git.commit", "git", "commit").await;
@@ -85,9 +91,15 @@ async fn test_drop_table_clears_keyword_index_for_skills() {
     store.drop_table("skills").await.unwrap();
 
     // Recreate and verify
-    let store2 = VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(1024), true)
-        .await
-        .unwrap();
+    let store2 = VectorStore::new_with_keyword_index(
+        db_path.to_str().unwrap(),
+        Some(1024),
+        true,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     // Add tools again after drop
     add_test_tool(&store2, "git.commit", "git", "commit").await;
@@ -108,10 +120,15 @@ async fn test_drop_table_clears_keyword_index_for_skills() {
 #[tokio::test]
 async fn test_drop_table_clears_keyword_index_for_router() {
     let (_temp_dir, db_path) = create_temp_db();
-    let mut store =
-        VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(1024), true)
-            .await
-            .unwrap();
+    let mut store = VectorStore::new_with_keyword_index(
+        db_path.to_str().unwrap(),
+        Some(1024),
+        true,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     // Add initial data
     add_test_tool(&store, "researcher.analyze", "researcher", "analyze").await;
@@ -135,9 +152,15 @@ async fn test_drop_table_clears_keyword_index_for_router() {
     store.drop_table("router").await.unwrap();
 
     // Recreate and verify
-    let store2 = VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(1024), true)
-        .await
-        .unwrap();
+    let store2 = VectorStore::new_with_keyword_index(
+        db_path.to_str().unwrap(),
+        Some(1024),
+        true,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     // Add tools again
     add_test_tool(&store2, "researcher.analyze", "researcher", "analyze").await;
@@ -152,33 +175,45 @@ async fn test_drop_table_clears_keyword_index_for_router() {
 #[tokio::test]
 async fn test_drop_and_reindex_removes_stale_tools() {
     let (_temp_dir, db_path) = create_temp_db();
-    let mut store =
-        VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(1024), true)
-            .await
-            .unwrap();
+    let mut store = VectorStore::new_with_keyword_index(
+        db_path.to_str().unwrap(),
+        Some(1024),
+        true,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
-    // Add initial tools with UUID-like names (simulating stale data)
+    // Add initial tools with routable "stale" names (simulating stale data; UUID-like
+    // names are not indexed by design, so use a routable stale_skill)
     add_test_tool(
         &store,
-        "ee50478c-4824-4be0-b584-8169c7a51563.uuid_tool",
-        "ee50478c-4824-4be0-b584-8169c7a51563",
-        "uuid_tool",
+        "stale_skill.stale_tool",
+        "stale_skill",
+        "stale_tool",
     )
     .await;
 
-    // Verify UUID tool exists
+    // Verify stale tool exists in keyword index before drop
     assert!(
-        store.keyword_index_contains("ee50478c"),
-        "UUID tool should exist before drop"
+        store.keyword_index_contains("stale"),
+        "Stale tool should exist before drop"
     );
 
     // Drop and recreate
     store.drop_table("skills").await.unwrap();
 
     // Create new store
-    let store2 = VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(1024), true)
-        .await
-        .unwrap();
+    let store2 = VectorStore::new_with_keyword_index(
+        db_path.to_str().unwrap(),
+        Some(1024),
+        true,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     // Add clean tools (no UUID skill names)
     add_test_tool(&store2, "git.commit", "git", "commit").await;
@@ -203,10 +238,15 @@ async fn test_drop_and_reindex_removes_stale_tools() {
 #[tokio::test]
 async fn test_clear_keyword_index_method() {
     let (_temp_dir, db_path) = create_temp_db();
-    let mut store =
-        VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(1024), true)
-            .await
-            .unwrap();
+    let mut store = VectorStore::new_with_keyword_index(
+        db_path.to_str().unwrap(),
+        Some(1024),
+        true,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     // Add data to keyword index with unique identifier
     add_to_keyword_index(&store, "UNIQUE_TEST_12345.tool", "Test description", "test");
@@ -236,10 +276,15 @@ async fn test_clear_keyword_index_method() {
 #[tokio::test]
 async fn test_drop_table_preserves_related_tools() {
     let (_temp_dir, db_path) = create_temp_db();
-    let mut store =
-        VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(1024), true)
-            .await
-            .unwrap();
+    let mut store = VectorStore::new_with_keyword_index(
+        db_path.to_str().unwrap(),
+        Some(1024),
+        true,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     // Add git-related tools
     add_test_tool(&store, "git.commit", "git", "commit").await;
@@ -255,9 +300,15 @@ async fn test_drop_table_preserves_related_tools() {
 
     // Drop and recreate
     store.drop_table("skills").await.unwrap();
-    let store2 = VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(1024), true)
-        .await
-        .unwrap();
+    let store2 = VectorStore::new_with_keyword_index(
+        db_path.to_str().unwrap(),
+        Some(1024),
+        true,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     // Re-add only git tools (simulating clean reindex)
     add_test_tool(&store2, "git.commit", "git", "commit").await;

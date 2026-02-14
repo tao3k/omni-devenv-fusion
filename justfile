@@ -369,6 +369,21 @@ rust-test-snapshots:
     @echo "Running Rust snapshot contract tests..."
     @cargo test -p omni-vector --test test_fusion_snapshots
 
+# Regenerate Tantivy vs Lance FTS decision report from v4_large snapshot
+# See docs/testing/keyword-backend-decision.md for full loop (snapshots + report).
+[group('validate')]
+keyword-backend-report:
+    @echo "Regenerating keyword backend decision report (v4_large)..."
+    @uv run python scripts/generate_keyword_backend_decision_report.py
+    @echo "Wrote docs/testing/keyword-backend-decision-report.md"
+
+# Regenerate statistical comparison (bootstrap CI, sign test, per-scene winner)
+[group('validate')]
+keyword-backend-statistical:
+    @echo "Regenerating keyword backend statistical report (v4_large)..."
+    @uv run python scripts/generate_keyword_backend_statistical_report.py
+    @echo "Wrote docs/testing/keyword-backend-statistical-report.md"
+
 [group('validate')]
 test:
     @echo "TEST PIPELINE"

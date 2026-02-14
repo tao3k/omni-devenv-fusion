@@ -206,14 +206,26 @@ pub struct AgentContext {
     pub relevant_files: Vec<String>,
 }
 
-/// Vector search result
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+/// Vector search result (Arrow-native fields preferred; metadata kept for filter/extra keys).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct VectorSearchResult {
-    /// Result identifier
+    /// Result identifier (e.g. tool name)
     pub id: String,
     /// Result content
     pub content: String,
-    /// Additional metadata
+    /// Tool name (Arrow-native; avoid parsing metadata)
+    #[serde(default)]
+    pub tool_name: String,
+    /// File path (Arrow-native)
+    #[serde(default)]
+    pub file_path: String,
+    /// Routing keywords as string (space/whitespace-separated; Arrow-native)
+    #[serde(default)]
+    pub routing_keywords: String,
+    /// Intents as string (e.g. " | "-separated; Arrow-native)
+    #[serde(default)]
+    pub intents: String,
+    /// Additional metadata (for filter and extra keys; may be built from native columns)
     pub metadata: serde_json::Value,
     /// Distance from query vector
     pub distance: f64,

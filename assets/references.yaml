@@ -40,6 +40,12 @@ knowledge_dirs:
       - "**/*.md"
       - "**/*.markdown"
     description: "Project knowledge base (patterns, solutions, errors)"
+  # Project docs: milestones, plan, reference (enables recall/hybrid for "project progress" etc.)
+  - path: "docs"
+    domain: "docs"
+    globs:
+      - "**/*.md"
+    description: "User docs, milestones, plan, reference"
   # - path: "assets/how-to"
   #   domain: "workflow"
   #   globs: ["**/*.md"]

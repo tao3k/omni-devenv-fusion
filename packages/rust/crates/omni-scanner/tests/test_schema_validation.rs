@@ -99,6 +99,8 @@ fn test_tool_record_json_serialization_schema() {
         category: "commit".to_string(),
         annotations: ToolAnnotations::default(),
         parameters: vec!["action".to_string()],
+        skill_tools_refers: vec![],
+        resource_uri: "".to_string(),
     };
 
     // Serialize to JSON
@@ -135,6 +137,8 @@ fn test_skill_index_entry_tool_format() {
         category: "commit".to_string(),
         annotations: ToolAnnotations::default(),
         parameters: vec![],
+        skill_tools_refers: vec![],
+        resource_uri: "".to_string(),
     };
 
     // Build index entry
@@ -386,6 +390,8 @@ fn test_build_index_entry_no_double_prefix_regression() {
         category: "status".to_string(),
         annotations: ToolAnnotations::default(),
         parameters: vec![],
+        skill_tools_refers: vec![],
+        resource_uri: "".to_string(),
     }];
 
     let skill_path = TempDir::new().unwrap().path().join("git");

@@ -6,8 +6,6 @@ Test the Hybrid Router with semantic + keyword search and caching.
 Usage:
     omni route test "git commit"           # Test routing for a query
     omni route test "git commit" --debug   # Show detailed scoring
-    omni route test "git commit" --mcp     # Force use MCP server for embedding
-    omni route test "git commit" --local   # Use local embedding (default)
     omni route stats                       # Show router statistics
     omni route cache                       # Show cache stats
     omni route schema                      # Export router settings JSON schema
@@ -15,6 +13,7 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import socket
 import typer
@@ -109,25 +108,23 @@ def _build_route_test_json_payload(
     selected_profile_source: str,
     stats: dict[str, float] | None = None,
 ) -> dict:
+    """Build route_test v1 JSON. Results are from the skills table (hybrid search over skills.lance)."""
     profile = {
         "name": selected_profile_name,
         "source": selected_profile_source,
     }
+    # Stats from skills-table search (HybridSearch.stats() = store.get_search_profile()); defaults when missing
     stats_payload = {
-        "semantic_weight": None,
-        "keyword_weight": None,
-        "rrf_k": None,
-        "strategy": None,
+        "semantic_weight": 1.0,
+        "keyword_weight": 1.5,
+        "rrf_k": 10,
+        "strategy": "weighted_rrf_field_boosting",
     }
     if stats:
-        stats_payload.update(
-            {
-                "semantic_weight": stats.get("semantic_weight"),
-                "keyword_weight": stats.get("keyword_weight"),
-                "rrf_k": stats.get("rrf_k"),
-                "strategy": stats.get("strategy"),
-            }
-        )
+        for key in ("semantic_weight", "keyword_weight", "rrf_k", "strategy"):
+            v = stats.get(key)
+            if v is not None:
+                stats_payload[key] = v if key != "strategy" else str(v)
     return {
         "schema": ROUTE_TEST_SCHEMA_V1,
         "query": query,
@@ -321,6 +318,17 @@ async def _detect_mcp_port() -> int:
     return 0  # No server available
 
 
+async def _embed_via_local_only(texts: list[str]) -> list[list[float]]:
+    """Embed using local model only (no MCP/HTTP). Dimension matches index from omni sync."""
+    from omni.foundation.services.embedding import get_embedding_service
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None,
+        lambda: get_embedding_service().embed_force_local(texts),
+    )
+
+
 @route_app.command("test")
 def test_route(
     query: str = typer.Argument(..., help="User intent to route"),
@@ -344,23 +352,24 @@ def test_route(
         "--confidence-profile",
         help="Named confidence profile from settings (router.search.profiles.<name>)",
     ),
-    use_mcp: bool = typer.Option(
-        False, "--mcp", "-m", help="Use MCP server for embedding (faster if MCP is running)"
-    ),
-    use_local: bool = typer.Option(
-        False, "--local", "-l", help="Use local embedding model (default behavior)"
+    explain: bool = typer.Option(
+        False,
+        "--explain",
+        "-e",
+        help="With --json, add per-result score breakdown (raw_rrf, vector_score, keyword_score, final_score)",
     ),
 ) -> None:
     """
     Test hybrid routing for a required query intent.
 
     QUERY is required and should be quoted when it contains spaces.
+    Embedding and routing use built-in or configured services; no extra options needed.
 
     Examples:
         omni route test "git commit"
+        omni route test "帮我研究一下 https://example.com/repo"
         omni route test "search python symbols" --threshold 0.45 --number 5
         omni route test "refactor rust module" --debug
-        omni route test "index knowledge docs" --mcp
     """
     try:
         from omni.core.router.hybrid_search import HybridSearch
@@ -381,44 +390,47 @@ def test_route(
         )
         raise typer.Exit(2)
 
+    async def _ensure_dimension_aligned() -> bool:
+        """Proactive dimension check: if index dim != current dim, reindex skills and return True."""
+        from omni.foundation.services.index_dimension import get_embedding_dimension_status
+
+        status = get_embedding_dimension_status()
+        if status.match:
+            return False
+        if not json_output:
+            console.print(
+                f"[yellow]Index dimension mismatch (index={status.index_dim}, current={status.current_dim}). Reindexing skills...[/yellow]"
+            )
+        try:
+            from omni.agent.cli.commands.reindex import (
+                _reindex_skills_only,
+                _write_embedding_signature,
+            )
+
+            reindex_result = _reindex_skills_only(clear=True)
+            if reindex_result.get("status") == "success":
+                _write_embedding_signature()
+                if not json_output:
+                    console.print(
+                        "[green]Dimension aligned (skills reindexed to current config).[/green]"
+                    )
+                return True
+        except Exception as e:
+            if not json_output:
+                err_console.print(f"[red]Dimension repair failed: {e}[/]")
+        return False
+
+    async def _warm_embed_service() -> None:
+        """Trigger embedding service init in executor so first real embed() is fast."""
+        from omni.foundation.services.embedding import get_embedding_service
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: get_embedding_service().embed("_warm_"))
+
     async def run_test():
         search = HybridSearch()
 
-        # Decide embedding method
-        if use_mcp:
-            if not json_output:
-                console.print(f"[dim]Using MCP server for embedding...[/dim]")
-            # Inject MCP embedding function
-            search._embed_func = _embed_via_mcp
-        elif use_local:
-            if not json_output:
-                console.print(f"[dim]Using local embedding model...[/dim]")
-            # Use default local embedding
-            search._embed_func = None
-        else:
-            # Auto-detect: try embedding HTTP server first (18501), then MCP ports
-            if not json_output:
-                console.print(f"[dim]Auto-detecting embedding source...[/dim]")
-            mcp_port = await _detect_mcp_port()
-            if mcp_port > 0:
-                if mcp_port == EMBEDDING_HTTP_PORT:
-                    if not json_output:
-                        console.print(
-                            f"[green]✓ Embedding HTTP server found on port {mcp_port} (model preloaded)[/green]"
-                        )
-                    search._embed_func = _embed_via_http
-                else:
-                    if not json_output:
-                        console.print(
-                            f"[green]✓ MCP server found on port {mcp_port} (model preloaded)[/green]"
-                        )
-                    search._embed_func = lambda texts: _embed_via_mcp(texts, port=mcp_port)
-            else:
-                if not json_output:
-                    console.print(
-                        f"[yellow]⚠ No embedding server available, using local model[/yellow]"
-                    )
-                search._embed_func = None
+        await asyncio.gather(_ensure_dimension_aligned(), _warm_embed_service())
 
         if not json_output:
             console.print(f"[dim]Searching for: '{query}'[/dim]")
@@ -431,7 +443,51 @@ def test_route(
             limit=resolved_limit,
             min_score=resolved_threshold,
             confidence_profile=confidence_profile,
+            skip_translation=True,
         )
+        # Fallback: when threshold filters everything, retry with 0 so routing still returns top-k from skills DB
+        if not results and resolved_threshold > 0.0:
+            results = await search.search(
+                query=query,
+                limit=resolved_limit,
+                min_score=0.0,
+                confidence_profile=confidence_profile,
+                skip_translation=True,
+            )
+
+        # Fallback: if still 0 results, check dimension again and reindex/retry (e.g. signature was missing)
+        if not results:
+            from omni.foundation.services.index_dimension import get_embedding_dimension_status
+
+            status = get_embedding_dimension_status()
+            if not status.match:
+                if not json_output:
+                    console.print(
+                        f"[yellow]Index dimension mismatch (index={status.index_dim}, current={status.current_dim}). Reindexing skills...[/yellow]"
+                    )
+                try:
+                    from omni.agent.cli.commands.reindex import (
+                        _reindex_skills_only,
+                        _write_embedding_signature,
+                    )
+
+                    reindex_result = _reindex_skills_only(clear=True)
+                    if reindex_result.get("status") == "success":
+                        _write_embedding_signature()
+                        results = await search.search(
+                            query=query,
+                            limit=resolved_limit,
+                            min_score=0.0,
+                            confidence_profile=confidence_profile,
+                            skip_translation=True,
+                        )
+                        if results and not json_output:
+                            console.print(
+                                "[green]Reindex completed; routing now returns results.[/green]"
+                            )
+                except Exception as e:
+                    if not json_output:
+                        err_console.print(f"[red]Auto-fix reindex failed: {e}[/]")
 
         # Display results
         if not results:
@@ -451,10 +507,31 @@ def test_route(
             return
 
         stats = search.stats()
+        # NOTE: Score persistence to router.lance removed from route test.
+        # It created a second RustVectorStore initialization (confusing logs)
+        # and nobody reads from the scores table. If analytics are needed,
+        # re-enable with an explicit --persist flag.
+
         if json_output:
+            out_results = results
+            if explain:
+                out_results = [
+                    {
+                        **r,
+                        "explain": {
+                            "scores": {
+                                "raw_rrf": r.get("score"),
+                                "vector_score": r.get("vector_score"),
+                                "keyword_score": r.get("keyword_score"),
+                                "final_score": r.get("final_score"),
+                            }
+                        },
+                    }
+                    for r in results
+                ]
             payload = _build_route_test_json_payload(
                 query=query,
-                results=results,
+                results=out_results,
                 threshold=resolved_threshold,
                 limit=resolved_limit,
                 selected_profile_name=selected_profile_name,
@@ -529,13 +606,17 @@ def test_route(
         console.print(table)
 
         # Show filtered count if threshold was used
-        if resolved_threshold > 0:
-            high_med_count = sum(1 for r in results if r.get("confidence") in ("high", "medium"))
-            if high_med_count < len(results):
-                console.print(
-                    f"[dim]Showing {len(results)} results ({high_med_count} high/medium confidence). "
-                    f"Use -t 0 to show all results.[/dim]"
-                )
+        high_med_count = sum(1 for r in results if r.get("confidence") in ("high", "medium"))
+        if resolved_threshold > 0 and high_med_count < len(results):
+            console.print(
+                f"[dim]Showing {len(results)} results ({high_med_count} high/medium confidence). "
+                f"Use -t 0 to show all results.[/dim]"
+            )
+        if high_med_count == 0 and not json_output:
+            console.print(
+                "[dim]If the expected skill is missing: run 'omni sync' to refresh the router index; "
+                "non-English queries are translated to English before search.[/dim]"
+            )
 
         # Show stats
         console.print(

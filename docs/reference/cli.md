@@ -6,23 +6,29 @@ The `omni` CLI provides unified access to all Omni-Dev-Fusion Fusion capabilitie
 
 ## Quick Reference
 
-| Command                        | Description                                            |
-| ------------------------------ | ------------------------------------------------------ |
-| `omni run`                     | Enter interactive REPL mode                            |
-| `omni run exec "<task>"`       | Execute single task                                    |
-| `omni run exec "<task>" -s 10` | Execute with custom step limit                         |
-| `omni route test "<query>"`    | Run router diagnostics for a query                     |
-| `omni route schema`            | Export router search settings schema                   |
-| `omni route schema --stdout`   | Print router schema JSON to stdout                     |
-| `omni sync`                    | Synchronize symbols, skills, router, knowledge, memory |
-| `omni reindex all --clear`     | Rebuild vector indexes from scratch                    |
-| `omni db stats`                | Inspect vector database status                         |
-| `omni mcp`                     | Start MCP server                                       |
-| `omni skill run <cmd>`         | Execute skill command                                  |
-| `omni skill list`              | List installed skills                                  |
-| `omni skill analyze`           | Analyze tool statistics (Arrow-native)                 |
-| `omni skill stats`             | Quick skill database statistics                        |
-| `omni skill context`           | Generate LLM system context                            |
+| Command                             | Description                                                 |
+| ----------------------------------- | ----------------------------------------------------------- |
+| `omni run`                          | Enter interactive REPL mode                                 |
+| `omni run exec "<task>"`            | Execute single task                                         |
+| `omni run exec "<task>" -s 10`      | Execute with custom step limit                              |
+| `omni route test "<query>"`         | Run router diagnostics for a query                          |
+| `omni route schema`                 | Export router search settings schema                        |
+| `omni route schema --stdout`        | Print router schema JSON to stdout                          |
+| `omni sync`                         | Synchronize symbols, skills, router, knowledge, memory      |
+| `omni reindex all --clear`          | Rebuild vector indexes from scratch                         |
+| `omni db stats`                     | Inspect vector database status                              |
+| `omni db health [db]`               | Table health (fragmentation, indices, recommendations)      |
+| `omni db compact <db>`              | Compact table (cleanup + compact_files)                     |
+| `omni db index-stats <table>`       | Index cache stats (entry count, hit rate)                   |
+| `omni db index create`              | Create BTree/Bitmap/HNSW/optimal-vector index (LanceDB 2.x) |
+| `omni db partition-suggest <table>` | Suggest partition column for large tables (Phase 4)         |
+| `omni db query-metrics <table>`     | Per-table query metrics (in-process from agentic_search)    |
+| `omni mcp`                          | Start MCP server                                            |
+| `omni skill run <cmd>`              | Execute skill command                                       |
+| `omni skill list`                   | List installed skills                                       |
+| `omni skill analyze`                | Analyze tool statistics (Arrow-native)                      |
+| `omni skill stats`                  | Quick skill database statistics                             |
+| `omni skill context`                | Generate LLM system context                                 |
 
 ---
 
@@ -338,6 +344,9 @@ omni route test "git commit" --debug
 # Filter by score threshold and limit
 omni route test "git commit" --threshold 0.4 --number 5
 
+# JSON with per-result score breakdown (raw_rrf, vector_score, keyword_score, final_score)
+omni route test "git commit" --local --json --explain
+
 # Force embedding source
 omni route test "git commit" --mcp
 omni route test "git commit" --local
@@ -347,7 +356,7 @@ Defaults:
 
 - `--number` uses `router.search.default_limit` (default `10`)
 - `--threshold` uses `router.search.default_threshold` (default `0.2`)
-- Rust metadata rerank stage is controlled by `router.search.rerank` (default `true`)
+- Hybrid search **always** applies the Rust metadata rerank stage (no option to disable). The `router.search.rerank` setting is reserved for future use.
 
 Detailed examples:
 
@@ -391,6 +400,8 @@ omni route test "git status" --local
 omni route test
 # -> Error: Missing argument 'QUERY'
 ```
+
+- With `--json --explain`, each result includes an `explain.scores` object: `raw_rrf` (RRF score from Rust), `vector_score`, `keyword_score`, and `final_score` (display-calibrated). Use this to debug why a query ranked one tool over another.
 
 How to read output:
 
@@ -672,6 +683,85 @@ Database Statistics
 │ memory.lance   │ 340     │ 6.1MB  │ OK     │
 └────────────────┴─────────┴────────┴────────┘
 ```
+
+### `omni db health`
+
+Show table health (LanceDB observability): row count, fragment count, fragmentation ratio, indices status, and recommendations (e.g. run compaction, create indices, partition by column).
+
+```bash
+# Health for all databases (default tables)
+omni db health
+
+# Health for one database
+omni db health skills
+
+# Specific table and JSON output
+omni db health skills --table skills --json
+```
+
+Output keys: `row_count`, `fragment_count`, `fragmentation_ratio`, `indices_status`, `recommendations`.
+
+### `omni db compact`
+
+Run compaction (cleanup + compact_files) on a table to reduce fragments and reclaim space.
+
+```bash
+omni db compact skills
+omni db compact knowledge --table knowledge_chunks --json
+```
+
+Output (or `--json`): `fragments_before`, `fragments_after`, `fragments_removed`, `bytes_freed`, `duration_ms`.
+
+### `omni db index-stats`
+
+Show index cache stats for a table (Lance in-memory index cache: entry count, hit rate).
+
+```bash
+omni db index-stats skills --json
+omni db index-stats knowledge_chunks -d knowledge
+```
+
+### `omni db index create`
+
+Create an index on a table using LanceDB 2.x APIs. Scalar indices require `--column`; vector indices do not.
+
+- **btree** — Exact match / range queries on a scalar column. Requires `--column`.
+- **bitmap** — Low-cardinality scalar column. Requires `--column`.
+- **hnsw** — IVF+HNSW vector index (min ~50 rows).
+- **optimal-vector** — Best vector index for table size (HNSW or IVF_FLAT).
+
+```bash
+# Scalar indices (column required)
+omni db index create skills --type btree --column name
+omni db index create skills --type bitmap --column skill_name -d skills --json
+
+# Vector indices (no column)
+omni db index create skills --type hnsw
+omni db index create knowledge_chunks -t optimal-vector -d knowledge
+```
+
+### `omni db partition-suggest`
+
+Suggest a partition column for a table (LanceDB 2.x Phase 4). Useful when planning partitioning for large tables (e.g. ≥10k rows); returns a column name such as `skill_name` or `category` when the schema supports it, or no suggestion otherwise.
+
+```bash
+omni db partition-suggest skills
+omni db partition-suggest knowledge_chunks -d knowledge --json
+```
+
+### `omni db query-metrics`
+
+Show per-table query metrics. Values are in-process: when the same store has run `agentic_search` (e.g. in a long-running server), `query_count` and `last_query_ms` are populated; a fresh CLI run shows 0 until Lance per-query tracing is wired.
+
+```bash
+omni db query-metrics skills --json
+omni db query-metrics knowledge_chunks -d knowledge
+```
+
+### When to run compact and how to read health
+
+- **When to compact:** Run `omni db compact <db>` when `omni db health` shows a high `fragmentation_ratio` (e.g. &gt; 0.01) or when `recommendations` includes `run_compaction`. Compaction merges fragments and reclaims space.
+- **Health fields:** `row_count` / `fragment_count` describe table size; `fragmentation_ratio` is fragment_count/row_count. `recommendations` may include `run_compaction`, `create_indices`, or `partition` (with a suggested column). Use `--json` for scripting.
 
 ### `omni sync router`
 

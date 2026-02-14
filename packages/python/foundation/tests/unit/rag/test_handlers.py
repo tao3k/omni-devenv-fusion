@@ -106,9 +106,8 @@ class TestSkillCommandHandlerIntegration:
         assert config["execution"]["handler"] is None
 
     def test_skill_command_handler_wraps_function(self):
-        """Test that handler actually wraps the function."""
+        """Test that handler wraps the function and output is MCP canonical shape."""
         from omni.foundation.api.decorators import skill_command
-        from omni.foundation.api.handlers import ExecutionResult
 
         @skill_command(
             name="test_command",
@@ -118,14 +117,13 @@ class TestSkillCommandHandlerIntegration:
             """Test command that returns result."""
             return {"status": "ok"}
 
-        # The function should be wrapped by the handler
-        # When called, it should return ExecutionResult
+        # Handler + MCP normalization: result is always canonical dict
         result = test_command()
         assert result is not None
-        # Handler wraps the function - verify it returns ExecutionResult
-        assert isinstance(result, ExecutionResult)
-        assert result.success is True
-        assert result.data == {"status": "ok"}
+        assert isinstance(result, dict)
+        assert "content" in result and "isError" in result
+        assert result["content"][0]["text"] == '{"status": "ok"}'
+        assert result["isError"] is False
 
     def test_skill_command_handler_with_destructive_hint(self):
         """Test handler works alongside MCP annotations."""

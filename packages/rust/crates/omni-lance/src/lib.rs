@@ -24,6 +24,18 @@ pub const CONTENT_COLUMN: &str = "content";
 pub const METADATA_COLUMN: &str = "metadata";
 /// Thread ID column name (for checkpoint filtering)
 pub const THREAD_ID_COLUMN: &str = "thread_id";
+/// Skill name column (for scalar index / filtering)
+pub const SKILL_NAME_COLUMN: &str = "skill_name";
+/// Category column (for scalar index / filtering)
+pub const CATEGORY_COLUMN: &str = "category";
+/// Tool name (e.g. skill.command) – Arrow-native, avoids JSON parse in read path
+pub const TOOL_NAME_COLUMN: &str = "tool_name";
+/// File path – Arrow-native
+pub const FILE_PATH_COLUMN: &str = "file_path";
+/// Routing keywords, space-joined – Arrow-native
+pub const ROUTING_KEYWORDS_COLUMN: &str = "routing_keywords";
+/// Intents, " | "-joined – Arrow-native
+pub const INTENTS_COLUMN: &str = "intents";
 
 /// Default embedding dimension (LLM-generated semantic vector)
 pub const DEFAULT_DIMENSION: usize = 1024;

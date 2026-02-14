@@ -161,20 +161,25 @@ class MockPyKnowledgeGraph:
 
     def multi_hop_search(
         self,
-        start_entities: list[str],
-        relation_types: list[str] | None = None,
+        start_name: str,
         max_hops: int = 2,
-        limit: int = 20,
-    ) -> list[dict[str, Any]]:
-        """Mock multi-hop search (returns direct neighbors)."""
-        results = []
-        for start in start_entities:
-            rels = self.get_relations(entity_name=start)
-            for r in rels:
-                target = r["target"] if r["source"] == start else r["source"]
-                if target in self.entities:
-                    results.append(self.entities[target])
-        return results[:limit]
+    ) -> list["MockPyEntity"]:
+        """Mock multi-hop search matching Rust PyO3 signature.
+
+        Args:
+            start_name: Single entity name to start traversal from.
+            max_hops: Maximum hops to traverse.
+
+        Returns:
+            List of MockPyEntity neighbours (with ``to_dict()``).
+        """
+        results: list[MockPyEntity] = []
+        rels = self.get_relations(entity_name=start_name)
+        for r in rels:
+            target = r["target"] if r["source"] == start_name else r["source"]
+            if target in self.entities:
+                results.append(MockPyEntity(self.entities[target]))
+        return results
 
 
 @pytest.fixture

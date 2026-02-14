@@ -288,15 +288,13 @@ class IntentSniffer:
             Number of rules loaded from LanceDB.
         """
         try:
-            from omni.agent.cli.commands.reindex import get_database_path
             from omni.foundation.bridge.rust_vector import get_vector_store
 
             # Clear existing rules to prevent duplication on reload
             self.clear_declarative_rules()
 
-            # Use router.lance for routing
-            router_path = get_database_path("router")
-            store = get_vector_store(router_path)
+            # Use skills table for routing (single DB for tools and routing).
+            store = get_vector_store()
             tools = store.list_all_tools()
 
             # Group tools by skill_name and extract routing keywords

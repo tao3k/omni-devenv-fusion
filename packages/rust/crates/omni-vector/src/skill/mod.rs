@@ -35,8 +35,8 @@ pub struct ToolSearchResult {
     pub tool_name: String,
     /// Source file path
     pub file_path: String,
-    /// Routing keywords for hybrid search
-    pub keywords: Vec<String>,
+    /// Routing keywords for hybrid search (schema: routing_keywords)
+    pub routing_keywords: Vec<String>,
     /// Associated intents for semantic alignment
     pub intents: Vec<String>,
     /// Tool category from decorator metadata (or inferred fallback).
@@ -51,11 +51,23 @@ pub struct ToolSearchOptions {
     /// Keeping this explicit allows Python callers to run deterministic
     /// fusion-only mode while preserving backwards compatibility.
     pub rerank: bool,
+
+    /// Override semantic (vector) weight for weighted-RRF fusion.
+    /// When `None`, falls back to the global `SEMANTIC_WEIGHT` constant.
+    pub semantic_weight: Option<f32>,
+
+    /// Override keyword (BM25) weight for weighted-RRF fusion.
+    /// When `None`, falls back to the global `KEYWORD_WEIGHT` constant.
+    pub keyword_weight: Option<f32>,
 }
 
 impl Default for ToolSearchOptions {
     fn default() -> Self {
-        Self { rerank: true }
+        Self {
+            rerank: true,
+            semantic_weight: None,
+            keyword_weight: None,
+        }
     }
 }
 

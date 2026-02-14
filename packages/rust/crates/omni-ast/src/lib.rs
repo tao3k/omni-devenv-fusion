@@ -74,3 +74,7 @@ pub use chunk::{CodeChunk, chunk_code};
 pub use python_tree_sitter::{
     DecoratedFunction, DecoratorArguments, DecoratorInfo, ParameterInfo, TreeSitterPythonParser,
 };
+
+// Tests for TreeSitter Python Parser
+#[cfg(test)]
+mod python_tree_sitter_tests;

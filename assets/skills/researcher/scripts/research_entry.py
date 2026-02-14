@@ -29,7 +29,7 @@ def _get_workflow_id(repo_url: str) -> str:
 @skill_command(
     name="git_repo_analyer",
     description="""
-    Execute the Sharded Deep Research Workflow.
+    Research a git repository: clone, analyze by shards, and produce an index.
 
     This autonomously analyzes large repositories using a Map-Plan-Loop-Synthesize pattern:
 

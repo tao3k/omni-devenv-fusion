@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omni.router.route_test.v1.schema.json",
+  "title": "Omni Router Route Test Payload v1",
+  "description": "Contract for `omni route test --json` output. Driven by routing algorithm: Rust ToolSearchResult → tool_search.v1 (routing_keywords) → Python adds id, command, payload. Canonical snapshot: packages/shared/schemas/snapshots/route_test_canonical_v1.json. Doc: docs/reference/route-test-result-shape.md. Forbidden: keywords (use routing_keywords only).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "query",
+    "count",
+    "threshold",
+    "limit",
+    "confidence_profile",
+    "stats",
+    "results"
+  ],
+  "properties": {
+    "schema": { "type": "string", "const": "omni.router.route_test.v1" },
+    "query": { "type": "string" },
+    "count": { "type": "integer", "minimum": 0 },
+    "threshold": { "type": "number" },
+    "limit": { "type": "integer", "minimum": 0 },
+    "confidence_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "source"],
+      "properties": {
+        "name": { "type": ["string", "null"] },
+        "source": { "type": "string" }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semantic_weight", "keyword_weight", "rrf_k", "strategy"],
+      "properties": {
+        "semantic_weight": { "type": ["number", "null"] },
+        "keyword_weight": { "type": ["number", "null"] },
+        "rrf_k": { "type": ["number", "null"] },
+        "strategy": { "type": ["string", "null"] }
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/route_result_item" }
+    }
+  },
+  "$defs": {
+    "route_result_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One tool result. Field set aligned with omni.vector.tool_search.v1; route_test adds id, command, explain, payload. No keywords (use routing_keywords only).",
+      "required": [
+        "id",
+        "description",
+        "skill_name",
+        "tool_name",
+        "command",
+        "score",
+        "final_score",
+        "confidence",
+        "routing_keywords",
+        "input_schema",
+        "payload"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "name": {
+          "type": "string",
+          "description": "Display name (tool_search.v1); e.g. skill.command"
+        },
+        "description": { "type": "string" },
+        "skill_name": { "type": "string" },
+        "tool_name": { "type": "string" },
+        "command": { "type": "string" },
+        "file_path": { "type": "string" },
+        "score": { "type": "number" },
+        "vector_score": {
+          "type": "number",
+          "description": "Component score from vector search (tool_search.v1)"
+        },
+        "keyword_score": {
+          "type": "number",
+          "description": "Component score from keyword search (tool_search.v1)"
+        },
+        "final_score": { "type": "number" },
+        "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+        "routing_keywords": { "type": "array", "items": { "type": "string" } },
+        "intents": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Intent labels (tool_search.v1)"
+        },
+        "category": {
+          "type": "string",
+          "description": "Tool category (tool_search.v1)"
+        },
+        "input_schema": { "type": "object" },
+        "explain": {
+          "type": "object",
+          "description": "Score breakdown when --explain is used (raw_rrf, vector_score, keyword_score, final_score)",
+          "properties": {
+            "scores": {
+              "type": "object",
+              "properties": {
+                "raw_rrf": { "type": "number" },
+                "vector_score": { "type": ["number", "null"] },
+                "keyword_score": { "type": ["number", "null"] },
+                "final_score": { "type": "number" }
+              }
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": ["type", "metadata"],
+          "properties": {
+            "type": { "type": "string" },
+            "description": { "type": "string" },
+            "metadata": {
+              "type": "object",
+              "required": ["tool_name", "routing_keywords"],
+              "properties": {
+                "tool_name": { "type": "string" },
+                "routing_keywords": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "input_schema": { "type": "object" },
+                "intents": { "type": "array", "items": { "type": "string" } },
+                "category": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

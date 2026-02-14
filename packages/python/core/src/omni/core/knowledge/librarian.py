@@ -106,7 +106,31 @@ class KnowledgeStorage:
         return parsed
 
     def vector_search(self, vector: list[float], limit: int = 5) -> list[dict[str, Any]]:
-        """Vector search over knowledge chunks."""
+        """Vector search over knowledge chunks. Prefers Arrow IPC when available."""
+        if hasattr(self._store, "search_optimized_ipc"):
+            try:
+                import io
+
+                import pyarrow.ipc
+
+                from omni.foundation.services.vector_schema import VectorPayload
+
+                ipc_bytes = self._store.search_optimized_ipc(self.table_name, vector, limit, None)
+                table = pyarrow.ipc.open_stream(io.BytesIO(ipc_bytes)).read_all()
+                payloads = VectorPayload.from_arrow_table(table)
+                return [
+                    {
+                        "id": p.id,
+                        "content": p.content,
+                        "metadata": p.metadata,
+                        "distance": p.distance,
+                        "schema": p.schema_version,
+                        **({"score": p.score} if p.score is not None else {}),
+                    }
+                    for p in payloads
+                ]
+            except Exception as e:
+                logger.debug("vector_search IPC path failed, using JSON: %s", e)
         raw_results = self._store.search_optimized(self.table_name, vector, limit, None)
         return self._parse_search_results(raw_results)
 
@@ -200,10 +224,10 @@ class Librarian:
 
         # Initialize embedder using singleton pattern to avoid loading model twice
         self.embedder = embedder or get_embedding_service()
-        # Get dimension from settings (lazy load only when actually embedding)
-        from omni.foundation.config.settings import get_setting
+        # Use unified dimension (respects truncate_dim) so sync and knowledge.ingest stay aligned
+        from omni.foundation.services.index_dimension import get_effective_embedding_dimension
 
-        dimension = get_setting("embedding.dimension", 1024)
+        dimension = get_effective_embedding_dimension()
 
         # Initialize storage using unified database path
         if store is None:

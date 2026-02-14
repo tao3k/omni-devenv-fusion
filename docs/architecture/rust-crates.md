@@ -832,43 +832,61 @@ schema = py_get_schema_json('SkillDefinition')
 omni-vector/
 ├── Cargo.toml
 ├── src/
-│   ├── lib.rs             # VectorStore struct
-│   ├── store.rs           # CRUD operations (add/delete/count)
-│   ├── search.rs          # Search operations
-│   ├── index.rs           # Index creation operations
-│   ├── skill.rs           # Skill tool indexing
+│   ├── lib.rs             # VectorStore struct, re-exports
+│   ├── index.rs           # Index creation (legacy path)
 │   ├── batch.rs           # RecordBatch utilities
-│   └── error.rs           # VectorStoreError enum
+│   ├── error.rs           # VectorStoreError enum
+│   ├── ops/               # Administrative and maintenance operations
+│   │   ├── core.rs        # table_path, create_schema
+│   │   ├── admin_impl.rs  # create_index, create_fts_index, table info, schema evolution
+│   │   ├── writer_impl.rs # add_documents, merge_insert
+│   │   ├── maintenance.rs # has_*_index, auto_index_if_needed, compact
+│   │   ├── scalar.rs      # create_btree_index, create_bitmap_index, create_optimal_scalar_index
+│   │   ├── vector_index.rs# create_hnsw_index, create_optimal_vector_index
+│   │   ├── observability.rs # analyze_table_health, get_query_metrics
+│   │   ├── partitioning.rs  # suggest_partition_column
+│   │   ├── types.rs       # IndexStats, CompactionStats, TableHealthReport, QueryMetrics, etc.
+│   │   └── mod.rs
+│   ├── search/            # Search operations
+│   │   ├── search_impl.rs # search, hybrid search
+│   │   ├── options.rs     # SearchOptions
+│   │   └── mod.rs
+│   ├── skill/             # Skill tool indexing
+│   │   ├── ops_impl.rs    # index_skills, tool search
+│   │   ├── scanner.rs     # SkillScanner integration
+│   │   └── mod.rs
+│   ├── keyword/           # BM25 / Tantivy hybrid
+│   ├── checkpoint/        # CheckpointStore (LanceDB)
+│   └── ...
 └── tests/
-    └── test_vector.rs
+    ├── test_*.rs          # Unit and integration tests
+    └── snapshots/         # insta snapshots for contracts
 ```
 
 **Key Operations**:
 
-- `add(documents, ids, metadatas)` - Add documents
-- `search(query, n_results, where_filter)` - Search with filtering
-- `delete(ids)` - Delete by IDs
-- `count()` - Count documents
-- `create_index(column, metric_type)` - Create index
+- `add_documents`, `merge_insert` - Add/upsert documents
+- `search`, hybrid search - Search with filtering
+- `delete`, `count` - Delete by IDs, count rows
+- `create_index`, `create_fts_index` - Vector and FTS indices
+- `create_btree_index`, `create_bitmap_index`, `create_optimal_scalar_index` - Scalar indices (Phase 1)
+- `auto_index_if_needed`, `compact` - Maintenance (Phase 2)
+- `create_hnsw_index`, `create_optimal_vector_index` - Vector index tuning (Phase 3)
+- `suggest_partition_column` - Partitioning suggestion (Phase 4)
+- `analyze_table_health`, `get_query_metrics` - Observability (Phase 5)
 
 **Key Dependencies**:
 
-- `lance`
-- `omni-lance`
-- `skills-scanner`
-- `dashmap` (thread-safe storage)
-- `tokio` (async operations)
+- `lance`, `lance-arrow`, `lance-index`, `lance-linalg` (2.0)
+- `omni-lance`, `omni-scanner`
+- `dashmap`, `tokio`, `tantivy` (keyword), `chrono` (maintenance)
 
 **Key Exports**:
 
-```rust
-pub struct VectorStore {
-    pub uri: String,
-    pub dimension: usize,
-    pub async fn add(&self, collection: &str, documents: &[String], ...);
-    pub async fn search(&self, collection: &str, query: &str, ...) -> Vec<VectorSearchResult>;
-}
-```
+- `VectorStore`, `VectorStoreError`
+- `IndexStats`, `CompactionStats`, `TableHealthReport`, `QueryMetrics`, `Recommendation`, `IndexStatus`, `IndexThresholds`
+- `CheckpointStore`, `CheckpointRecord`; `KeywordIndex`, `HybridSearchResult`; `ToolSearchResult`, `ToolSearchOptions`
+- See [LanceDB Version and Roadmap](../reference/lancedb-version-and-roadmap.md) for phase details.
 
 ---
 

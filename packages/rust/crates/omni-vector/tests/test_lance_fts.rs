@@ -13,9 +13,10 @@ async fn build_store_with_tool_data() -> VectorStore {
         .unwrap()
         .keep();
     let db_path = temp_dir.join("fts_store");
-    let store = VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(8), true)
-        .await
-        .unwrap();
+    let store =
+        VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(8), true, None, None)
+            .await
+            .unwrap();
 
     let ids = vec![
         "git.commit".to_string(),
@@ -90,6 +91,8 @@ async fn build_store_with_lance_backend() -> VectorStore {
         Some(8),
         true,
         KeywordSearchBackend::LanceFts,
+        None,
+        None,
     )
     .await
     .unwrap();

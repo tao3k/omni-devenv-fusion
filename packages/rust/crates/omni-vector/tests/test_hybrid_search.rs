@@ -4,7 +4,7 @@ use omni_vector::VectorStore;
 
 /// Setup a vector store with keyword index enabled for testing.
 async fn setup_store(path: &std::path::Path, dim: usize) -> VectorStore {
-    VectorStore::new_with_keyword_index(path.to_str().unwrap(), Some(dim), true)
+    VectorStore::new_with_keyword_index(path.to_str().unwrap(), Some(dim), true, None, None)
         .await
         .unwrap()
 }

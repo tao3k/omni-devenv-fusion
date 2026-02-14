@@ -62,9 +62,14 @@ tempfile = "3.24"
 # JSON Schema generation for Schema Singularity (SSOT)
 schemars = "0.8.21"
 
-# LanceDB for vector storage
-lance = "1.0"
-lance-arrow = "1.0"
+# LanceDB for vector storage (2.0: v2 manifest default, create_index returns IndexMetadata)
+lance = "2.0"
+lance-arrow = "2.0"
+
+# Arrow IPC for analytics (Rust RecordBatch → bytes → Python pyarrow); used in bindings only
+arrow = "57"
+arrow-ipc = "57"
+
 
 # Logging
 log = "0.4"

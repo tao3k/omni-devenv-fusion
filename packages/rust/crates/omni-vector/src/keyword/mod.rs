@@ -16,7 +16,10 @@ pub use entity_aware::{
     ENTITY_CONFIDENCE_THRESHOLD, ENTITY_WEIGHT, EntityAwareSearchResult, EntityMatch,
     EntityMatchType, MAX_ENTITY_MATCHES, apply_entity_boost, apply_triple_rrf,
 };
-pub use fusion::{HybridSearchResult, apply_adaptive_rrf, apply_rrf, apply_weighted_rrf};
+pub use fusion::{
+    HybridSearchResult, apply_adaptive_rrf, apply_rrf, apply_weighted_rrf, distance_to_score,
+    rrf_term, rrf_term_batch,
+};
 pub use index::KeywordIndex;
 use serde::{Deserialize, Serialize};
 

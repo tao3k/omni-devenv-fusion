@@ -172,15 +172,13 @@ class ReactiveSkillWatcher:
             return
 
         logger.info(
-            f"👀 Reactive Skill Watcher started",
-            skills_dir=str(self.skills_dir),
-            patterns=self.patterns,
+            f"[hot-reload] Watcher started (skills_dir={self.skills_dir}, patterns={self.patterns})"
         )
 
         # Start Rust file watcher
         try:
             self._watcher_handle = rs.py_start_file_watcher(self.config)
-            logger.info("Rust file watcher started successfully")
+            logger.debug("[hot-reload] Rust file watcher started")
         except Exception as e:
             logger.error(f"Failed to start Rust file watcher: {e}")
             raise
@@ -193,7 +191,7 @@ class ReactiveSkillWatcher:
         if not self._running:
             return
 
-        logger.info("Stopping Reactive Skill Watcher...")
+        logger.info("[hot-reload] Stopping watcher...")
 
         self._running = False
 
@@ -211,7 +209,7 @@ class ReactiveSkillWatcher:
             except Exception as e:
                 logger.warning(f"Error stopping watcher handle: {e}")
 
-        logger.info("Reactive Skill Watcher stopped")
+        logger.info("[hot-reload] Watcher stopped")
 
     async def _poll_events(self):
         """Poll for file events from the Rust receiver."""
@@ -234,24 +232,20 @@ class ReactiveSkillWatcher:
 
     async def _process_batch(self, events: list[FileChangeEvent]):
         """Process a batch of file change events."""
-        logger.info(f"🗑️ [BATCH] Received {len(events)} events")
+        logger.debug(f"[hot-reload] Batch received: {len(events)} events")
         for event in events:
-            logger.info(f"🗑️ [BATCH] Processing event: {event.event_type.value} {event.path}")
-            # Filter to skill-related paths
             if not self._is_skill_related(event.path):
-                logger.info(f"🗑️ [BATCH] Skipped (not skill-related): {event.path}")
+                logger.debug(f"[hot-reload] Skip (not skill-related): {event.path}")
                 continue
 
-            # Debounce duplicate events
             if self._should_debounce(event):
-                logger.debug(f"Debounced event: {event.path}")
+                logger.debug(f"[hot-reload] Debounced: {event.path}")
                 continue
 
-            logger.info(f"🗑️ [BATCH] Calling _handle_event for {event.event_type.value}")
             try:
                 await self._handle_event(event)
             except Exception as e:
-                logger.warning(f"Failed to process event for {event.path}: {e}")
+                logger.warning(f"[hot-reload] Event failed for {event.path}: {e}")
 
     def _is_skill_related(self, path: str) -> bool:
         """Check if the path is relevant to skills."""
@@ -347,102 +341,72 @@ class ReactiveSkillWatcher:
             FileChangeType.MODIFIED,
         ):
             if not path.exists():
-                logger.info(
-                    f"🗑️ [WORKAROUND] File doesn't exist for {event.event_type.value}, treating as DELETED"
+                logger.debug(
+                    f"[hot-reload] File missing for {event.event_type.value}, treating as DELETED"
                 )
                 effective_event_type = FileChangeType.DELETED
 
+        skill_name = self._extract_skill_name(event.path)
+        if skill_name:
+            logger.info(
+                f"[hot-reload] File change: {effective_event_type.value} {filename} -> skill {skill_name}"
+            )
+
         if effective_event_type == FileChangeType.CREATED:
-            # Index the new file to vector store first
             count = await self.indexer.index_file(event.path)
             if count > 0:
-                logger.info(f"⚡ Added {count} tools from {filename}")
+                logger.info(f"[hot-reload] Indexed {count} tools from {filename}")
                 should_notify = True
 
-            # For CREATE events, we need to refresh the skill discovery cache
-            # because the new tools might belong to a NEW skill
             if self._kernel is not None:
                 try:
-                    # Force refresh skill discovery cache
                     from omni.core.skills.discovery import SkillDiscoveryService
-
-                    logger.info(f"🔄 Refreshing skill discovery cache for new file...")
-                    discovery = SkillDiscoveryService()
-                    # Re-index skills to update discovery cache
                     from omni.foundation.config.skills import SKILLS_DIR
 
-                    skills_path = str(SKILLS_DIR())
-                    await self.indexer.store.index_skill_tools(skills_path, "skills")
-                    # Clear and refresh discovery cache
+                    await self.indexer.store.index_skill_tools(str(SKILLS_DIR()), "skills")
+                    discovery = SkillDiscoveryService()
                     await discovery._refresh_cache()
-                    logger.info(f"✅ Skill discovery cache refreshed")
+                    logger.debug("[hot-reload] Skill discovery cache refreshed")
                 except Exception as e:
-                    logger.warning(f"Failed to refresh skill discovery cache: {e}")
+                    logger.warning(f"[hot-reload] Discovery refresh failed: {e}")
 
         elif effective_event_type in (FileChangeType.MODIFIED, FileChangeType.CHANGED):
             count = await self.indexer.reindex_file(event.path)
             if count > 0:
-                logger.info(f"⚡ Hot-reloaded {count} tools from {filename}")
+                logger.info(f"[hot-reload] Reindexed {count} tools from {filename}")
                 should_notify = True
-            else:
-                logger.debug(f"No tools indexed for modified file: {filename}")
 
         elif effective_event_type == FileChangeType.DELETED:
-            # Always notify on deletion - even if remove returns 0,
-            # the file change itself is significant
-            logger.info(f"🗑️ Processing DELETED event for {filename}")
             count = await self.indexer.remove_file(event.path)
-            # Handle both int and mock objects
             try:
                 has_count = count > 0
             except TypeError:
-                has_count = True  # For mock objects, assume count > 0
+                has_count = True
             if has_count:
-                logger.info(f"🗑️ Removed {count} tools for {filename}")
+                logger.info(f"[hot-reload] Removed {count} tools for {filename}")
             else:
-                logger.info(f"🗑️ File deleted: {filename}")
+                logger.info(f"[hot-reload] File deleted: {filename}")
             should_notify = True
-            logger.info(f"🗑️ should_notify set to True for DELETED event")
 
         elif event.event_type == FileChangeType.ERROR:
-            logger.warning(f"File watcher error: {event.path}")
+            logger.warning(f"[hot-reload] Watcher error: {event.path}")
 
-        # Bridge to Kernel for skill reload (Live-Wire Discovery Loop)
-        # For all events (CREATE, MODIFY, DELETE), call reload_skill() to update skill_context
-        # register_skill() now clears old skill's commands before adding new ones
-        skill_name = self._extract_skill_name(event.path)
         if skill_name and self._kernel is not None:
             try:
-                logger.info(
-                    f"🔄 Calling kernel.reload_skill({skill_name}) for {effective_event_type.value}"
-                )
                 await self._kernel.reload_skill(skill_name)
-                logger.info(f"✅ kernel.reload_skill({skill_name}) completed")
             except Exception as e:
-                logger.warning(f"Failed to reload skill {skill_name}: {e}")
+                logger.warning(f"[hot-reload] Reload failed for {skill_name}: {e}")
 
-        # Notify MCP clients if tools were added/modified/removed
-        logger.info(
-            f"🗑️ [DEBUG] should_notify={should_notify}, callback={self._on_change_callback is not None}"
-        )
         if should_notify and self._on_change_callback:
-            # Use effective_event_type for accurate logging
-            log_event_type = effective_event_type.value
-            logger.info(f"🔔 Triggering on_change_callback for {log_event_type}: {filename}")
             try:
-                # Support both sync and async callbacks
                 callback = self._on_change_callback
-                logger.info(f"🔔 [DEBUG] callback type: {type(callback).__name__}")
                 if asyncio.iscoroutinefunction(callback):
-                    logger.info(f"🔔 [DEBUG] Awaiting async callback")
-                    # Wait for callback to complete before returning
-                    # This ensures reload_skill finishes before clients are notified
                     await callback()
                 else:
-                    logger.info(f"🔔 [DEBUG] Calling sync callback directly")
                     callback()
+                logger.debug("[hot-reload] MCP clients notified")
             except Exception as e:
-                logger.warning(f"Error in on_change callback: {e}")
+                logger.warning(f"[hot-reload] On-change callback error: {e}")
 
     @property
     def is_running(self) -> bool:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-
 import pytest
 from omni.test_kit.fixtures.vector import (
     make_tool_search_payload,
@@ -70,6 +69,10 @@ class _StubInner:
         )
         return []
 
+    def list_all_tools(self, table_name: str | None = None) -> str:
+        self.calls.append(("list_all_tools", (table_name,), {}))
+        return json.dumps([])
+
     def get_skill_index(self, base_path: str) -> str:
         self.calls.append(("get_skill_index", (base_path,), {}))
         return json.dumps(
@@ -106,6 +109,23 @@ class _StubInner:
     ) -> None:
         self.calls.append(("add_documents", (table_name, ids, vectors, contents, metadatas), {}))
 
+    def add_documents_partitioned(
+        self,
+        table_name: str,
+        partition_by: str,
+        ids: list[str],
+        vectors: list[list[float]],
+        contents: list[str],
+        metadatas: list[str],
+    ) -> None:
+        self.calls.append(
+            (
+                "add_documents_partitioned",
+                (table_name, partition_by, ids, vectors, contents, metadatas),
+                {},
+            )
+        )
+
     def index_skill_tools_dual(
         self,
         base_path: str,
@@ -114,6 +134,30 @@ class _StubInner:
     ) -> tuple[int, int]:
         self.calls.append(("index_skill_tools_dual", (base_path, skills_table, router_table), {}))
         return 11, 11
+
+    def create_btree_index(self, table_name: str, column: str) -> str:
+        self.calls.append(("create_btree_index", (table_name, column), {}))
+        return json.dumps({"column": column, "index_type": "btree", "duration_ms": 1})
+
+    def create_bitmap_index(self, table_name: str, column: str) -> str:
+        self.calls.append(("create_bitmap_index", (table_name, column), {}))
+        return json.dumps({"column": column, "index_type": "bitmap", "duration_ms": 2})
+
+    def create_hnsw_index(self, table_name: str) -> str:
+        self.calls.append(("create_hnsw_index", (table_name,), {}))
+        return json.dumps({"column": "vector", "index_type": "ivf_hnsw", "duration_ms": 10})
+
+    def create_optimal_vector_index(self, table_name: str) -> str:
+        self.calls.append(("create_optimal_vector_index", (table_name,), {}))
+        return json.dumps({"column": "vector", "index_type": "ivf_hnsw", "duration_ms": 5})
+
+    def suggest_partition_column(self, table_name: str) -> str | None:
+        self.calls.append(("suggest_partition_column", (table_name,), {}))
+        return "skill_name"
+
+    def auto_index_if_needed(self, table_name: str) -> str | None:
+        self.calls.append(("auto_index_if_needed", (table_name,), {}))
+        return json.dumps({"column": "vector", "index_type": "ivf_flat", "duration_ms": 0})
 
 
 class _StubInnerToolPayload(_StubInner):
@@ -166,6 +210,71 @@ async def test_admin_methods_parse_json(store: RustVectorStore) -> None:
     assert info == {"version_id": 7, "num_rows": 3}
     assert versions == [{"version_id": 6}, {"version_id": 7}]
     assert fragments == [{"id": 0, "num_rows": 2}, {"id": 1, "num_rows": 1}]
+
+
+def test_index_and_maintenance_api_delegate_and_parse(store: RustVectorStore) -> None:
+    """Index/maintenance APIs delegate to inner and parse JSON or Option correctly."""
+    # create_* return dict from JSON
+    btree = store.create_btree_index("skills", "skill_name")
+    assert btree == {"column": "skill_name", "index_type": "btree", "duration_ms": 1}
+
+    bitmap = store.create_bitmap_index("skills", "category")
+    assert bitmap == {"column": "category", "index_type": "bitmap", "duration_ms": 2}
+
+    hnsw = store.create_hnsw_index("skills")
+    assert hnsw == {"column": "vector", "index_type": "ivf_hnsw", "duration_ms": 10}
+
+    optimal = store.create_optimal_vector_index("skills")
+    assert optimal == {"column": "vector", "index_type": "ivf_hnsw", "duration_ms": 5}
+
+    # suggest_partition_column returns str | None
+    col = store.suggest_partition_column("skills")
+    assert col == "skill_name"
+
+    # auto_index_if_needed returns dict | None
+    auto = store.auto_index_if_needed("skills")
+    assert auto == {"column": "vector", "index_type": "ivf_flat", "duration_ms": 0}
+
+    # Stub was called for each
+    calls = [c[0] for c in store._inner.calls]  # type: ignore[attr-defined]
+    assert "create_btree_index" in calls
+    assert "create_bitmap_index" in calls
+    assert "create_hnsw_index" in calls
+    assert "create_optimal_vector_index" in calls
+    assert "suggest_partition_column" in calls
+    assert "auto_index_if_needed" in calls
+
+
+@pytest.mark.asyncio
+async def test_add_documents_partitioned_uses_default_partition_column_when_none(
+    store: RustVectorStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When partition_by is None, uses vector.default_partition_column from settings."""
+
+    def _fake_get_setting(key: str, default=None):
+        if key == "vector.default_partition_column":
+            return "category"
+        return default
+
+    monkeypatch.setattr("omni.foundation.config.settings.get_setting", _fake_get_setting)
+    await store.add_documents_partitioned(
+        "tools",
+        None,
+        ids=["a", "b"],
+        vectors=[[0.1] * 10, [0.2] * 10],
+        contents=["c1", "c2"],
+        metadatas=[
+            '{"skill_name": "git", "category": "vcs"}',
+            '{"skill_name": "knowledge", "category": "knowledge"}',
+        ],
+    )
+    call = next(
+        (c for c in store._inner.calls if c[0] == "add_documents_partitioned"),
+        None,
+    )
+    assert call is not None
+    assert call[1][1] == "category"
 
 
 @pytest.mark.asyncio
@@ -226,7 +335,10 @@ async def test_search_tools_rejects_legacy_payload_without_canonical_schema() ->
         threshold=0.0,
     )
 
-    assert results == []
+    # Bridge returns raw; caller parse_tool_search_payload rejects missing schema
+    assert len(results) == 1
+    with pytest.raises((ValueError, KeyError)):
+        parse_tool_search_payload(results[0])
 
 
 @pytest.mark.asyncio
@@ -253,15 +365,16 @@ async def test_search_tools_accepts_canonical_tool_schema_payload() -> None:
     )
 
     assert len(results) == 1
-    assert results[0]["schema"] == "omni.vector.tool_search.v1"
-    assert results[0]["tool_name"] == "git.commit"
-    assert results[0]["vector_score"] == 0.8
-    assert results[0]["keyword_score"] == 0.7
-    assert isinstance(results[0]["input_schema"], dict)
-    assert results[0]["routing_keywords"] == ["git", "commit"]
-    assert "keywords" not in results[0]
-    assert "description" in results[0]
-    assert "description" in results[0]["payload"]
+    raw = results[0]
+    assert raw["tool_name"] == "git.commit"
+    assert raw["name"] == "git.commit"
+    assert raw["vector_score"] == 0.8
+    assert raw["keyword_score"] == 0.7
+    # input_schema may be dict or JSON string in raw Rust payload
+    assert raw["input_schema"] == "{}" or isinstance(raw["input_schema"], dict)
+    assert raw["routing_keywords"] == ["git", "commit"]
+    assert "keywords" not in raw
+    assert "description" in raw
 
 
 @pytest.mark.asyncio
@@ -288,7 +401,8 @@ async def test_search_tools_normalizes_input_schema_object_payload(
         threshold=0.0,
     )
     assert len(results) == 1
-    assert results[0]["input_schema"]["type"] == "object"
+    parsed = parse_tool_search_payload(results[0])
+    assert parsed.input_schema.get("type") == "object"
 
 
 @pytest.mark.asyncio
@@ -344,7 +458,48 @@ async def test_search_tools_returns_empty_on_invalid_confidence_label() -> None:
         threshold=0.0,
     )
 
-    assert results == []
+    # Bridge returns raw; invalid confidence is in the payload for callers to handle
+    assert len(results) == 1
+    assert results[0].get("confidence") == "unknown"
+
+
+def test_list_of_dicts_to_table_returns_pyarrow_table() -> None:
+    import pyarrow as pa
+
+    from omni.foundation.bridge.rust_vector import _list_of_dicts_to_table
+
+    rows = [{"id": "a", "score": 0.5}, {"id": "b", "score": 0.8}]
+    table = _list_of_dicts_to_table(rows)
+    assert isinstance(table, pa.Table)
+    assert table.num_rows == 2
+    assert table.num_columns == 2
+    empty = _list_of_dicts_to_table([])
+    assert empty.num_rows == 0
+
+
+def test_list_all_tools_arrow_returns_table(store: RustVectorStore) -> None:
+    import pyarrow as pa
+
+    table = store.list_all_tools_arrow()
+    assert isinstance(table, pa.Table)
+    assert table.num_rows == 0
+
+
+def test_get_skill_index_arrow_returns_table(store: RustVectorStore) -> None:
+    import pyarrow as pa
+
+    table = store.get_skill_index_arrow("assets/skills")
+    assert isinstance(table, pa.Table)
+    assert table.num_rows == 1
+    assert "name" in table.column_names
+    assert table["name"][0].as_py() == "git"
+
+
+def test_list_all_arrow_returns_table(store: RustVectorStore) -> None:
+    import pyarrow as pa
+
+    table = store.list_all_arrow("knowledge")
+    assert isinstance(table, pa.Table)
 
 
 def test_get_skill_index_sync_parses_payload(store: RustVectorStore) -> None:
@@ -384,12 +539,12 @@ async def test_index_skill_tools_dual_returns_two_counts() -> None:
     stub = _StubInner()
     store._inner = stub
 
-    skills_count, router_count = await store.index_skill_tools_dual(
-        "assets/skills", "skills", "router"
+    skills_count, second_count = await store.index_skill_tools_dual(
+        "assets/skills", "skills", "skills"
     )
 
     assert skills_count == 11
-    assert router_count == 11
+    assert second_count == 11
     assert any(c[0] == "index_skill_tools_dual" for c in stub.calls)
 
 
@@ -580,18 +735,15 @@ async def test_search_tools_and_parser_keep_core_fields_consistent() -> None:
         threshold=0.0,
     )
 
-    parsed = parse_tool_search_payload(canonical)
     assert len(results) == 1
-    assert results[0]["schema"] == parsed.schema_version
-    assert results[0]["tool_name"] == parsed.tool_name
-    assert results[0]["description"] == parsed.description
-    assert results[0]["routing_keywords"] == parsed.routing_keywords
+    raw = results[0]
+    parsed = parse_tool_search_payload(raw)
+    assert raw["tool_name"] == parsed.tool_name
+    assert raw["description"] == parsed.description
+    assert raw["routing_keywords"] == parsed.routing_keywords
     expected_router = parsed.to_router_result()
-    assert results[0]["payload"]["description"] == expected_router["payload"]["description"]
-    assert (
-        results[0]["payload"]["metadata"]["tool_name"]
-        == expected_router["payload"]["metadata"]["tool_name"]
-    )
+    assert expected_router["payload"]["description"] == parsed.description
+    assert expected_router["payload"]["metadata"]["tool_name"] == parsed.tool_name
 
 
 @pytest.mark.asyncio
@@ -608,4 +760,6 @@ async def test_search_tools_rejects_legacy_keywords_field() -> None:
         limit=5,
         threshold=0.0,
     )
-    assert results == []
+    assert len(results) == 1
+    with pytest.raises(ValueError, match="keywords"):
+        parse_tool_search_payload(results[0])

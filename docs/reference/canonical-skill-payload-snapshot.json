@@ -1,0 +1,85 @@
+{
+  "skill_name": "researcher",
+  "skill_md_path": "assets/skills/researcher/SKILL.md",
+  "metadata": {
+    "skill_name": "researcher",
+    "version": "1.0.0",
+    "description": "Execute the Sharded Deep Research Workflow.",
+    "routing_keywords": ["research", "repo", "analyze", "architecture"],
+    "authors": ["omni-dev-fusion"],
+    "intents": ["deep_research", "repository_analysis"],
+    "require_refs": [],
+    "repository": "",
+    "permissions": ["network:http", "filesystem:read"]
+  },
+  "skill_tools": {
+    "researcher.run_research_graph": {
+      "tool": {
+        "tool_name": "researcher.run_research_graph",
+        "description": "Execute the Sharded Deep Research Workflow.",
+        "skill_name": "researcher",
+        "file_path": "assets/skills/researcher/scripts/research_graph.py",
+        "function_name": "run_research_graph",
+        "execution_mode": "async",
+        "keywords": ["researcher", "run_research_graph", "research", "repo"],
+        "intents": ["deep_research"],
+        "file_hash": "a1b2c3d4e5",
+        "input_schema": "{\"type\":\"object\",\"properties\":{\"repo_url\":{\"type\":\"string\"},\"request\":{\"type\":\"string\"}}}",
+        "docstring": "Execute the Sharded Deep Research Workflow.",
+        "category": "query",
+        "annotations": {
+          "readOnly": false,
+          "destructive": false,
+          "idempotent": false,
+          "openWorld": true
+        },
+        "parameters": ["repo_url", "request", "visualize"],
+        "skill_tools_refers": ["run_research_graph"]
+      },
+      "skill_tool_references": {
+        "researcher.references.run_research_graph": "assets/skills/researcher/references/run_research_graph.md"
+      }
+    }
+  },
+  "references": {
+    "run_research_graph": {
+      "ref_name": "run_research_graph",
+      "title": "Run Research Graph Workflow",
+      "skill_name": "researcher",
+      "file_path": "assets/skills/researcher/references/run_research_graph.md",
+      "for_skills": ["researcher"],
+      "for_tools": ["researcher.run_research_graph"],
+      "doc_type": "reference",
+      "content_preview": "This document describes how to use the run_research_graph command...",
+      "keywords": ["research", "graph", "workflow"],
+      "sections": ["Overview", "Args", "Example"],
+      "file_hash": "f6e7d8c9b0"
+    },
+    "smart_commit_cross_ref": {
+      "ref_name": "smart_commit_cross_ref",
+      "title": "Git Smart Commit (cross-skill ref)",
+      "skill_name": "git",
+      "file_path": "assets/skills/git/references/smart_commit.md",
+      "for_skills": ["git"],
+      "for_tools": ["git.smart_commit"],
+      "doc_type": "reference",
+      "content_preview": "",
+      "keywords": [],
+      "sections": [],
+      "file_hash": ""
+    },
+    "graph_multi_tool": {
+      "ref_name": "graph_multi_tool",
+      "title": "Graph spanning multiple skills/tools",
+      "skill_name": "researcher",
+      "file_path": "assets/skills/researcher/references/graph_multi_tool.md",
+      "for_skills": ["researcher", "git"],
+      "for_tools": ["researcher.run_research_graph", "git.smart_commit"],
+      "doc_type": "reference",
+      "content_preview": "",
+      "keywords": [],
+      "sections": [],
+      "file_hash": ""
+    }
+  }
+}

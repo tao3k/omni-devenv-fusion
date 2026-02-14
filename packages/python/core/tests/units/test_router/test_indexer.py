@@ -46,13 +46,15 @@ class TestSkillIndexer:
     """Test SkillIndexer class."""
 
     def test_default_initialization(self):
-        """Test default initialization uses unified path."""
+        """Test default initialization uses unified path (vector DB base directory)."""
+        from omni.foundation.config.dirs import get_vector_db_path
+
         expected_dimension = get_setting("embedding.dimension", 1024)
         indexer = SkillIndexer()
 
-        # Default should use unified path
+        # Default should use unified base path (directory; skills/router tables live under it)
+        assert indexer._storage_path == str(get_vector_db_path())
         assert "omni-vector" in indexer._storage_path
-        assert "router.lance" in indexer._storage_path
         assert indexer._dimension == expected_dimension
         assert indexer._store is None
         assert indexer._indexed_count == 0
@@ -358,7 +360,7 @@ class TestSkillIndexerSearch:
     async def test_search_rust_path_uses_search_tools(self):
         """Rust-backed search should use explicit search_tools path."""
         indexer = SkillIndexer(storage_path=":memory:")
-        indexer._store = MagicMock()
+        indexer._store = MagicMock(spec=["search_tools"])
         indexer._embedding_service = MagicMock()
         indexer._embedding_service.embed.return_value = [[0.1, 0.2, 0.3]]
         indexer._store.search_tools = AsyncMock(
@@ -391,7 +393,7 @@ class TestSkillIndexerSearch:
     async def test_search_rust_path_applies_threshold(self):
         """Rust-backed search should filter low-scoring records."""
         indexer = SkillIndexer(storage_path=":memory:")
-        indexer._store = MagicMock()
+        indexer._store = MagicMock(spec=["search_tools"])
         indexer._embedding_service = MagicMock()
         indexer._embedding_service.embed.return_value = [[0.1, 0.2, 0.3]]
         indexer._store.search_tools = AsyncMock(
@@ -430,3 +432,35 @@ class TestSkillIndexerSearch:
         assert len(results) == 1
         assert results[0].id == "git.commit"
         assert results[0].score >= 0.9
+
+    @pytest.mark.asyncio
+    async def test_search_intent_override_passed_to_agentic(self):
+        """When intent_override is set, it is passed to agentic_search."""
+        indexer = SkillIndexer(storage_path=":memory:")
+        indexer._store = MagicMock(spec=["agentic_search"])
+        indexer._embedding_service = MagicMock()
+        indexer._embedding_service.embed.return_value = [[0.1, 0.2, 0.3]]
+        indexer._store.agentic_search = AsyncMock(
+            return_value=[
+                make_tool_search_payload(
+                    name="git.commit",
+                    tool_name="git.commit",
+                    description="Commit",
+                    input_schema={},
+                    file_path="git/commit.py",
+                    score=0.9,
+                    vector_score=0.85,
+                    keyword_score=0.8,
+                    final_score=0.9,
+                    confidence="high",
+                    routing_keywords=["git", "commit"],
+                )
+            ]
+        )
+
+        results = await indexer.search("commit", limit=2, intent_override="exact")
+
+        assert len(results) == 1
+        indexer._store.agentic_search.assert_awaited_once()
+        call_kwargs = indexer._store.agentic_search.call_args.kwargs
+        assert call_kwargs.get("intent") == "exact"

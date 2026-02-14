@@ -121,6 +121,36 @@ vector:
 | Add          | O(d)            | Single vector insertion |
 | Create Index | O(n log n)      | Batch index build       |
 
+## Scalar Indices (Phase 1)
+
+BTree and Bitmap indices on metadata columns (`skill_name`, `category`) for faster filters:
+
+- **Location:** `packages/rust/crates/omni-vector/src/ops/scalar.rs`
+- **APIs:** `create_btree_index`, `create_bitmap_index`, `create_optimal_scalar_index` (cardinality &lt; 100 → Bitmap, else BTree). Skill index write triggers best-effort scalar index creation.
+- **Roadmap:** [LanceDB Version and Roadmap](../reference/lancedb-version-and-roadmap.md).
+
+## Auto-Indexing and Maintenance (Phase 2)
+
+- **Location:** `packages/rust/crates/omni-vector/src/ops/maintenance.rs`
+- **APIs:** `has_vector_index`, `has_fts_index`, `has_scalar_index`; `auto_index_if_needed` / `auto_index_if_needed_with_thresholds`; `compact(table_name)` (cleanup + compact_files).
+- **Thresholds:** Configurable via `IndexThresholds` (e.g. `auto_index_at` row count).
+
+## Vector Index Tuning (Phase 3)
+
+- **Location:** `packages/rust/crates/omni-vector/src/ops/vector_index.rs`
+- **APIs:** `create_hnsw_index` (IVF+HNSW for smaller tables), `create_optimal_vector_index` (HNSW &lt; 10k rows, IVF_FLAT ≥ 10k).
+
+## Partitioning Suggestions (Phase 4)
+
+- **Location:** `packages/rust/crates/omni-vector/src/ops/partitioning.rs`
+- **APIs:** `suggest_partition_column(table_name)` returns a suggested column (e.g. `skill_name`) when the table has ≥ 10k rows and a partition-friendly schema. Wired into health report as `Recommendation::Partition { column }`.
+
+## Observability (Phase 5)
+
+- **Location:** `packages/rust/crates/omni-vector/src/ops/observability.rs`
+- **APIs:** `analyze_table_health(table_name)` → `TableHealthReport` (row_count, fragment_count, fragmentation_ratio, indices_status, recommendations); `get_query_metrics(table_name)` → `QueryMetrics` (placeholder for future Lance tracing).
+- **Types:** `IndexStatus`, `Recommendation` (e.g. `RunCompaction`, `CreateIndices`, `Partition { column }`), `TableHealthReport`, `QueryMetrics`.
+
 ## Related Files
 
 **Python:**
@@ -131,9 +161,13 @@ vector:
 
 - `packages/rust/crates/omni-vector/src/lib.rs`
 - `packages/rust/crates/omni-vector/src/index.rs`
-- `packages/rust/crates/omni-vector/src/search.rs`
-- `packages/rust/crates/omni-vector/src/store.rs`
+- `packages/rust/crates/omni-vector/src/search/` (search_impl, options)
+- `packages/rust/crates/omni-vector/src/ops/` (admin_impl, writer_impl, maintenance, scalar, vector_index, observability, partitioning, types)
 
 **Bindings:**
 
 - `packages/rust/bindings/python/src/vector.rs`
+
+**Roadmap:**
+
+- [LanceDB Version and Roadmap](../reference/lancedb-version-and-roadmap.md)

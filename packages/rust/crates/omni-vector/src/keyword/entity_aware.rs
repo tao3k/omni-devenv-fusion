@@ -5,6 +5,8 @@
 
 use crate::HybridSearchResult;
 use crate::skill::ToolSearchResult;
+use aho_corasick::AhoCorasick;
+use std::collections::HashSet;
 
 /// Result type for entity-aware search
 #[derive(Debug, Clone)]
@@ -76,42 +78,79 @@ pub fn apply_entity_boost(
         })
         .collect();
 
-    // Build entity lookup map by lowercase name for O(1) access
-    let mut entity_map: std::collections::HashMap<String, &EntityMatch> =
-        std::collections::HashMap::new();
-    for entity in &entities {
-        entity_map.insert(entity.entity_name.to_lowercase(), entity);
-    }
+    // Aho-Corasick over entity names: one automaton, O(n+m) per haystack instead of O(entities * contains)
+    let (entity_ac, pattern_to_cached_idx): (Option<AhoCorasick>, Vec<usize>) = {
+        let mut patterns: Vec<&str> = Vec::new();
+        let mut pattern_to_cached_idx: Vec<usize> = Vec::new();
+        for (i, c) in cached_entities.iter().enumerate() {
+            if !c.name_lower.is_empty() {
+                patterns.push(c.name_lower.as_str());
+                pattern_to_cached_idx.push(i);
+            }
+        }
+        if patterns.is_empty() {
+            (None, Vec::new())
+        } else {
+            match AhoCorasick::new(patterns) {
+                Ok(ac) => (Some(ac), pattern_to_cached_idx),
+                Err(_) => (None, Vec::new()),
+            }
+        }
+    };
 
     let mut aware_results: Vec<EntityAwareSearchResult> = Vec::new();
 
     for result in results {
         let tool_name_lower = result.tool_name.to_lowercase();
         let mut matched_entities: Vec<EntityMatch> = Vec::new();
-        let mut matched_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut matched_names: HashSet<String> = HashSet::new();
 
-        // Check 1: Direct name match in tool name (O(n) with cached lowercase)
-        for cached in &cached_entities {
-            if tool_name_lower.contains(&cached.name_lower) {
-                matched_entities.push(cached.original.clone());
-                matched_names.insert(cached.name_lower.clone());
+        // Check 1: Direct name match in tool name via Aho-Corasick (O(n+m))
+        if let Some(ref ac) = entity_ac {
+            for mat in ac.find_iter(&tool_name_lower) {
+                let cached_idx = pattern_to_cached_idx.get(mat.pattern().as_usize()).copied();
+                if let Some(i) = cached_idx {
+                    let cached = &cached_entities[i];
+                    if matched_names.insert(cached.name_lower.clone()) {
+                        matched_entities.push(cached.original.clone());
+                    }
+                }
+            }
+        } else {
+            for cached in &cached_entities {
+                if tool_name_lower.contains(&cached.name_lower) {
+                    matched_entities.push(cached.original.clone());
+                    matched_names.insert(cached.name_lower.clone());
+                }
             }
         }
 
-        // Check 2: Metadata entity mentions
+        // Check 2: Metadata entity mentions (AC over content_lower)
         if let Some(meta_list) = metadata {
             for meta in meta_list {
                 if let Some(content) = meta.get("content").and_then(|c| c.as_str()) {
                     let content_lower = content.to_lowercase();
-                    for cached in &cached_entities {
-                        // Check if not already matched (O(1) with HashSet)
-                        if !matched_names.contains(&cached.name_lower)
-                            && content_lower.contains(&cached.name_lower)
-                        {
-                            let mut meta_match = cached.original.clone();
-                            meta_match.match_type = EntityMatchType::MetadataMatch;
-                            matched_entities.push(meta_match);
-                            matched_names.insert(cached.name_lower.clone());
+                    if let Some(ref ac) = entity_ac {
+                        for mat in ac.find_iter(&content_lower) {
+                            if let Some(&i) = pattern_to_cached_idx.get(mat.pattern().as_usize()) {
+                                let cached = &cached_entities[i];
+                                if matched_names.insert(cached.name_lower.clone()) {
+                                    let mut meta_match = cached.original.clone();
+                                    meta_match.match_type = EntityMatchType::MetadataMatch;
+                                    matched_entities.push(meta_match);
+                                }
+                            }
+                        }
+                    } else {
+                        for cached in &cached_entities {
+                            if !matched_names.contains(&cached.name_lower)
+                                && content_lower.contains(&cached.name_lower)
+                            {
+                                let mut meta_match = cached.original.clone();
+                                meta_match.match_type = EntityMatchType::MetadataMatch;
+                                matched_entities.push(meta_match);
+                                matched_names.insert(cached.name_lower.clone());
+                            }
                         }
                     }
                 }
@@ -163,7 +202,7 @@ pub fn apply_triple_rrf(
 
     // Process semantic results
     for (rank, (name, score)) in semantic_results.into_iter().enumerate() {
-        let rrf = 1.0 / (k + (rank as f32) + 1.0);
+        let rrf = crate::rrf_term(k, rank);
         fusion_map.insert(
             name.clone(),
             EntityAwareSearchResult {
@@ -181,7 +220,7 @@ pub fn apply_triple_rrf(
 
     // Process keyword results
     for (rank, result) in keyword_results.into_iter().enumerate() {
-        let rrf = 1.0 / (k + (rank as f32) + 1.0);
+        let rrf = crate::rrf_term(k, rank);
         let name = result.tool_name.clone();
 
         if let Some(existing) = fusion_map.get_mut(&name) {

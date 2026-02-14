@@ -1,6 +1,7 @@
 {
   __inputs__,
   __nixpkgs__,
+  inputs,
   pkgs,
   lib,
   ...
@@ -10,6 +11,7 @@ let
 in
 {
   packages = [
+    inputs.worktrunk.packages.${system}.worktrunk
     __inputs__.packages.mcp-inspector
     __inputs__.packages.backmark
     __inputs__.llm-agents.packages.${system}.claudebox

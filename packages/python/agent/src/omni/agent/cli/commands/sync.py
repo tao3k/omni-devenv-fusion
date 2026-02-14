@@ -3,19 +3,35 @@
 The "One Ring" command to synchronize all vector indexes and system state.
 Consolidates 'ingest knowledge', 'ingest skills', and memory indexing.
 
+Five components (all use unified embedding dimension via get_effective_embedding_dimension):
+    1. Symbols  - Zero-token code index (no embedding dimension)
+    2. Skills   - Cortex + skills table (bridge get_vector_store)
+    3. Router   - Scores table init (get_effective_embedding_dimension)
+    4. Knowledge - Librarian docs (Librarian uses get_effective_embedding_dimension)
+    5. Memory   - Hippocampus index (VectorStoreClient uses get_effective_embedding_dimension)
+
+Full sync starts by writing .embedding_signature.json so all components see the same dimension.
+
 Usage:
     omni sync                # Sync EVERYTHING (Default)
     omni sync knowledge      # Sync documentation only
     omni sync skills         # Sync skill registry (Cortex) only
-    omni sync router         # Sync router database (Hybrid Search) only
     omni sync memory         # Optimize memory index
     omni sync symbols        # Sync code symbols (Zero-Token Indexing)
+
+Unified interface with reindex:
+    Sync and reindex use the same paths and APIs per component so that
+    "omni sync" and "omni reindex [component]" produce the same state.
+    - Skills: get_database_path("skills"), index_skill_tools_dual, relationship graph.
+    - Router: get_database_path("router") for scores table init.
+    - Knowledge/Memory: same get_database_path names as reindex.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -414,8 +430,19 @@ async def _sync_knowledge(clear: bool = False, include_code: bool = False) -> di
 
 
 async def _sync_skills() -> dict[str, Any]:
-    """Internal logic to sync skill registry (Cortex) and skills table."""
+    """Internal logic to sync skill registry (Cortex) and skills table.
+
+    Pipeline:
+    1. Rust scan: index_skill_tools_dual → metadata + keyword index (zero vectors)
+    2. Embedding: generate real vectors and merge-insert into the lance table
+    3. Relationship graph: build skill→tool and tool→reference edges
+    4. Signature: persist embedding config for mismatch detection
+
+    Uses the same path and API as reindex (get_database_path('skills'),
+    index_skill_tools_dual, relationship graph) so sync and reindex are aligned.
+    """
     from omni.foundation.bridge import get_vector_store
+    from omni.foundation.config.database import get_database_path
     from omni.foundation.config.skills import SKILLS_DIR
 
     try:
@@ -423,9 +450,30 @@ async def _sync_skills() -> dict[str, Any]:
         if not Path(skills_path).exists():
             return {"status": "skipped", "details": "Skills dir not found"}
 
-        # Index tools to skills table (for omni db search)
-        store = get_vector_store()
-        count = await store.index_skill_tools(skills_path, "skills")
+        # Same path as reindex so route test and keyword index stay in sync
+        skills_db_path = get_database_path("skills")
+        store = get_vector_store(skills_db_path)
+
+        # Step 1: Rust scan → metadata + keyword index (vectors are zero placeholders)
+        skills_count, _ = await store.index_skill_tools_dual(skills_path, "skills", "skills")
+
+        # Step 2: Generate real embeddings and merge-insert into the lance table
+        embedded_count = await _embed_skill_vectors(store, skills_db_path)
+
+        # Step 3: Build relationship graph (same as reindex)
+        try:
+            from omni.agent.cli.commands.reindex import (
+                _build_relationship_graph_after_skills_reindex,
+            )
+
+            _build_relationship_graph_after_skills_reindex(skills_db_path)
+        except Exception as e:
+            sync_log.warn(f"Relationship graph build skipped: {e}")
+
+        # Step 4: Persist embedding signature so route-test dimension check can detect mismatch
+        from omni.foundation.services.index_dimension import ensure_embedding_signature_written
+
+        ensure_embedding_signature_written()
 
         # Also update the skill discovery service
         from omni.core.skills.discovery import SkillDiscoveryService
@@ -433,12 +481,103 @@ async def _sync_skills() -> dict[str, Any]:
         discovery = SkillDiscoveryService()
         skills = await discovery.discover_all()
 
+        embed_info = f", embedded {embedded_count}" if embedded_count else ""
         return {
             "status": "success",
-            "details": f"Indexed {count} tools, registered {len(skills)} skills",
+            "details": f"Indexed {skills_count} tools{embed_info}, registered {len(skills)} skills",
         }
     except Exception as e:
         return {"status": "error", "details": str(e)}
+
+
+async def _embed_skill_vectors(store, skills_db_path: str) -> int:
+    """Generate real embeddings for all tools and replace vectors.
+
+    Reads the tool entries from the skills table (which have zero vectors after
+    Rust scan), generates embeddings for their content via the embedding service,
+    then replaces documents with real vectors (keyword index is preserved by the
+    fixed replace_documents implementation).
+
+    Returns:
+        Number of tools embedded, or 0 on failure.
+    """
+    import asyncio
+    import json as _json
+    from concurrent.futures import ThreadPoolExecutor
+
+    try:
+        # Get all entries from the skills table
+        entries = await store.list_all("skills")
+        if not entries:
+            return 0
+
+        # Parse entries to get IDs, content, and metadata
+        ids = []
+        contents = []
+        metadatas = []
+        for entry in entries:
+            data = _json.loads(entry) if isinstance(entry, str) else entry
+            entry_id = data.get("id", "")
+            content = data.get("content", "")
+            if not entry_id or not content:
+                continue
+            ids.append(entry_id)
+            contents.append(content)
+            # Reconstruct metadata JSON from flattened entry (exclude id, content)
+            meta = {k: v for k, v in data.items() if k not in ("id", "content")}
+            metadatas.append(_json.dumps(meta))
+
+        if not ids:
+            return 0
+
+        # Get embedding service
+        from omni.foundation.services.embedding import get_embedding_service
+
+        embed_service = get_embedding_service()
+
+        # Generate embeddings in a thread pool (blocking I/O)
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="sync-embed") as executor:
+            embeddings = await loop.run_in_executor(
+                executor, lambda: list(embed_service.embed_batch(contents))
+            )
+
+        # Replace documents with real vectors.
+        # replace_documents now preserves keyword_index (drop_table uses selective cleanup).
+        await store.replace_documents(
+            table_name="skills",
+            ids=ids,
+            vectors=embeddings,
+            contents=contents,
+            metadatas=metadatas,
+        )
+
+        sync_log.info(f"Embedded {len(ids)} tool vectors into skills table")
+        return len(ids)
+
+    except Exception as e:
+        sync_log.warn(f"Embedding step skipped (non-fatal): {e}")
+        return 0
+
+
+async def _sync_router_init() -> dict[str, Any]:
+    """Initialize router DB (scores table) so router.lance exists. Non-fatal."""
+    from omni.foundation.config.database import get_database_path
+    from omni.foundation.services.embedding import get_embedding_service
+    from omni.foundation.services.router_scores import init_router_db
+
+    try:
+        router_path = get_database_path("router")
+        # Router uses skills dimension (1024), not truncated dimension (256)
+        # This ensures compatibility with skills vector table
+        embed_service = get_embedding_service()
+        dimension = embed_service.dimension  # Always 1024 for skills
+        ok = await init_router_db(router_path, dimension=dimension)
+        if ok:
+            return {"status": "success", "details": "Router DB (scores) initialized"}
+        return {"status": "skipped", "details": "Router DB init skipped"}
+    except Exception as e:
+        return {"status": "skipped", "details": f"Router init skipped: {e}"}
 
 
 async def _sync_memory() -> dict[str, Any]:
@@ -452,24 +591,6 @@ async def _sync_memory() -> dict[str, Any]:
         await store.create_index("memory")
         count = await store.count("memory")
         return {"status": "success", "details": f"Optimized index ({count} memories)"}
-    except Exception as e:
-        return {"status": "error", "details": str(e)}
-
-
-async def _sync_router() -> dict[str, Any]:
-    """Internal logic to sync router database from skills."""
-    from omni.foundation.bridge import get_vector_store
-    from omni.foundation.config import get_database_path
-    from omni.foundation.config.skills import SKILLS_DIR
-
-    try:
-        router_path = get_database_path("router")
-        skills_path = str(SKILLS_DIR())
-
-        router_store = get_vector_store(router_path, enable_keyword_index=True)
-        count = await router_store.index_skill_tools(skills_path, "router")
-
-        return {"status": "success", "details": f"Synced {count} tools to router"}
     except Exception as e:
         return {"status": "error", "details": str(e)}
 
@@ -498,28 +619,54 @@ def main(
     async def run_sync_all():
         stats = {}
 
-        # 1. Symbols (Zero-Token Code Index)
+        # 0. Check and report vector store dimension consistency
+        from omni.foundation.services.index_dimension import (
+            check_all_vector_stores_dimension,
+            ensure_embedding_signature_written,
+        )
+
+        # Check dimensions before sync
+        dim_report = check_all_vector_stores_dimension()
+        if not dim_report.is_consistent:
+            sync_log.warn("Vector store dimension issues detected:")
+            for issue in dim_report.issues:
+                sync_log.warn(f"  - {issue}")
+            sync_log.warn("Attempting to fix during sync...")
+
+        # Write signature to ensure consistency
+        ensure_embedding_signature_written()
+
+        # 1. Symbols (Zero-Token Code Index; no embedding dimension)
         sync_log.info("Starting symbols sync...")
         stats["symbols"] = await _sync_symbols()
 
-        # 2. Skills (Cortex)
+        # 2. Skills (Cortex + routing; single table)
         sync_log.info("Starting skills sync...")
         stats["skills"] = await _sync_skills()
 
-        # 3. Router (Hybrid Search Index)
-        sync_log.info("Starting router sync...")
-        stats["router"] = await _sync_router()
+        # 2b. Router DB (scores table only; no tool content)
+        sync_log.info("Initializing router DB (scores)...")
+        stats["router"] = await _sync_router_init()
 
-        # 4. Knowledge (Librarian - Docs only)
+        # 3. Knowledge (Librarian - Docs only)
         sync_log.info("Starting knowledge sync...")
         stats["knowledge"] = await _sync_knowledge()
 
-        # 5. Memory (Hippocampus)
+        # 4. Memory (Hippocampus)
         sync_log.info("Starting memory sync...")
         stats["memory"] = await _sync_memory()
 
         # Calculate total time
         total_elapsed = (datetime.now() - start_time).total_seconds()
+
+        # Final dimension check
+        final_report = check_all_vector_stores_dimension()
+        if final_report.is_consistent:
+            sync_log.info("✓ All vector stores dimension consistent")
+        else:
+            sync_log.warn("⚠ Some vector stores have dimension issues:")
+            for issue in final_report.issues:
+                sync_log.warn(f"  - {issue}")
 
         _print_sync_report("Full System Sync", stats, json_output, total_elapsed)
 
@@ -558,17 +705,6 @@ def sync_memory_cmd(
     """
     stats = {"memory": run_async_blocking(_sync_memory())}
     _print_sync_report("Memory Index", stats, json_output)
-
-
-@sync_app.command("router")
-def sync_router_cmd(
-    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
-):
-    """
-    Sync router database from skills (Hybrid Search Index).
-    """
-    stats = {"router": run_async_blocking(_sync_router())}
-    _print_sync_report("Router Index", stats, json_output)
 
 
 @sync_app.command("symbols")

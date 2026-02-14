@@ -11,6 +11,44 @@ from unittest.mock import AsyncMock, patch, MagicMock
 import pytest
 
 
+class TestWatcherIndexerContract:
+    """Test that watcher and indexer have matching contracts.
+
+    These tests verify that the methods called by the watcher
+    actually exist on the real SkillIndexer, preventing bugs like:
+    - AttributeError when calling non-existent methods
+    - Missing method signatures
+    """
+
+    def test_indexer_has_required_methods(self):
+        """Verify SkillIndexer has all methods called by watcher."""
+        from omni.core.skills.indexer import SkillIndexer
+
+        # These are the methods watcher calls on indexer
+        required_methods = [
+            "index_file",
+            "reindex_file",
+            "remove_file",
+        ]
+
+        for method_name in required_methods:
+            assert hasattr(SkillIndexer, method_name), (
+                f"SkillIndexer missing required method: {method_name}"
+            )
+
+    def test_store_has_delete_by_file_path(self):
+        """Verify RustVectorStore has delete_by_file_path method.
+
+        This is critical: SkillIndexer.remove_file() calls store.delete_by_file_path(),
+        which must exist on the RustVectorStore wrapper.
+        """
+        from omni.foundation.bridge.rust_vector import RustVectorStore
+
+        assert hasattr(RustVectorStore, "delete_by_file_path"), (
+            "RustVectorStore missing delete_by_file_path method"
+        )
+
+
 class TestReactiveSkillWatcherIntegration:
     """Integration tests for ReactiveSkillWatcher with Kernel."""
 

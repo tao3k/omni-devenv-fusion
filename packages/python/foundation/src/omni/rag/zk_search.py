@@ -22,7 +22,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .zk_integration import ZkClient, ZkNote
+from .zk_client import ZkNote
+from .zk_enhancer import EnrichedNote, ZkEnhancer, get_zk_enhancer
+from .zk_integration import ZkClient
 
 logger = logging.getLogger(__name__)
 
@@ -68,12 +70,14 @@ class ZkReasoningSearcher:
     2. LLM infers relevant notes
     3. Traverse bidirectional links
     4. Iterate until sufficient context
+    5. Enhance results via omni-knowledge (entity extraction, frontmatter, graph)
     """
 
     def __init__(
         self,
         notebook_dir: str | Path | None = None,
         config: ZkSearchConfig | None = None,
+        enhancer: ZkEnhancer | None = None,
     ):
         """Initialize the reasoning searcher.
 
@@ -81,12 +85,15 @@ class ZkReasoningSearcher:
             notebook_dir: Directory containing .zk/zk.toml. If None, uses CWD.
                           Note: ZK config is typically at project root (.zk/)
                           even if notes are in a subdirectory like assets/knowledge.
+            enhancer: Optional ZkEnhancer for secondary enrichment. Created
+                      automatically if not provided.
         """
         # ZK expects notebook_dir to be where .zk folder exists
         # If not specified, use current working directory
         self.notebook_dir = Path(notebook_dir) if notebook_dir else Path.cwd()
         self.config = config or ZkSearchConfig()
         self.zk_client = ZkClient(self.notebook_dir)
+        self.enhancer = enhancer or get_zk_enhancer()
 
     async def search(
         self,
@@ -152,12 +159,33 @@ class ZkReasoningSearcher:
             # Step 4: Score and rank results
             scored_results = self._rank_results(results, query, context)
 
-            # Step 5: Return top-k results
-            return scored_results[:max_results]
+            # Step 5: Enhance via omni-knowledge (secondary analysis)
+            top_results = scored_results[:max_results]
+            self._enhance_results(top_results)
+
+            return top_results
 
         except Exception as e:
             logger.error(f"ZK reasoning search failed: {e}")
             return []
+
+    def _enhance_results(self, results: list[ZkSearchResult]) -> None:
+        """Enhance search results via omni-knowledge secondary analysis.
+
+        Extracts entities, parses frontmatter, and registers in the
+        KnowledgeGraph. Enrichment data is attached to each result's
+        ``reasoning`` field as a suffix when entities are found.
+        """
+        notes = [r.note for r in results]
+        try:
+            enriched = self.enhancer.enhance_notes(notes)
+            for result, enriched_note in zip(results, enriched):
+                entity_count = enriched_note.ref_stats.get("total_refs", 0)
+                if entity_count > 0:
+                    names = [e.name for e in enriched_note.entity_refs[:5]]
+                    result.reasoning += f" | entities: {', '.join(names)}"
+        except Exception as e:
+            logger.debug("Enhancement failed (non-critical): %s", e)
 
     async def _search_direct(
         self,
@@ -365,10 +393,11 @@ class ZkReasoningSearcher:
 
 
 class ZkHybridSearcher:
-    """Hybrid search combining ZK reasoning + Vector search.
+    """Hybrid search combining ZK reasoning + Vector search + Entity graph.
 
-    TIER 1: ZK search (high precision)
-    TIER 2: Vector search (fallback for unknown topics)
+    TIER 1: ZK search (high precision, bidirectional links)
+    TIER 2: Vector search (semantic similarity via LanceDB)
+    TIER 3: Entity graph reranking (multi-hop boost via KnowledgeGraph)
     """
 
     def __init__(
@@ -376,6 +405,8 @@ class ZkHybridSearcher:
         notebook_dir: str | Path | None = None,
         zk_config: ZkSearchConfig | None = None,
         vector_search_func: callable | None = None,
+        enhancer: ZkEnhancer | None = None,
+        graph_path: str | Path | None = None,
     ):
         """Initialize hybrid searcher.
 
@@ -383,10 +414,16 @@ class ZkHybridSearcher:
             notebook_dir: ZK notebook directory.
             zk_config: ZK search configuration.
             vector_search_func: Optional function for vector search fallback.
+            enhancer: Optional ZkEnhancer. Created automatically if not provided.
+            graph_path: Deprecated, ignored. KG is loaded from Lance automatically.
         """
         self.notebook_dir = notebook_dir
-        self.zk_searcher = ZkReasoningSearcher(notebook_dir, zk_config)
+        self.enhancer = enhancer or get_zk_enhancer()
+        self.zk_searcher = ZkReasoningSearcher(notebook_dir, zk_config, self.enhancer)
         self.vector_search_func = vector_search_func
+
+        # Load KG from Lance (auto-resolved)
+        self.enhancer.load_graph("")
 
     async def search(
         self,
@@ -410,6 +447,16 @@ class ZkHybridSearcher:
         vector_results: list[dict] = []
         merged_results: list[dict] = []
 
+        # --- Dual-Core Fusion Weights ---
+        # Compute once, drive ZK vs Vector emphasis in the merge stage.
+        fusion = None
+        try:
+            from omni.rag.dual_core import compute_fusion_weights
+
+            fusion = compute_fusion_weights(query)
+        except Exception:
+            pass
+
         # TIER 1: ZK Search (high precision)
         try:
             zk_results = await self.zk_searcher.search(query, context, max_results)
@@ -427,11 +474,11 @@ class ZkHybridSearcher:
 
         # Merge results if using hybrid
         if use_hybrid and (zk_results or vector_results):
-            merged_results = self._merge_results(zk_results, vector_results, query)
+            merged_results = self._merge_results(zk_results, vector_results, query, fusion=fusion)
         elif zk_results:
             merged_results = [
                 {
-                    "note": r.note,
+                    "note": r.note.to_dict(),
                     "score": r.relevance_score,
                     "source": "zk",
                     "reasoning": r.reasoning,
@@ -440,6 +487,13 @@ class ZkHybridSearcher:
             ]
         elif vector_results:
             merged_results = vector_results
+
+        # Persist graph after search (incremental knowledge accumulation)
+        if self.enhancer:
+            try:
+                self.enhancer.save_graph("")
+            except Exception as e:
+                logger.debug("Graph persistence failed (non-critical): %s", e)
 
         return {
             "zk_results": [
@@ -464,21 +518,40 @@ class ZkHybridSearcher:
         zk_results: list[ZkSearchResult],
         vector_results: list[dict],
         query: str,
+        *,
+        fusion: Any | None = None,
     ) -> list[dict]:
-        """Merge ZK and vector results with ranking."""
+        """Merge ZK and vector results with entity graph reranking.
+
+        Three-stage merge:
+        1. Collect ZK results (precision boost, scaled by fusion.zk_proximity_scale)
+        2. Collect vector results (semantic coverage)
+        3. Apply entity graph boost (multi-hop proximity, scaled by fusion.zk_entity_scale)
+
+        Args:
+            zk_results: ZK reasoning search results.
+            vector_results: LanceDB vector search results.
+            query: Original search query.
+            fusion: Optional FusionWeights from compute_fusion_weights.
+        """
         merged: dict[str, dict] = {}
 
-        # Add ZK results
+        # Dynamic ZK boost based on intent (knowledge/docs queries → stronger ZK emphasis)
+        zk_precision_boost = 1.5  # default
+        if fusion is not None:
+            zk_precision_boost = 1.0 + (0.5 * fusion.zk_proximity_scale)
+
+        # Stage 1: ZK results (precision boost)
         for r in zk_results:
             key = r.note.filename_stem
             merged[key] = {
-                "note": r.note,
-                "score": r.relevance_score * 1.5,  # ZK boost for precision
+                "note": r.note.to_dict(),
+                "score": r.relevance_score * zk_precision_boost,
                 "source": "zk",
                 "reasoning": r.reasoning,
             }
 
-        # Add vector results
+        # Stage 2: Vector results (semantic coverage)
         for v in vector_results:
             key = v.get("id") or v.get("note_id") or v.get("filename_stem")
             if not key:
@@ -487,7 +560,7 @@ class ZkHybridSearcher:
             vector_score = v.get("score", 0.5)
 
             if key in merged:
-                # Average with existing score (both ZK and vector found it)
+                # Both ZK and vector found it → strong signal
                 merged[key]["score"] = (merged[key]["score"] + vector_score) / 2
                 merged[key]["source"] = "hybrid"
             else:
@@ -498,9 +571,72 @@ class ZkHybridSearcher:
                     "reasoning": f"Vector similarity match for '{query}'",
                 }
 
+        # Stage 3: Entity graph reranking (scaled by fusion weights)
+        graph_scale = fusion.zk_entity_scale if fusion is not None else 1.0
+        merged = self._apply_graph_boost(merged, query, graph_scale=graph_scale)
+
         # Sort by score and return
         sorted_results = sorted(merged.values(), key=lambda x: x["score"], reverse=True)
         return sorted_results
+
+    def _apply_graph_boost(
+        self,
+        merged: dict[str, dict],
+        query: str,
+        graph_scale: float = 1.0,
+    ) -> dict[str, dict]:
+        """Apply entity graph boost to merged results.
+
+        If a result's document is connected to query-related entities
+        in the KnowledgeGraph, boost its score. This is what ZK CLI
+        alone cannot do — typed entity graph traversal.
+
+        Args:
+            merged: Current merged result dict.
+            query: Original search query.
+            graph_scale: Multiplier from fusion weights (>1 for knowledge queries).
+        """
+        if not self.enhancer or not self.enhancer.graph:
+            return merged
+
+        # Find entities related to query terms in the graph
+        query_entities: set[str] = set()
+        for token in query.lower().split():
+            if len(token) < 3:
+                continue
+            try:
+                found = self.enhancer.search_entities(token, limit=3)
+                for e in found:
+                    query_entities.add(e.get("name", "").lower())
+            except Exception:
+                pass
+
+        if not query_entities:
+            return merged
+
+        # Boost results whose documents share graph connections with query entities
+        base_graph_boost = 0.15
+        effective_graph_boost = base_graph_boost * graph_scale
+        for key, entry in merged.items():
+            note = entry.get("note")
+            if note is None:
+                continue
+
+            doc_name = getattr(note, "title", "") or key
+            try:
+                # Check if this document has relations to any query entity
+                related = self.enhancer.find_related_entities(doc_name, max_hops=2)
+                related_names = {e.get("name", "").lower() for e in related}
+
+                overlap = query_entities & related_names
+                if overlap:
+                    boost = effective_graph_boost * min(len(overlap), 3)  # cap at 3x
+                    entry["score"] += boost
+                    entry["reasoning"] += f" | graph: {', '.join(list(overlap)[:3])}"
+            except Exception:
+                pass
+
+        return merged
 
 
 # ============================================================================
@@ -531,4 +667,6 @@ __all__ = [
     "ZkHybridSearcher",
     "get_zk_searcher",
     "get_zk_hybrid_searcher",
+    "EnrichedNote",
+    "ZkEnhancer",
 ]

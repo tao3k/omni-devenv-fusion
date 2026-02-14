@@ -14,8 +14,8 @@ from unittest.mock import AsyncMock, MagicMock
 def create_mock_search(mock_matches):
     """Helper to create a mock async search function that returns specified matches."""
 
-    async def mock_search(query, limit=5, min_score=0.0, rerank=None):
-        del query, limit, min_score, rerank
+    async def mock_search(query, limit=5, min_score=0.0):
+        del query, limit, min_score
         return mock_matches
 
     return mock_search

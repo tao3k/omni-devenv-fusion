@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import os
 import re
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from jsonschema import Draft202012Validator
 from omni.test_kit.fixtures.vector import (
     make_router_result_payload,
     parametrize_route_intent_queries,
@@ -23,6 +25,13 @@ _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m|\x1b\[[?0-9;]*[a-zA-Z]")
 
 def _strip_ansi(text: str) -> str:
     return _ANSI_ESCAPE.sub("", text)
+
+
+def _load_route_test_schema() -> dict:
+    """Load omni.router.route_test.v1 schema for contract validation."""
+    repo_root = Path(__file__).resolve().parents[6]
+    path = repo_root / "packages" / "shared" / "schemas" / "omni.router.route_test.v1.schema.json"
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 class TestRouteSchemaCommand:
@@ -61,13 +70,14 @@ class TestRouteSchemaCommand:
         assert '"active_profile"' in result.output
 
     def test_route_schema_respects_active_conf_directory(self, tmp_path):
-        """Default schema output should resolve under active conf directory."""
+        """Default schema output uses SSOT path (packages/shared/schemas) when using default config."""
         conf_dir = tmp_path / "custom_conf"
         conf_dir.mkdir(parents=True, exist_ok=True)
 
         # CliRunner invokes Typer app directly (not entry_point pre-parser),
         # so we bootstrap config directory explicitly for this test.
         from omni.agent.cli.app import _bootstrap_configuration
+        from omni.foundation.runtime.gitops import get_project_root
 
         original_conf_home = os.environ.get("PRJ_CONFIG_HOME")
         try:
@@ -77,9 +87,13 @@ class TestRouteSchemaCommand:
             result = runner.invoke(app, ["route", "schema", "--json"])
 
             assert result.exit_code == 0
-            expected = conf_dir / "omni-dev-fusion" / "schemas" / "router.search.schema.json"
+            # Default schema_file points to packages/shared (SSOT)
+            expected = (
+                get_project_root()
+                / "packages/shared/schemas/omni.router.search_config.v1.schema.json"
+            )
             assert expected.exists()
-            assert f'"path": "{expected}"' in result.output
+            assert str(expected) in result.output
         finally:
             if original_conf_home is None:
                 os.environ.pop("PRJ_CONFIG_HOME", None)
@@ -161,7 +175,7 @@ class TestRouteTestCommand:
         }
         mock_search_cls.return_value = mock_search
 
-        result = runner.invoke(app, ["route", "test", "git commit", "--debug", "--local"])
+        result = runner.invoke(app, ["route", "test", "git commit", "--debug"])
 
         assert result.exit_code == 0
         assert "raw=0.820 | final=0.910" in result.output
@@ -185,10 +199,10 @@ class TestRouteTestCommand:
             "_select_confidence_profile",
             new=AsyncMock(return_value=(None, None, "none-configured")),
         ):
-            result = runner.invoke(app, ["route", "test", "git commit", "--local", "--json"])
+            result = runner.invoke(app, ["route", "test", "git commit", "--json"])
 
         assert result.exit_code == 0
-        payload = json.loads(result.output)
+        payload = json.loads(_strip_ansi(result.output))
         assert payload["query"] == "git commit"
         assert payload["schema"] == "omni.router.route_test.v1"
         assert payload["count"] == 1
@@ -200,8 +214,52 @@ class TestRouteTestCommand:
             "git",
             "commit",
         ]
+        # Contract gate: CLI JSON must match schema (CI fails on field drift)
+        schema = _load_route_test_schema()
+        errors = list(Draft202012Validator(schema).iter_errors(payload))
+        assert not errors, "Payload must match omni.router.route_test.v1: " + "; ".join(
+            e.message for e in errors
+        )
 
-    @pytest.mark.parametrize("local_flag", [True, False], ids=["local", "remote"])
+    @patch("omni.core.router.hybrid_search.HybridSearch")
+    def test_route_test_json_explain_adds_score_breakdown(self, mock_search_cls):
+        """With --json --explain, each result has explain.scores (raw_rrf, vector_score, keyword_score, final_score)."""
+        runner = CliRunner()
+        base = make_router_result_payload()
+        base["vector_score"] = 0.72
+        base["keyword_score"] = 0.35
+        mock_search = MagicMock()
+        mock_search.search = AsyncMock(return_value=[base])
+        mock_search.stats.return_value = {
+            "semantic_weight": 1.0,
+            "keyword_weight": 1.5,
+            "rrf_k": 10,
+            "strategy": "weighted_rrf_field_boosting",
+        }
+        mock_search_cls.return_value = mock_search
+
+        with patch.object(
+            route_module,
+            "_select_confidence_profile",
+            new=AsyncMock(return_value=(None, None, "none-configured")),
+        ):
+            result = runner.invoke(
+                app,
+                ["route", "test", "git commit", "--json", "--explain"],
+            )
+
+        assert result.exit_code == 0
+        payload = json.loads(_strip_ansi(result.output))
+        assert payload["count"] == 1
+        explain = payload["results"][0].get("explain")
+        assert explain is not None
+        scores = explain.get("scores")
+        assert scores is not None
+        assert scores.get("raw_rrf") == base.get("score")
+        assert scores.get("vector_score") == 0.72
+        assert scores.get("keyword_score") == 0.35
+        assert scores.get("final_score") == base.get("final_score")
+
     @parametrize_route_intent_queries()
     @patch("omni.core.router.hybrid_search.HybridSearch")
     def test_route_test_json_intent_shape_is_stable(
@@ -209,7 +267,6 @@ class TestRouteTestCommand:
         mock_search_cls,
         query: str,
         expected_tool_name: str,
-        local_flag: bool,
     ):
         runner = CliRunner()
         mock_search = MagicMock()
@@ -252,13 +309,10 @@ class TestRouteTestCommand:
             "_select_confidence_profile",
             new=AsyncMock(return_value=(None, "balanced", "active-profile")),
         ):
-            args = ["route", "test", query, "--json"]
-            if local_flag:
-                args.append("--local")
-            result = runner.invoke(app, args)
+            result = runner.invoke(app, ["route", "test", query, "--json"])
 
         assert result.exit_code == 0
-        payload = json.loads(result.output)
+        payload = json.loads(_strip_ansi(result.output))
         assert payload["schema"] == "omni.router.route_test.v1"
         assert payload["query"] == query
         assert payload["count"] == 1
@@ -283,10 +337,10 @@ class TestRouteTestCommand:
             "_select_confidence_profile",
             new=AsyncMock(return_value=(None, "balanced", "active-profile")),
         ):
-            result = runner.invoke(app, ["route", "test", "git commit", "--local", "--json"])
+            result = runner.invoke(app, ["route", "test", "git commit", "--json"])
 
         assert result.exit_code == 0
-        payload = json.loads(result.output)
+        payload = json.loads(_strip_ansi(result.output))
         assert payload["schema"] == "omni.router.route_test.v1"
         assert payload["query"] == "git commit"
         assert payload["count"] == 0
@@ -294,7 +348,7 @@ class TestRouteTestCommand:
         assert "confidence_profile" in payload
         assert payload["confidence_profile"]["name"] == "balanced"
         assert "stats" in payload
-        assert payload["stats"]["strategy"] is None
+        assert payload["stats"]["strategy"] == "weighted_rrf_field_boosting"
 
     @patch("omni.agent.cli.commands.route.run_async_blocking")
     def test_route_test_uses_shared_async_runner(self, mock_run_async_blocking):
@@ -340,7 +394,6 @@ class TestRouteTestCommand:
                     "route",
                     "test",
                     "git commit",
-                    "--local",
                     "--confidence-profile",
                     "precision",
                 ],
@@ -401,7 +454,7 @@ class TestRouteTestCommand:
             "_select_confidence_profile",
             new=AsyncMock(return_value=({"high_threshold": 0.75}, "balanced", "active-profile")),
         ):
-            result = runner.invoke(app, ["route", "test", "git commit", "--local"])
+            result = runner.invoke(app, ["route", "test", "git commit"])
 
         assert result.exit_code == 0
         kwargs = mock_search.search.call_args.kwargs

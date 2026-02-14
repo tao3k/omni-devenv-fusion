@@ -1,18 +1,22 @@
 """reindex.py - Unified Reindex Command
 
-Reindex all vector databases (skills, router, knowledge, memory).
+Reindex vector databases (skills, knowledge, memory).
 
 Usage:
     omni reindex                 # Reindex skills to main DB
     omni reindex --all           # Reindex all databases
-    omni reindex router          # Reindex router database
     omni reindex clear           # Clear all indexes
 
 Databases:
-    skills.lance   - Main skill tools database
-    router.lance   - Router/hybrid search index
+    skills.lance   - Full skill/tool data (routing + discovery)
+    router.lance  - Routing-only scores (no duplication of skills content)
     knowledge.lance - Knowledge base
     memory.lance   - Memory index
+
+Unified with sync:
+    Same paths (get_database_path) and same indexing API for skills so that
+    "omni sync" and "omni reindex skills" write to the same skills.lance
+    and keyword index; route test reads from that path.
 """
 
 from __future__ import annotations
@@ -36,7 +40,7 @@ from omni.foundation.services.vector_schema import validate_vector_table_contrac
 
 reindex_app = typer.Typer(
     name="reindex",
-    help="Reindex vector databases (skills, router, knowledge, memory)",
+    help="Reindex vector databases (skills, knowledge, memory)",
     invoke_without_command=True,
 )
 
@@ -68,9 +72,11 @@ def _embedding_signature_path() -> Path:
 
 def _current_embedding_signature() -> dict[str, Any]:
     """Current embedding signature derived from settings."""
+    from omni.foundation.services.index_dimension import get_effective_embedding_dimension
+
     return {
         "embedding_model": str(get_setting("embedding.model", "")),
-        "embedding_dimension": int(get_setting("embedding.dimension", 1024)),
+        "embedding_dimension": get_effective_embedding_dimension(),
         "embedding_provider": str(get_setting("embedding.provider", "")),
     }
 
@@ -133,29 +139,79 @@ def _reindex_skills(clear: bool = False) -> dict[str, Any]:
         return {"status": "error", "database": "skills.lance", "error": str(e)}
 
 
-def _validate_skills_router_schema() -> dict[str, Any]:
-    """Run contract validation on skills and router tables (no legacy 'keywords' in metadata)."""
+def _validate_skills_schema() -> dict[str, Any]:
+    """Run contract validation on the skills table (no legacy 'keywords' in metadata)."""
     from omni.foundation.bridge import RustVectorStore
 
     result: dict[str, Any] = {}
-    for db_name, table_name in [("skills", "skills"), ("router", "router")]:
-        try:
-            db_path = get_database_path(db_name)
-            store = RustVectorStore(db_path, enable_keyword_index=True)
-            entries = run_async_blocking(store.list_all(table_name))
-            result[table_name] = validate_vector_table_contract(entries)
-        except Exception as e:
-            result[table_name] = {
-                "total": 0,
-                "legacy_keywords_count": 0,
-                "sample_ids": [],
-                "error": str(e),
-            }
+    try:
+        db_path = get_database_path("skills")
+        store = RustVectorStore(db_path, enable_keyword_index=True)
+        entries = run_async_blocking(store.list_all("skills"))
+        result["skills"] = validate_vector_table_contract(entries)
+    except Exception as e:
+        result["skills"] = {
+            "total": 0,
+            "legacy_keywords_count": 0,
+            "sample_ids": [],
+            "error": str(e),
+        }
     return result
 
 
-def _reindex_skills_and_router(clear: bool = False) -> dict[str, Any]:
-    """Reindex skills/router in one Rust scan for snapshot consistency."""
+def _build_relationship_graph_after_skills_reindex(db_path: str) -> None:
+    """Build and persist skill relationship graph from the skills table.
+
+    Uses same-skill and shared-reference edges when metadata is present
+    (e.g. after Rust reindex). Idempotent; no-op if path is memory or graph empty.
+
+    Also registers skill entities in the KnowledgeGraph (Bridge 4: Core 2 → Core 1)
+    so that ZK entity graph enrichment has data to work with.
+    """
+    from omni.core.router.skill_relationships import (
+        build_graph_from_entries,
+        get_relationship_graph_path,
+        save_relationship_graph,
+    )
+    from omni.foundation.bridge import RustVectorStore
+
+    graph_path = get_relationship_graph_path(db_path)
+    if graph_path is None:
+        return
+    try:
+        store = RustVectorStore(db_path, enable_keyword_index=True)
+        entries = run_async_blocking(store.list_all("skills"))
+        graph = build_graph_from_entries(entries)
+        if graph:
+            save_relationship_graph(graph, graph_path)
+
+        # Bridge 4: Register skill entities in KnowledgeGraph (Core 2 → Core 1)
+        try:
+            from omni.rag.dual_core import register_skill_entities
+
+            docs = [{"id": e.get("id"), "content": "", "metadata": e} for e in entries]
+            kg_result = register_skill_entities(docs)
+            if kg_result.get("status") == "success":
+                _console.print(
+                    f"[dim]KnowledgeGraph: +{kg_result['entities_added']} entities, "
+                    f"+{kg_result['relations_added']} relations[/dim]"
+                )
+        except Exception as e:
+            _console.print(f"[dim]KnowledgeGraph registration skipped: {e}[/dim]")
+
+    except Exception as e:
+        # Non-fatal; reindex already succeeded
+        _console.print(f"[dim]Relationship graph build skipped: {e}[/dim]")
+
+
+def _reindex_skills_only(clear: bool = False) -> dict[str, Any]:
+    """Reindex the single skills table (routing and discovery use this table).
+
+    Pipeline mirrors _sync_skills:
+    1. Rust scan → metadata + keyword index (zero vectors)
+    2. Embedding → generate real vectors and merge-insert
+    3. Relationship graph → build skill→tool and tool→reference edges
+    """
     from omni.foundation.bridge import RustVectorStore
     from omni.foundation.config.skills import SKILLS_DIR
 
@@ -167,21 +223,32 @@ def _reindex_skills_and_router(clear: bool = False) -> dict[str, Any]:
             store = RustVectorStore(db_path, enable_keyword_index=True)
 
             if clear:
-                print("Dropping existing skills/router tables...")
+                print("Dropping existing skills table...")
                 run_async_blocking(store.drop_table("skills"))
-                run_async_blocking(store.drop_table("router"))
 
-            print("Indexing skills/router from single snapshot...")
-            skills_count, router_count = run_async_blocking(
-                store.index_skill_tools_dual(skills_path, "skills", "router")
+            # Step 1: Rust scan → metadata + keyword index
+            print("Indexing skills table (routing + discovery)...")
+            skills_count, _ = run_async_blocking(
+                store.index_skill_tools_dual(skills_path, "skills", "skills")
             )
+
+            # Step 2: Generate real embeddings
+            print("Generating embeddings...")
+            try:
+                from omni.agent.cli.commands.sync import _embed_skill_vectors
+
+                embedded = run_async_blocking(_embed_skill_vectors(store, db_path))
+                print(f"Embedded {embedded} tool vectors")
+            except Exception as e:
+                print(f"Embedding step skipped: {e}")
 
             out = {
                 "status": "success",
+                "database": "skills.lance",
                 "skills_tools_indexed": skills_count,
-                "router_tools_indexed": router_count,
+                "tools_indexed": skills_count,
             }
-            validation = _validate_skills_router_schema()
+            validation = _validate_skills_schema()
             out["schema_validation"] = validation
             legacy_total = sum(
                 v.get("legacy_keywords_count", 0)
@@ -192,105 +259,17 @@ def _reindex_skills_and_router(clear: bool = False) -> dict[str, Any]:
                 out["schema_validation_warning"] = (
                     "Some rows still have legacy 'keywords' in metadata; use routing_keywords only."
                 )
+            # Step 3: Build relationship graph from index
+            _build_relationship_graph_after_skills_reindex(db_path)
             return out
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
 
-def _sync_router_lance_from_skills() -> dict[str, Any]:
-    """Sync the separate router.lance directory from current skills (no refresh).
-
-    Call after _reindex_skills_and_router so that router.lance stays in sync
-    and omni db validate-schema passes for both skills and router.
-    """
-    from omni.foundation.bridge import get_vector_store
-    from omni.foundation.config.skills import SKILLS_DIR
-
-    try:
-        router_path = get_database_path("router")
-        skills_path = str(SKILLS_DIR())
-        with _reindex_lock():
-            router_store = get_vector_store(router_path, enable_keyword_index=True)
-            count = run_async_blocking(router_store.index_skill_tools(skills_path, "router"))
-        entries = run_async_blocking(router_store.list_all("router"))
-        val = validate_vector_table_contract(entries)
-        out = {
-            "status": "success",
-            "database": "router.lance",
-            "tools_indexed": count,
-            "schema_validation": {"router": val},
-        }
-        if val.get("legacy_keywords_count", 0) > 0:
-            out["schema_validation_warning"] = (
-                "Some rows still have legacy 'keywords' in metadata; use routing_keywords only."
-            )
-        return out
-    except Exception as e:
-        return {"status": "error", "database": "router.lance", "error": str(e)}
-
-
-def _sync_router_from_skills(refresh_skills: bool = True) -> dict[str, Any]:
-    """Sync router.lance from the latest skills snapshot.
-
-    This function always refreshes ``skills.lance`` first, then indexes
-    ``router.lance`` from the same skills directory snapshot to keep counts
-    and metadata in lockstep.
-    """
-    from omni.foundation.bridge import get_vector_store
-    from omni.foundation.config.skills import SKILLS_DIR
-
-    try:
-        router_path = get_database_path("router")
-        skills_path = str(SKILLS_DIR())
-
-        # Ensure skills database is refreshed first so router sync uses
-        # the same source snapshot and does not drift from skills.lance.
-        if refresh_skills:
-            atomic = _reindex_skills_and_router(clear=False)
-            if atomic.get("status") != "success":
-                return {
-                    "status": "error",
-                    "database": "router.lance",
-                    "error": f"skills/router atomic reindex failed: {atomic.get('error', 'unknown')}",
-                }
-            out = {
-                "status": "success",
-                "database": "router.lance",
-                "tools_indexed": int(atomic.get("router_tools_indexed", 0)),
-            }
-            if "schema_validation" in atomic:
-                out["schema_validation"] = atomic["schema_validation"]
-            if atomic.get("schema_validation_warning"):
-                out["schema_validation_warning"] = atomic["schema_validation_warning"]
-            return out
-
-        with _reindex_lock():
-            router_store = get_vector_store(router_path, enable_keyword_index=True)
-
-            print("Syncing router database from skills...")
-            count = run_async_blocking(router_store.index_skill_tools(skills_path, "router"))
-
-        entries = run_async_blocking(router_store.list_all("router"))
-        val = validate_vector_table_contract(entries)
-        out = {
-            "status": "success",
-            "database": "router.lance",
-            "tools_indexed": count,
-            "schema_validation": {"router": val},
-        }
-        if val.get("legacy_keywords_count", 0) > 0:
-            out["schema_validation_warning"] = (
-                "Some rows still have legacy 'keywords' in metadata; use routing_keywords only."
-            )
-        return out
-    except Exception as e:
-        return {"status": "error", "database": "router.lance", "error": str(e)}
-
-
 def ensure_embedding_index_compatibility(auto_fix: bool = True) -> dict[str, Any]:
     """Ensure vector indexes match current embedding settings.
 
-    When embedding model or dimension changes, skills/router indexes must be rebuilt.
+    When embedding model or dimension changes, skills index must be rebuilt.
     """
     enabled = bool(get_setting("embedding.auto_reindex_on_change", True))
     if not enabled:
@@ -310,11 +289,11 @@ def ensure_embedding_index_compatibility(auto_fix: bool = True) -> dict[str, Any
         return {"status": "mismatch", "changed": True, "saved": saved, "current": current}
 
     # Rebuild from scratch on signature drift.
-    atomic_result = _reindex_skills_and_router(clear=True)
-    if atomic_result.get("status") != "success":
+    skills_result = _reindex_skills_only(clear=True)
+    if skills_result.get("status") != "success":
         return {
             "status": "error",
-            "error": f"skills/router reindex failed: {atomic_result.get('error', 'unknown')}",
+            "error": f"skills reindex failed: {skills_result.get('error', 'unknown')}",
             "saved": saved,
             "current": current,
         }
@@ -325,8 +304,7 @@ def ensure_embedding_index_compatibility(auto_fix: bool = True) -> dict[str, Any
         "changed": True,
         "saved": saved,
         "current": current,
-        "skills_tools_indexed": int(atomic_result.get("skills_tools_indexed", 0)),
-        "router_tools_indexed": int(atomic_result.get("router_tools_indexed", 0)),
+        "skills_tools_indexed": int(skills_result.get("skills_tools_indexed", 0)),
     }
 
 
@@ -375,76 +353,103 @@ def _reindex_memory(clear: bool = False) -> dict[str, Any]:
 # =============================================================================
 
 
+def _reindex_symbols(clear: bool = False) -> dict[str, Any]:
+    """Reindex code symbols (Zero-Token Indexing). Aligns with sync symbols component."""
+    from omni.agent.cli.commands.sync import _sync_symbols
+
+    out = run_async_blocking(_sync_symbols(clear=clear))
+    # Normalize to reindex shape
+    if out.get("status") == "success":
+        return {
+            "status": "success",
+            "details": out.get("details", ""),
+            "project_symbols": out.get("project_symbols", 0),
+            "external_symbols": out.get("external_symbols", 0),
+        }
+    return {
+        "status": out.get("status", "error"),
+        "details": out.get("details", ""),
+        "error": out.get("details", ""),
+    }
+
+
+def _reindex_router_init() -> dict[str, Any]:
+    """Initialize router DB (scores table). Aligns with sync router component."""
+    from omni.agent.cli.commands.sync import _sync_router_init
+
+    return run_async_blocking(_sync_router_init())
+
+
 def _do_reindex_all(clear: bool, json_output: bool):
-    """Internal function to perform full reindex."""
+    """Internal function to perform full reindex. Five components aligned with sync."""
     results = {}
 
-    # Reindex skills (main database) and sync separate router.lance
+    # 1. Symbols (Zero-Token Code Index)
     print("=" * 50)
-    print("Reindexing skills/router...")
-    atomic_result = _reindex_skills_and_router(clear)
-    if atomic_result.get("status") == "success":
+    print("Reindexing symbols...")
+    results["symbols"] = _reindex_symbols(clear)
+
+    # 2. Skills (routing + discovery)
+    print("=" * 50)
+    print("Reindexing skills...")
+    skills_result = _reindex_skills_only(clear)
+    if skills_result.get("status") == "success":
         results["skills"] = {
             "status": "success",
             "database": "skills.lance",
-            "tools_indexed": int(atomic_result.get("skills_tools_indexed", 0)),
+            "tools_indexed": int(skills_result.get("skills_tools_indexed", 0)),
         }
-        # Sync the separate router.lance directory so omni db validate-schema passes for both
-        router_sync = _sync_router_lance_from_skills()
-        if router_sync.get("status") == "success":
-            results["router"] = {
-                "status": "success",
-                "database": "router.lance",
-                "tools_indexed": int(router_sync.get("tools_indexed", 0)),
-            }
-        else:
-            results["router"] = {
-                "status": "error",
-                "database": "router.lance",
-                "error": router_sync.get("error", "sync failed"),
-            }
     else:
-        err = atomic_result.get("error", "unknown")
+        err = skills_result.get("error", "unknown")
         results["skills"] = {"status": "error", "database": "skills.lance", "error": str(err)}
-        results["router"] = {"status": "error", "database": "router.lance", "error": str(err)}
 
-    if (
-        results["skills"].get("status") == "success"
-        and results["router"].get("status") == "success"
-    ):
+    if results["skills"].get("status") == "success":
         _write_embedding_signature()
 
-    # Reindex knowledge
+    # 3. Router DB (scores table init only)
+    print("=" * 50)
+    print("Initializing router DB (scores)...")
+    router_out = _reindex_router_init()
+    results["router"] = {
+        "status": router_out.get("status", "skipped"),
+        "details": router_out.get("details", "Router DB (scores) initialized"),
+    }
+
+    # 4. Knowledge
     print("=" * 50)
     print("Reindexing knowledge...")
     results["knowledge"] = _reindex_knowledge(clear)
 
-    # Memory doesn't need reindexing
+    # 5. Memory (info only)
     results["memory"] = _reindex_memory()
 
     if json_output:
         print(json.dumps(results, indent=2))
     else:
         table = Table(title="Reindex All Results")
-        table.add_column("Database", style="cyan")
+        table.add_column("Component", style="cyan")
         table.add_column("Status", style="yellow")
         table.add_column("Details", style="dim")
 
-        for db, info in results.items():
+        component_order = ("symbols", "skills", "router", "knowledge", "memory")
+        for db in component_order:
+            info = results.get(db, {})
             status = info.get("status", "unknown")
             if status == "success":
                 if db == "skills":
                     details = f"{info.get('tools_indexed', 0)} tools"
-                elif db == "router":
-                    details = f"{info.get('tools_indexed', 0)} tools"
                 elif db == "knowledge":
                     details = f"{info.get('docs_indexed', 0)} docs"
+                elif db == "symbols":
+                    details = info.get("details", "")
+                elif db == "router":
+                    details = info.get("details", "Router DB (scores) initialized")
                 else:
-                    details = ""
+                    details = info.get("details", "")
             elif status == "info":
-                details = info.get("message", "")
+                details = info.get("message", info.get("details", ""))
             else:
-                details = info.get("error", "Unknown error")
+                details = info.get("error", info.get("details", "Unknown error"))
             table.add_row(db, status, details)
 
         _console.print(
@@ -462,13 +467,13 @@ def reindex_main(
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
     clear: bool = typer.Option(False, "--clear", "-c", help="Clear all databases first"),
 ):
-    """Reindex all vector databases (skills, router, knowledge).
+    """Reindex all vector databases (skills, knowledge).
 
     If no subcommand is provided, reindexes ALL databases.
+    Routing and tool discovery use the single skills table.
 
     Subcommands:
-        skills    - Reindex skills only
-        router    - Sync router from skills
+        skills    - Reindex skills (routing + discovery)
         knowledge - Reindex knowledge base
         status    - Show database status
         clear     - Clear all databases
@@ -489,14 +494,13 @@ def reindex_skills(
     """
     Reindex skill tools to skills.lance.
 
-    This is the main database for skill tools. The router and other
-    components sync from this database.
+    Single database for skill tools (routing + discovery).
 
     Example:
         omni reindex skills         # Reindex skills
         omni reindex skills --clear # Clear and reindex from scratch
     """
-    result = _reindex_skills(clear)
+    result = _reindex_skills_only(clear)
 
     if json_output:
         print(json.dumps(result, indent=2))
@@ -510,48 +514,6 @@ def reindex_skills(
         )
     else:
         print(
-            Panel(
-                f"Failed: {result.get('error', 'Unknown error')}",
-                title="❌ Error",
-                style="red",
-            )
-        )
-
-
-@reindex_app.command("router")
-def reindex_router(
-    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
-    only_router: bool = typer.Option(
-        False,
-        "--only-router",
-        help="Rebuild router table only (skip atomic skills+router snapshot reindex).",
-    ),
-):
-    """
-    Reindex/sync router database from skills.
-
-    The router database is used for hybrid search (semantic + keyword).
-    It should be kept in sync with skills.lance.
-
-    Example:
-        omni reindex router
-    """
-    # Default path is atomic dual reindex to keep router/skills perfectly aligned.
-    # Only use router-only mode for explicit operator workflows.
-    result = _sync_router_from_skills(refresh_skills=not only_router)
-
-    if json_output:
-        print(json.dumps(result, indent=2))
-    elif result["status"] == "success":
-        _console.print(
-            Panel(
-                f"Synced {result['tools_indexed']} tools to {result['database']}",
-                title="✅ Success",
-                style="green",
-            )
-        )
-    else:
-        _console.print(
             Panel(
                 f"Failed: {result.get('error', 'Unknown error')}",
                 title="❌ Error",
@@ -612,7 +574,7 @@ def reindex_clear(
 
     cleared = []
 
-    for table in ["skills", "router"]:
+    for table in ["skills"]:
         try:
             store = RustVectorStore(enable_keyword_index=True)
             run_async_blocking(store.drop_table(table))
@@ -655,7 +617,7 @@ def reindex_status(
     Example:
         omni reindex status
     """
-    from omni.foundation.bridge import RustVectorStore, get_vector_store
+    from omni.foundation.bridge import RustVectorStore
     from omni.core.knowledge.librarian import Librarian
 
     db_paths = get_database_paths()
@@ -672,18 +634,6 @@ def reindex_status(
         }
     except Exception as e:
         stats["skills.lance"] = {"status": "error", "error": str(e)}
-
-    # Check router.lance
-    try:
-        router_store = get_vector_store(db_paths["router"], enable_keyword_index=True)
-        router_tools = router_store.list_all_tools()
-        stats["router.lance"] = {
-            "status": "ready",
-            "tools": len(router_tools),
-            "path": db_paths["router"],
-        }
-    except Exception as e:
-        stats["router.lance"] = {"status": "error", "error": str(e)}
 
     # Check knowledge.lance
     try:
@@ -730,9 +680,8 @@ def reindex_all(
     Reindex all vector databases.
 
     Performs:
-    1. Reindex skills to skills.lance
-    2. Sync to router.lance
-    3. Reindex knowledge to knowledge.lance
+    1. Reindex skills (routing + discovery) to skills.lance
+    2. Reindex knowledge to knowledge.lance
 
     Example:
         omni reindex all          # Full reindex

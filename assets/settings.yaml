@@ -95,7 +95,7 @@ inference:
   base_url: null
 
   # Default model name (MiniMax model)
-  model: "MiniMax-M2.1"
+  model: "MiniMax-M2.5"
 
   # Request timeout in seconds
   timeout: 120
@@ -207,6 +207,18 @@ embedding:
   # HTTP server port
   http_port: 18501
 
+  # Memory optimization settings
+  # device: "auto"=detect (MPS on Apple Silicon), "cpu", "mps"
+  device: "auto"
+  # torch_dtype: "auto", "float32", "float16" (float16 only effective with MPS)
+  torch_dtype: "float16"
+  # quantize: null=disabled, "int8"=8-bit, "int4"=4-bit (requires bitsandbytes)
+  quantize: null
+  # truncate_dim: null=disabled, 256/512/768=truncate to target dimension
+  # MRL (Matryoshka): reduces output by 75% (1024->256), speeds up ~4x
+  # WARNING: Lower dimension = slight precision loss. 256 recommended for speed.
+  truncate_dim: 256
+
   # HTTP client URL (only needed when forcing client mode)
   # client_url: "http://127.0.0.1:18501"
 
@@ -264,6 +276,24 @@ rag:
 
 # =============================================================================
 # Checkpoint / Workflow State Configuration
+# =============================================================================
+# Vector Store (LanceDB) Configuration
+# =============================================================================
+# Shared by router (skills), knowledge, and other vector-backed features
+vector:
+  # LanceDB index cache size in bytes. When set, dataset opens use an in-memory
+  # index cache for faster repeated scans. Leave null to use Lance default (no limit).
+  # Example: 268435456 for 256 MiB
+  index_cache_size_bytes: null
+
+  # Phase 2: max in-memory dataset (table) count; LRU eviction when exceeded.
+  # Use e.g. 2 or 4 for memory-constrained or many-table setups. Leave null for unbounded.
+  max_cached_tables: null
+
+  # Default partition column for add_documents_partitioned when partition_by is not passed.
+  # Used for fragment-aligned writes (e.g. "skill_name" or "category"). Leave null to require explicit partition_by.
+  default_partition_column: "skill_name"
+
 # =============================================================================
 # Unified checkpoint storage using Rust LanceDB backend
 # All workflow state persists here - no separate SQLite per workflow
@@ -582,18 +612,46 @@ router:
 
     # Defaults used by `omni route test` when flags are not provided.
     default_limit: 10
-    default_threshold: 0.2
+    default_threshold: 0.0 # Show all results (no confidence filtering)
     rerank: true # Canonical rerank toggle for router hybrid pipeline
 
     semantic_weight: 0.7 # Weight for semantic search
     keyword_weight: 0.3 # Weight for keyword search
     adaptive_threshold_step: 0.15 # Threshold reduction step per retry in adaptive search
     adaptive_max_attempts: 3 # Max adaptive attempts before returning best available
-    schema_file: "schemas/router.search.schema.json" # Relative to --conf directory (or absolute path)
+    schema_file: "packages/shared/schemas/omni.router.search_config.v1.schema.json" # SSOT: relative to project root; or absolute path
+
+    # Intent terms for overlap boost (data-driven). Tools with routing_keywords/intents matching these get a boost when they appear in the query. Empty = use built-in set. Scale: add domain terms here.
+    intent_vocab: [] # e.g. ["research", "analyze", "crawl", "commit", "search", "find", "recall", "save"]
 
   # Sniffer settings (context activation from filesystem + dynamic sniffers)
   sniffer:
     score_threshold: 0.5 # Dynamic sniffer activation threshold [0.0, 1.0]
+
+  # Query translation: non-English → English before routing. Default on (we don't know user language; common language is English).
+  # This layer is part of the search pipeline; it also feeds into a stronger search (e.g. enrichment). LLM only; no rule-based fallback.
+  translation:
+    enabled: true # Default on. Set false to disable (e.g. when all queries are known to be English).
+    # model: null  # Optional: model for translation only. Else uses inference.model
+    fallback_to_original: true # On LLM failure, use original query
+
+  # Catalog enrichment: diversify attribute values (e.g. routing_keywords) via LLM for more precise search.
+  enrichment:
+    enabled: false # Set true to expand routing_keywords with synonyms/related terms at index time
+    expand_keywords: true # When enabled, LLM suggests extra keywords per tool (merged into index)
+    # model: null  # Optional: model for enrichment only. Else uses inference.model
+
+  # Optional LLM-driven intent classification for agentic search (P2). When enabled, intent is computed by LLM; otherwise rule-based (exact vs hybrid + file_discovery).
+  intent:
+    use_llm: false # Set true to use LLM for intent (exact | semantic | hybrid) and category_filter; fallback to rule-based on failure
+    # model: null  # Optional: model for intent only. Else uses inference.model
+
+  # Query normalization for routing (data-driven; extend here instead of code). Typo map: typo -> correct.
+  # Hybrid search + relationship graph do the heavy lifting; this only fixes token-level noise.
+  normalize:
+    typos:
+      analzye: analyze
+      reserach: research
 
 # =============================================================================
 # Claude Code Symbiosis - Post-Mortem Audit

@@ -7,6 +7,7 @@ impl VectorStore {
     ) -> Result<Vec<omni_scanner::ToolRecord>, VectorStoreError> {
         let skill_scanner = SkillScanner::new();
         let script_scanner = ToolsScanner::new();
+        let resource_scanner = ResourceScanner::new();
         let skills_path = Path::new(base_path);
         if !skills_path.exists() {
             log::warn!("Skills path does not exist: {:?}", skills_path);
@@ -20,21 +21,64 @@ impl VectorStore {
 
         let mut tools_map = std::collections::HashMap::new();
         for metadata in &metadatas {
-            let tools = script_scanner
+            let skill_path = skills_path.join(&metadata.skill_name);
+            let mut tools = script_scanner
                 .scan_scripts(
-                    &skills_path.join(&metadata.skill_name).join("scripts"),
+                    &skill_path.join("scripts"),
                     &metadata.skill_name,
                     &metadata.routing_keywords,
                     &metadata.intents,
                 )
                 .map_err(|e| VectorStoreError::General(e.to_string()))?;
+
+            // Scan for @skill_resource decorated functions and convert to tools
+            let resources: Vec<ResourceRecord> =
+                match resource_scanner.scan(&skill_path.join("scripts"), &metadata.skill_name) {
+                    Ok(r) => r,
+                    Err(e) => return Err(VectorStoreError::General(e.to_string())),
+                };
+
+            // Convert resources to tools with resource_uri set
+            for resource in resources {
+                let resource_tool = ToolRecord {
+                    tool_name: format!("{}.{}", resource.skill_name, resource.name),
+                    description: resource.description.clone(),
+                    skill_name: resource.skill_name.clone(),
+                    file_path: resource.file_path.clone(),
+                    function_name: resource.function_name.clone(),
+                    execution_mode: "resource".to_string(),
+                    keywords: vec![resource.skill_name.clone(), resource.name.clone()],
+                    intents: metadata.intents.clone(),
+                    file_hash: resource.file_hash.clone(),
+                    input_schema: "{}".to_string(),
+                    docstring: resource.description.clone(),
+                    category: "resource".to_string(),
+                    annotations: ToolAnnotations::default(),
+                    parameters: vec![],
+                    skill_tools_refers: vec![],
+                    resource_uri: resource.resource_uri,
+                };
+                tools.push(resource_tool);
+            }
+
             log::debug!(
-                "Skill '{}': found {} tools",
+                "Skill '{}': found {} tools (+ {} resources)",
                 metadata.skill_name,
-                tools.len()
+                tools.len(),
+                tools.iter().filter(|t| !t.resource_uri.is_empty()).count()
             );
+
+            // Fill skill_tools_refers from markdown front matter (references/*.md for_tools list), not from decorator
+            let entry = skill_scanner.build_index_entry(metadata.clone(), &tools, &skill_path);
+            for t in &mut tools {
+                t.skill_tools_refers = entry
+                    .references
+                    .iter()
+                    .filter(|r| r.applies_to_tool(&t.tool_name))
+                    .map(|r| r.ref_name.clone())
+                    .collect();
+            }
             for tool in tools {
-                // tool.tool_name already includes skill_name prefix from tools_scanner
                 tools_map.insert(tool.tool_name.clone(), tool);
             }
         }
@@ -55,6 +99,11 @@ impl VectorStore {
         let drop_result = self.drop_table(table_name).await;
         log::debug!("drop_table result: {:?}", drop_result);
 
+        // Re-enable keyword index after drop_table cleared it
+        if let Err(e) = self.enable_keyword_index() {
+            log::warn!("Could not re-enable keyword index after drop: {}", e);
+        }
+
         let tools = self.scan_unique_skill_tools(base_path)?;
         log::info!("Total tools to index: {}", tools.len());
         if tools.is_empty() {
@@ -63,6 +112,18 @@ impl VectorStore {
         }
 
         self.add(table_name, tools).await?;
+        if let Err(e) = self
+            .create_scalar_index(table_name, SKILL_NAME_COLUMN, ScalarIndexType::BTree)
+            .await
+        {
+            log::debug!("Scalar index skill_name skipped: {}", e);
+        }
+        if let Err(e) = self
+            .create_scalar_index(table_name, CATEGORY_COLUMN, ScalarIndexType::Bitmap)
+            .await
+        {
+            log::debug!("Scalar index category skipped: {}", e);
+        }
         log::info!("Successfully indexed tools for table: {}", table_name);
         Ok(())
     }
@@ -86,7 +147,17 @@ impl VectorStore {
         }
 
         self.drop_table(skills_table).await.ok();
+        // Re-enable keyword index after drop_table cleared it
+        if let Err(e) = self.enable_keyword_index() {
+            log::warn!("Could not re-enable keyword index after drop: {}", e);
+        }
         self.add(skills_table, tools.clone()).await?;
+        let _ = self
+            .create_scalar_index(skills_table, SKILL_NAME_COLUMN, ScalarIndexType::BTree)
+            .await;
+        let _ = self
+            .create_scalar_index(skills_table, CATEGORY_COLUMN, ScalarIndexType::Bitmap)
+            .await;
         let skills_count = self.count(skills_table).await? as usize;
 
         if router_table == skills_table {
@@ -94,7 +165,17 @@ impl VectorStore {
         }
 
         self.drop_table(router_table).await.ok();
+        // Re-enable keyword index after drop_table cleared it
+        if let Err(e) = self.enable_keyword_index() {
+            log::warn!("Could not re-enable keyword index after drop: {}", e);
+        }
         self.add(router_table, tools).await?;
+        let _ = self
+            .create_scalar_index(router_table, SKILL_NAME_COLUMN, ScalarIndexType::BTree)
+            .await;
+        let _ = self
+            .create_scalar_index(router_table, CATEGORY_COLUMN, ScalarIndexType::Bitmap)
+            .await;
         let router_count = self.count(router_table).await? as usize;
 
         Ok((skills_count, router_count))
@@ -130,45 +211,138 @@ impl VectorStore {
             .collect())
     }
 
-    /// List all tools in a specific table.
-    pub async fn list_all_tools(&self, table_name: &str) -> Result<String, VectorStoreError> {
+    /// List all tools that are also MCP resources (have non-empty `resource_uri` in metadata).
+    pub async fn list_all_resources(&self, table_name: &str) -> Result<String, VectorStoreError> {
+        use crate::ops::column_read::get_utf8_at;
+
         let table_path = self.table_path(table_name);
         if !table_path.exists() {
             return Ok("[]".to_string());
         }
-        let dataset = Dataset::open(table_path.to_string_lossy().as_ref()).await?;
+        let dataset = self
+            .open_dataset_at_uri(table_path.to_string_lossy().as_ref())
+            .await?;
+        let schema = dataset.schema();
+        if schema.field(METADATA_COLUMN).is_none() {
+            return Ok("[]".to_string());
+        }
         let mut scanner = dataset.scan();
-        scanner.project(&["id", "content", "metadata"])?;
+        scanner.project(&["id", "content", METADATA_COLUMN, "skill_name", "tool_name"])?;
+        let mut stream = scanner.try_into_stream().await?;
+        let mut resources = Vec::new();
+        while let Some(batch) = stream.try_next().await? {
+            use lance::deps::arrow_array::Array;
+            use lance::deps::arrow_array::StringArray;
+
+            let id_col = batch.column_by_name("id");
+            let content_col = batch.column_by_name("content");
+            let metadata_col = batch.column_by_name(METADATA_COLUMN);
+            let skill_col = batch.column_by_name("skill_name");
+            let tool_col = batch.column_by_name("tool_name");
+
+            let m_arr =
+                metadata_col.and_then(|c| c.as_any().downcast_ref::<StringArray>().cloned());
+
+            if let (Some(ids), Some(contents)) = (id_col, content_col) {
+                let id_arr = ids.as_any().downcast_ref::<StringArray>();
+                let content_arr = contents.as_any().downcast_ref::<StringArray>();
+
+                for i in 0..batch.num_rows() {
+                    // Only include rows with non-empty resource_uri
+                    let resource_uri = m_arr.as_ref().and_then(|ma| {
+                        if ma.is_null(i) {
+                            return None;
+                        }
+                        let meta_str = ma.value(i);
+                        serde_json::from_str::<serde_json::Value>(meta_str)
+                            .ok()
+                            .and_then(|v| {
+                                v.get("resource_uri")
+                                    .and_then(|u| u.as_str())
+                                    .filter(|s| !s.is_empty())
+                                    .map(String::from)
+                            })
+                    });
+
+                    let Some(uri) = resource_uri else {
+                        continue;
+                    };
+
+                    let id = id_arr.map_or(String::new(), |arr| arr.value(i).to_string());
+                    let content = content_arr.map_or(String::new(), |arr| arr.value(i).to_string());
+                    let skill_name = skill_col.map_or(String::new(), |c| get_utf8_at(c, i));
+                    let tool_name = tool_col.map_or(String::new(), |c| get_utf8_at(c, i));
+
+                    resources.push(serde_json::json!({
+                        "id": id,
+                        "resource_uri": uri,
+                        "description": content,
+                        "skill_name": skill_name,
+                        "tool_name": tool_name,
+                    }));
+                }
+            }
+        }
+        serde_json::to_string(&resources).map_err(|e| VectorStoreError::General(e.to_string()))
+    }
+
+    /// List all tools in a specific table.
+    pub async fn list_all_tools(&self, table_name: &str) -> Result<String, VectorStoreError> {
+        use crate::ops::column_read::get_utf8_at;
+
+        let table_path = self.table_path(table_name);
+        if !table_path.exists() {
+            return Ok("[]".to_string());
+        }
+        let dataset = self
+            .open_dataset_at_uri(table_path.to_string_lossy().as_ref())
+            .await?;
+        let mut scanner = dataset.scan();
+        // Read all columns needed for tool records
+        scanner.project(&[
+            "id",
+            "content",
+            "skill_name",
+            "category",
+            "tool_name",
+            "file_path",
+        ])?;
         let mut stream = scanner.try_into_stream().await?;
         let mut tools = Vec::new();
         while let Some(batch) = stream.try_next().await? {
             use lance::deps::arrow_array::Array;
             use lance::deps::arrow_array::StringArray;
+
             let id_col = batch.column_by_name("id");
             let content_col = batch.column_by_name("content");
-            let metadata_col = batch.column_by_name("metadata");
-            if let (Some(ids), Some(contents), Some(metas)) = (id_col, content_col, metadata_col) {
-                if let (Some(id_arr), Some(content_arr), Some(meta_arr)) = (
-                    ids.as_any().downcast_ref::<StringArray>(),
-                    contents.as_any().downcast_ref::<StringArray>(),
-                    metas.as_any().downcast_ref::<StringArray>(),
-                ) {
-                    for i in 0..batch.num_rows() {
-                        let id = id_arr.value(i).to_string();
-                        let content = content_arr.value(i).to_string();
-                        let metadata_str = if meta_arr.is_null(i) {
-                            "{}".to_string()
-                        } else {
-                            meta_arr.value(i).to_string()
-                        };
-                        if let Ok(mut metadata) =
-                            serde_json::from_str::<serde_json::Value>(&metadata_str)
-                        {
-                            metadata["id"] = serde_json::json!(id);
-                            metadata["content"] = serde_json::json!(content);
-                            tools.push(metadata);
-                        }
-                    }
+            let skill_name_col = batch.column_by_name("skill_name");
+            let category_col = batch.column_by_name("category");
+            let tool_name_col = batch.column_by_name("tool_name");
+            let file_path_col = batch.column_by_name("file_path");
+
+            if let (Some(ids), Some(contents)) = (id_col, content_col) {
+                let id_arr = ids.as_any().downcast_ref::<StringArray>();
+                let content_arr = contents.as_any().downcast_ref::<StringArray>();
+
+                for i in 0..batch.num_rows() {
+                    let id = id_arr.map_or(String::new(), |arr| arr.value(i).to_string());
+                    let content = content_arr.map_or(String::new(), |arr| arr.value(i).to_string());
+
+                    // Use get_utf8_at for dictionary-encoded columns
+                    let skill_name = skill_name_col.map_or(String::new(), |c| get_utf8_at(c, i));
+                    let category = category_col.map_or(String::new(), |c| get_utf8_at(c, i));
+                    let tool_name = tool_name_col.map_or(String::new(), |c| get_utf8_at(c, i));
+                    let file_path = file_path_col.map_or(String::new(), |c| get_utf8_at(c, i));
+
+                    let metadata = serde_json::json!({
+                        "id": id,
+                        "content": content,
+                        "skill_name": skill_name,
+                        "category": category,
+                        "tool_name": tool_name,
+                        "file_path": file_path,
+                    });
+                    tools.push(metadata);
                 }
             }
         }
@@ -191,11 +365,13 @@ impl VectorStore {
             limit,
             threshold,
             skill::ToolSearchOptions::default(),
+            None,
         )
         .await
     }
 
     /// Search for tools with explicit ranking options.
+    /// When `where_filter` is set (e.g. `skill_name = 'git'`), only rows matching the predicate are scanned.
     pub async fn search_tools_with_options(
         &self,
         table_name: &str,
@@ -204,16 +380,55 @@ impl VectorStore {
         limit: usize,
         threshold: f32,
         options: skill::ToolSearchOptions,
+        where_filter: Option<&str>,
     ) -> Result<Vec<skill::ToolSearchResult>, VectorStoreError> {
         let mut results_map: std::collections::HashMap<String, skill::ToolSearchResult> =
             std::collections::HashMap::new();
         let table_path = self.table_path(table_name);
         if table_path.exists() {
-            if let Ok(dataset) = Dataset::open(table_path.to_string_lossy().as_ref()).await {
+            if let Ok(dataset) = self
+                .open_dataset_at_uri(table_path.to_string_lossy().as_ref())
+                .await
+            {
+                let schema = dataset.schema();
+                let has_metadata = schema.field(METADATA_COLUMN).is_some();
+                let project_cols: Vec<&str> = if has_metadata {
+                    vec![
+                        VECTOR_COLUMN,
+                        METADATA_COLUMN,
+                        CONTENT_COLUMN,
+                        "id",
+                        crate::SKILL_NAME_COLUMN,
+                        crate::CATEGORY_COLUMN,
+                        crate::TOOL_NAME_COLUMN,
+                        crate::FILE_PATH_COLUMN,
+                        crate::ROUTING_KEYWORDS_COLUMN,
+                        crate::INTENTS_COLUMN,
+                    ]
+                } else {
+                    vec![
+                        VECTOR_COLUMN,
+                        CONTENT_COLUMN,
+                        "id",
+                        crate::SKILL_NAME_COLUMN,
+                        crate::CATEGORY_COLUMN,
+                        crate::TOOL_NAME_COLUMN,
+                        crate::FILE_PATH_COLUMN,
+                        crate::ROUTING_KEYWORDS_COLUMN,
+                        crate::INTENTS_COLUMN,
+                    ]
+                };
                 let mut scanner = dataset.scan();
-                scanner
-                    .project(&[VECTOR_COLUMN, METADATA_COLUMN, CONTENT_COLUMN, "id"])
-                    .ok();
+                scanner.project(&project_cols).ok();
+                let skill_filter_from_where =
+                    where_filter.and_then(parse_skill_name_from_where_filter);
+                if let Some(f) = where_filter {
+                    if skill_filter_from_where.is_none() {
+                        scanner.filter(f).map_err(|e| {
+                            VectorStoreError::General(format!("Invalid where_filter: {}", e))
+                        })?;
+                    }
+                }
                 if let Ok(mut stream) = scanner.try_into_stream().await {
                     let query_len = query_vector.len();
                     while let Ok(Some(batch)) = stream.try_next().await {
@@ -221,24 +436,38 @@ impl VectorStore {
                         let m_col = batch.column_by_name(METADATA_COLUMN);
                         let c_col = batch.column_by_name(CONTENT_COLUMN);
                         let i_col = batch.column_by_name("id");
-                        if let (Some(v_c), Some(m_c), Some(c_c), Some(id_c)) =
-                            (v_col, m_col, c_col, i_col)
-                        {
+                        let sk_col = batch.column_by_name(crate::SKILL_NAME_COLUMN);
+                        let cat_col = batch.column_by_name(crate::CATEGORY_COLUMN);
+                        let tn_col = batch.column_by_name(crate::TOOL_NAME_COLUMN);
+                        let fp_col = batch.column_by_name(crate::FILE_PATH_COLUMN);
+                        let rk_col = batch.column_by_name(crate::ROUTING_KEYWORDS_COLUMN);
+                        let in_col = batch.column_by_name(crate::INTENTS_COLUMN);
+                        if let (Some(v_c), Some(c_c), Some(id_c)) = (v_col, c_col, i_col) {
                             use lance::deps::arrow_array::Array;
                             let vector_arr =
                                 v_c.as_any()
                                     .downcast_ref::<lance::deps::arrow_array::FixedSizeListArray>();
-                            let metadata_arr = m_c
-                                .as_any()
-                                .downcast_ref::<lance::deps::arrow_array::StringArray>();
+                            let metadata_arr = m_col.and_then(|c| {
+                                c.as_any()
+                                    .downcast_ref::<lance::deps::arrow_array::StringArray>()
+                            });
                             let content_arr = c_c
                                 .as_any()
                                 .downcast_ref::<lance::deps::arrow_array::StringArray>();
                             let id_arr = id_c
                                 .as_any()
                                 .downcast_ref::<lance::deps::arrow_array::StringArray>();
-                            if let (Some(v_arr), Some(m_arr), Some(c_arr), Some(i_arr)) =
-                                (vector_arr, metadata_arr, content_arr, id_arr)
+                            // Use get_utf8_at so Utf8 and Dictionary (e.g. TOOL_NAME) columns both work.
+                            let str_at_col = |col: Option<
+                                &std::sync::Arc<dyn lance::deps::arrow_array::Array>,
+                            >,
+                                              idx: usize|
+                             -> String {
+                                col.map(|c| crate::ops::get_utf8_at(c.as_ref(), idx))
+                                    .unwrap_or_default()
+                            };
+                            if let (Some(v_arr), Some(c_arr), Some(i_arr)) =
+                                (vector_arr, content_arr, id_arr)
                             {
                                 let values = v_arr
                                     .values()
@@ -247,6 +476,17 @@ impl VectorStore {
                                 );
                                 if let Some(vals) = values {
                                     for i in 0..batch.num_rows() {
+                                        let sk = sk_col
+                                            .map(|c| crate::ops::get_utf8_at(c.as_ref(), i))
+                                            .unwrap_or_default();
+                                        if let Some(ref filter_skill) = skill_filter_from_where {
+                                            if sk != filter_skill.as_str() {
+                                                continue;
+                                            }
+                                        }
+                                        let cat = cat_col
+                                            .map(|c| crate::ops::get_utf8_at(c.as_ref(), i))
+                                            .unwrap_or_default();
                                         let mut dist_sq = 0.0f32;
                                         let v_len = vals.len() / batch.num_rows();
                                         for j in 0..query_len {
@@ -259,71 +499,163 @@ impl VectorStore {
                                             dist_sq += diff * diff;
                                         }
                                         let score = 1.0 / (1.0 + dist_sq.sqrt());
-                                        if m_arr.is_null(i) {
-                                            continue;
-                                        }
-                                        if let Ok(meta) = serde_json::from_str::<serde_json::Value>(
-                                            &m_arr.value(i),
-                                        ) {
-                                            if meta.get("type").and_then(|t| t.as_str())
-                                                != Some("command")
-                                            {
-                                                continue;
-                                            }
-                                            let row_id = i_arr.value(i).to_string();
-                                            let Some(canonical_tool_name) =
-                                                canonical_tool_name_from_result_meta(
-                                                    &meta, &row_id,
-                                                )
-                                            else {
-                                                continue;
-                                            };
-                                            let skill_name = meta
-                                                .get("skill_name")
-                                                .and_then(|s| s.as_str())
-                                                .map(ToString::to_string)
-                                                .unwrap_or_else(|| {
-                                                    canonical_tool_name
+                                        let row_id = i_arr.value(i).to_string();
+                                        let (
+                                            canonical_tool_name,
+                                            skill_name,
+                                            file_path,
+                                            routing_keywords,
+                                            intents,
+                                            category,
+                                            input_schema,
+                                        ) = if let Some(m_arr) = metadata_arr {
+                                            if m_arr.is_null(i) {
+                                                let tn = str_at_col(tn_col, i);
+                                                let canon = if !tn.is_empty() {
+                                                    tn
+                                                } else {
+                                                    row_id.clone()
+                                                };
+                                                let skill = if !sk.is_empty() {
+                                                    sk
+                                                } else {
+                                                    canon
                                                         .split('.')
                                                         .next()
                                                         .unwrap_or("")
                                                         .to_string()
-                                                });
-                                            results_map.insert(
-                                                canonical_tool_name.clone(),
-                                                skill::ToolSearchResult {
-                                                    name: canonical_tool_name.clone(),
-                                                    description: c_arr.value(i).to_string(),
-                                                    input_schema: meta
-                                                        .get("input_schema")
-                                                        .map(skill::normalize_input_schema_value)
-                                                        .unwrap_or_else(|| serde_json::json!({})),
-                                                    score,
-                                                    vector_score: Some(score),
-                                                    keyword_score: None,
-                                                    skill_name,
-                                                    tool_name: canonical_tool_name,
-                                                    file_path: meta
-                                                        .get("file_path")
-                                                        .and_then(|s| s.as_str())
-                                                        .unwrap_or("")
-                                                        .to_string(),
-                                                    keywords: skill::resolve_routing_keywords(
-                                                        &meta,
-                                                    ),
-                                                    intents: skill::resolve_intents(&meta),
-                                                    category: meta
-                                                        .get("category")
-                                                        .and_then(|c| c.as_str())
-                                                        .or_else(|| {
-                                                            meta.get("skill_name")
-                                                                .and_then(|s| s.as_str())
-                                                        })
-                                                        .unwrap_or("")
-                                                        .to_string(),
-                                                },
-                                            );
+                                                };
+                                                let rk = rk_col
+                                                    .map(|c| {
+                                                        crate::ops::get_routing_keywords_at(
+                                                            c.as_ref(),
+                                                            i,
+                                                        )
+                                                    })
+                                                    .unwrap_or_default();
+                                                let inv = in_col
+                                                    .map(|c| {
+                                                        crate::ops::get_intents_at(c.as_ref(), i)
+                                                    })
+                                                    .unwrap_or_default();
+                                                let meta = serde_json::json!({ "routing_keywords": rk.iter().map(|s| serde_json::Value::String(s.clone())).collect::<Vec<_>>(), "intents": inv.iter().map(|s| serde_json::Value::String(s.clone())).collect::<Vec<_>>() });
+                                                (
+                                                    canon.clone(),
+                                                    skill.clone(),
+                                                    str_at_col(fp_col, i),
+                                                    skill::resolve_routing_keywords(&meta),
+                                                    skill::resolve_intents(&meta),
+                                                    { if cat.is_empty() { skill } else { cat } },
+                                                    serde_json::json!({}),
+                                                )
+                                            } else if let Ok(meta) =
+                                                serde_json::from_str::<serde_json::Value>(
+                                                    &m_arr.value(i),
+                                                )
+                                            {
+                                                if meta.get("type").and_then(|t| t.as_str())
+                                                    != Some("command")
+                                                {
+                                                    continue;
+                                                }
+                                                let Some(canon) =
+                                                    canonical_tool_name_from_result_meta(
+                                                        &meta, &row_id,
+                                                    )
+                                                else {
+                                                    continue;
+                                                };
+                                                let skill = meta
+                                                    .get("skill_name")
+                                                    .and_then(|s| s.as_str())
+                                                    .map(String::from)
+                                                    .unwrap_or_else(|| {
+                                                        canon
+                                                            .split('.')
+                                                            .next()
+                                                            .unwrap_or("")
+                                                            .to_string()
+                                                    });
+                                                let file_path = meta
+                                                    .get("file_path")
+                                                    .and_then(|s| s.as_str())
+                                                    .unwrap_or("")
+                                                    .to_string();
+                                                let rk = skill::resolve_routing_keywords(&meta);
+                                                let inv = skill::resolve_intents(&meta);
+                                                let cat = meta
+                                                    .get("category")
+                                                    .and_then(|c| c.as_str())
+                                                    .or_else(|| {
+                                                        meta.get("skill_name")
+                                                            .and_then(|s| s.as_str())
+                                                    })
+                                                    .unwrap_or("")
+                                                    .to_string();
+                                                let schema = meta
+                                                    .get("input_schema")
+                                                    .map(skill::normalize_input_schema_value)
+                                                    .unwrap_or_else(|| serde_json::json!({}));
+                                                (canon, skill, file_path, rk, inv, cat, schema)
+                                            } else {
+                                                continue;
+                                            }
+                                        } else {
+                                            let tn = str_at_col(tn_col, i);
+                                            let canon =
+                                                if !tn.is_empty() { tn } else { row_id.clone() };
+                                            let skill = if !sk.is_empty() {
+                                                sk
+                                            } else {
+                                                canon.split('.').next().unwrap_or("").to_string()
+                                            };
+                                            let rk = rk_col
+                                                .map(|c| {
+                                                    crate::ops::get_routing_keywords_at(
+                                                        c.as_ref(),
+                                                        i,
+                                                    )
+                                                })
+                                                .unwrap_or_default();
+                                            let inv = in_col
+                                                .map(|c| crate::ops::get_intents_at(c.as_ref(), i))
+                                                .unwrap_or_default();
+                                            let rk_json = serde_json::json!({ "routing_keywords": rk.iter().map(|s| serde_json::Value::String(s.clone())).collect::<Vec<_>>(), "intents": inv.iter().map(|s| serde_json::Value::String(s.clone())).collect::<Vec<_>>() });
+                                            (
+                                                canon.clone(),
+                                                skill.clone(),
+                                                str_at_col(fp_col, i),
+                                                skill::resolve_routing_keywords(&rk_json),
+                                                skill::resolve_intents(&rk_json),
+                                                { if cat.is_empty() { skill } else { cat } },
+                                                serde_json::json!({}),
+                                            )
+                                        };
+                                        let full_name = if row_id.contains('.') {
+                                            row_id.clone()
+                                        } else {
+                                            canonical_tool_name.clone()
+                                        };
+                                        if !skill::is_routable_tool_name(&full_name) {
+                                            continue;
                                         }
+                                        results_map.insert(
+                                            canonical_tool_name.clone(),
+                                            skill::ToolSearchResult {
+                                                name: full_name.clone(),
+                                                description: c_arr.value(i).to_string(),
+                                                input_schema,
+                                                score,
+                                                vector_score: Some(score),
+                                                keyword_score: None,
+                                                skill_name,
+                                                tool_name: full_name,
+                                                file_path,
+                                                routing_keywords,
+                                                intents,
+                                                category,
+                                            },
+                                        );
                                     }
                                 }
                             }
@@ -346,8 +678,8 @@ impl VectorStore {
                 vector_scores,
                 kw_hits.clone(),
                 keyword::RRF_K,
-                keyword::SEMANTIC_WEIGHT,
-                keyword::KEYWORD_WEIGHT,
+                options.semantic_weight.unwrap_or(keyword::SEMANTIC_WEIGHT),
+                options.keyword_weight.unwrap_or(keyword::KEYWORD_WEIGHT),
                 text,
             );
             let mut new_map = std::collections::HashMap::new();
@@ -428,9 +760,35 @@ impl VectorStore {
         if !table_path.exists() {
             return Ok(Vec::new());
         }
-        let dataset = Dataset::open(table_path.to_string_lossy().as_ref()).await?;
+        let dataset = self
+            .open_dataset_at_uri(table_path.to_string_lossy().as_ref())
+            .await?;
+        let schema = dataset.schema();
+        let has_metadata = schema.field(METADATA_COLUMN).is_some();
+        let project_cols: Vec<&str> = if has_metadata {
+            vec![
+                METADATA_COLUMN,
+                CONTENT_COLUMN,
+                crate::SKILL_NAME_COLUMN,
+                crate::TOOL_NAME_COLUMN,
+                crate::FILE_PATH_COLUMN,
+                crate::ROUTING_KEYWORDS_COLUMN,
+                crate::INTENTS_COLUMN,
+                crate::CATEGORY_COLUMN,
+            ]
+        } else {
+            vec![
+                CONTENT_COLUMN,
+                crate::SKILL_NAME_COLUMN,
+                crate::TOOL_NAME_COLUMN,
+                crate::FILE_PATH_COLUMN,
+                crate::ROUTING_KEYWORDS_COLUMN,
+                crate::INTENTS_COLUMN,
+                crate::CATEGORY_COLUMN,
+            ]
+        };
         let mut scanner = dataset.scan();
-        scanner.project(&[METADATA_COLUMN, CONTENT_COLUMN])?;
+        scanner.project(&project_cols)?;
 
         if let Some(skill) = skill_filter {
             scanner.filter(&format!("skill_name = '{}'", skill))?;
@@ -440,78 +798,177 @@ impl VectorStore {
         let mut tools = Vec::new();
         while let Some(batch) = stream.try_next().await? {
             use lance::deps::arrow_array::Array;
-            if let (Some(m_col), Some(c_col)) = (
-                batch.column_by_name(METADATA_COLUMN),
-                batch.column_by_name(CONTENT_COLUMN),
-            ) {
-                let m_arr = m_col
-                    .as_any()
-                    .downcast_ref::<lance::deps::arrow_array::StringArray>();
-                let c_arr = c_col
-                    .as_any()
-                    .downcast_ref::<lance::deps::arrow_array::StringArray>();
-                if let (Some(ma), Some(ca)) = (m_arr, c_arr) {
-                    for i in 0..batch.num_rows() {
+            let c_col = batch.column_by_name(CONTENT_COLUMN);
+            let m_col = batch.column_by_name(METADATA_COLUMN);
+            let sk_col = batch.column_by_name(crate::SKILL_NAME_COLUMN);
+            let tn_col = batch.column_by_name(crate::TOOL_NAME_COLUMN);
+            let fp_col = batch.column_by_name(crate::FILE_PATH_COLUMN);
+            let rk_col = batch.column_by_name(crate::ROUTING_KEYWORDS_COLUMN);
+            let in_col = batch.column_by_name(crate::INTENTS_COLUMN);
+            let cat_col = batch.column_by_name(crate::CATEGORY_COLUMN);
+            let c_arr = c_col.and_then(|c| {
+                c.as_any()
+                    .downcast_ref::<lance::deps::arrow_array::StringArray>()
+            });
+            let m_arr = m_col.and_then(|c| {
+                c.as_any()
+                    .downcast_ref::<lance::deps::arrow_array::StringArray>()
+            });
+            let str_at_col = |col: Option<&std::sync::Arc<dyn lance::deps::arrow_array::Array>>,
+                              idx: usize|
+             -> String {
+                col.map(|c| crate::ops::get_utf8_at(c.as_ref(), idx))
+                    .unwrap_or_default()
+            };
+            if let Some(ca) = c_arr {
+                for i in 0..batch.num_rows() {
+                    let sk = sk_col
+                        .map(|c| crate::ops::get_utf8_at(c.as_ref(), i))
+                        .unwrap_or_default();
+                    let cat = cat_col
+                        .map(|c| crate::ops::get_utf8_at(c.as_ref(), i))
+                        .unwrap_or_default();
+                    let (
+                        name,
+                        skill_name,
+                        tool_name,
+                        file_path,
+                        routing_keywords,
+                        intents,
+                        category,
+                        input_schema,
+                    ) = if let Some(ma) = m_arr {
                         if ma.is_null(i) {
-                            continue;
-                        }
-                        if let Ok(meta) = serde_json::from_str::<serde_json::Value>(&ma.value(i)) {
+                            let tn = str_at_col(tn_col, i);
+                            let rk = rk_col
+                                .map(|c| crate::ops::get_routing_keywords_at(c.as_ref(), i))
+                                .unwrap_or_default();
+                            let inv = in_col
+                                .map(|c| crate::ops::get_intents_at(c.as_ref(), i))
+                                .unwrap_or_default();
+                            let rk_json = serde_json::json!({ "routing_keywords": rk.iter().map(|s| serde_json::Value::String(s.clone())).collect::<Vec<_>>(), "intents": inv.iter().map(|s| serde_json::Value::String(s.clone())).collect::<Vec<_>>() });
+                            (
+                                tn.clone(),
+                                sk.clone(),
+                                tn,
+                                str_at_col(fp_col, i),
+                                skill::resolve_routing_keywords(&rk_json),
+                                skill::resolve_intents(&rk_json),
+                                cat.clone(),
+                                serde_json::json!({}),
+                            )
+                        } else if let Ok(meta) =
+                            serde_json::from_str::<serde_json::Value>(&ma.value(i))
+                        {
                             if meta.get("type").and_then(|t| t.as_str()) != Some("command") {
                                 continue;
                             }
-
-                            // Extra safety check if scanner filter wasn't used or supported
                             if let Some(skill) = skill_filter {
                                 if meta.get("skill_name").and_then(|s| s.as_str()) != Some(skill) {
                                     continue;
                                 }
                             }
-
-                            tools.push(skill::ToolSearchResult {
-                                name: meta
-                                    .get("command")
+                            (
+                                meta.get("command")
                                     .and_then(|s| s.as_str())
                                     .unwrap_or("")
                                     .to_string(),
-                                description: ca.value(i).to_string(),
-                                input_schema: meta
-                                    .get("input_schema")
-                                    .map(skill::normalize_input_schema_value)
-                                    .unwrap_or_else(|| serde_json::json!({})),
-                                score: 1.0,
-                                vector_score: None,
-                                keyword_score: None,
-                                skill_name: meta
-                                    .get("skill_name")
+                                meta.get("skill_name")
                                     .and_then(|s| s.as_str())
                                     .unwrap_or("")
                                     .to_string(),
-                                tool_name: meta
-                                    .get("tool_name")
+                                meta.get("tool_name")
                                     .and_then(|s| s.as_str())
                                     .unwrap_or("")
                                     .to_string(),
-                                file_path: meta
-                                    .get("file_path")
+                                meta.get("file_path")
                                     .and_then(|s| s.as_str())
                                     .unwrap_or("")
                                     .to_string(),
-                                keywords: skill::resolve_routing_keywords(&meta),
-                                intents: skill::resolve_intents(&meta),
-                                category: meta
-                                    .get("category")
+                                skill::resolve_routing_keywords(&meta),
+                                skill::resolve_intents(&meta),
+                                meta.get("category")
                                     .and_then(|c| c.as_str())
                                     .or_else(|| meta.get("skill_name").and_then(|s| s.as_str()))
                                     .unwrap_or("")
                                     .to_string(),
-                            });
+                                meta.get("input_schema")
+                                    .map(skill::normalize_input_schema_value)
+                                    .unwrap_or_else(|| serde_json::json!({})),
+                            )
+                        } else {
+                            continue;
                         }
-                    }
+                    } else {
+                        let tn = str_at_col(tn_col, i);
+                        if let Some(skill) = skill_filter {
+                            if sk != skill {
+                                continue;
+                            }
+                        }
+                        let rk = rk_col
+                            .map(|c| crate::ops::get_routing_keywords_at(c.as_ref(), i))
+                            .unwrap_or_default();
+                        let inv = in_col
+                            .map(|c| crate::ops::get_intents_at(c.as_ref(), i))
+                            .unwrap_or_default();
+                        let rk_json = serde_json::json!({ "routing_keywords": rk.iter().map(|s| serde_json::Value::String(s.clone())).collect::<Vec<_>>(), "intents": inv.iter().map(|s| serde_json::Value::String(s.clone())).collect::<Vec<_>>() });
+                        (
+                            tn.clone(),
+                            sk.clone(),
+                            tn,
+                            str_at_col(fp_col, i),
+                            skill::resolve_routing_keywords(&rk_json),
+                            skill::resolve_intents(&rk_json),
+                            cat.clone(),
+                            serde_json::json!({}),
+                        )
+                    };
+                    tools.push(skill::ToolSearchResult {
+                        name,
+                        description: ca.value(i).to_string(),
+                        input_schema,
+                        score: 1.0,
+                        vector_score: None,
+                        keyword_score: None,
+                        skill_name,
+                        tool_name,
+                        file_path,
+                        routing_keywords,
+                        intents,
+                        category,
+                    });
                 }
             }
         }
         Ok(tools)
     }
+}
+
+/// Parse `skill_name = 'value'` from a where_filter string for Rust-side filtering
+/// (Lance filter on dictionary columns can return no rows).
+fn parse_skill_name_from_where_filter(where_filter: &str) -> Option<String> {
+    let prefix = "skill_name = '";
+    let f = where_filter.trim();
+    if !f.starts_with(prefix) {
+        return None;
+    }
+    let rest = f.get(prefix.len()..)?;
+    let mut end = 0usize;
+    let mut it = rest.char_indices();
+    while let Some((i, c)) = it.next() {
+        if c == '\'' {
+            if rest.get(i + 1..)?.starts_with('\'') {
+                it.next();
+                end = i + 2;
+                continue;
+            }
+            end = i;
+            break;
+        }
+        end = i + c.len_utf8();
+    }
+    Some(rest[..end].replace("''", "'"))
 }
 
 fn normalize_query_terms(query: &str) -> Vec<String> {
@@ -585,7 +1042,7 @@ fn tool_metadata_alignment_boost(tool: &skill::ToolSearchResult, query_parts: &[
             boost += 0.03;
         }
         if tool
-            .keywords
+            .routing_keywords
             .iter()
             .any(|k| k.to_lowercase().contains(term))
         {
@@ -619,7 +1076,10 @@ fn tool_file_discovery_match(tool: &skill::ToolSearchResult) -> bool {
     terms.iter().any(|t| {
         category.contains(t)
             || description.contains(t)
-            || tool.keywords.iter().any(|k| k.to_lowercase().contains(t))
+            || tool
+                .routing_keywords
+                .iter()
+                .any(|k| k.to_lowercase().contains(t))
             || tool.intents.iter().any(|i| i.to_lowercase().contains(t))
     })
 }

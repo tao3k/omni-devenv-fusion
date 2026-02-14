@@ -21,7 +21,7 @@ fn make_tool_result(name: &str, score: f32) -> ToolSearchResult {
         skill_name: name.split('.').next().unwrap_or("").to_string(),
         tool_name: name.to_string(),
         file_path: String::new(),
-        keywords: vec![],
+        routing_keywords: vec![],
         intents: vec![],
         category: "tool".to_string(),
     }

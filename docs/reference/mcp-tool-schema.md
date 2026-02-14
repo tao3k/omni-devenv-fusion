@@ -9,6 +9,9 @@ This document describes the MCP Tool schema system, including `inputSchema`, **t
 
 ## 0. tools/call result contract (response shape)
 
+**Shared schema (SSOT):** `packages/shared/schemas/omni.mcp.tool_result.v1.schema.json`  
+**API:** `omni.foundation.api.mcp_schema` — `get_schema_path()`, `get_validator()`, `validate(payload)`, `build_result(text, is_error)`, `is_canonical(value)`.
+
 All skill tool results are normalized so MCP clients (e.g. Cursor) never receive `result: null` or unrecognized keys, avoiding `invalid_union` schema errors.
 
 - **Success**: The JSON-RPC response has `result` set to an **object** with:
@@ -16,7 +19,12 @@ All skill tool results are normalized so MCP clients (e.g. Cursor) never receive
   - `isError`: `false`.
 - **Error**: The server sends a JSON-RPC **error** response (`error` object, no `result`). The stdio transport turns handler error responses into raised exceptions so the MCP layer always emits either a valid `result` object or an `error` object.
 
-Implementations use `_tool_result_content(text, is_error=False)` in the agent handler so every success path returns this shape.
+**Where normalization happens:**
+
+- **In `@skill_command`** (Foundation): Every decorated function’s return value is wrapped by `normalize_mcp_tool_result()` so the callable always yields a payload that conforms to the shared schema. Constant `MCP_TOOL_RESULT_SCHEMA_V1` refers to the schema file.
+- **In the agent handler**: If `skill.execute()` already returns this shape, the handler uses it as-is; otherwise it falls back to `_tool_result_content()` for backward compatibility.
+
+CI validates normalized results against the shared schema (`test_mcp_tool_result_validates_against_shared_schema`).
 
 ---
 

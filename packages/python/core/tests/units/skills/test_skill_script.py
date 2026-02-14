@@ -153,17 +153,18 @@ class TestSkillCommandDecorator:
         assert hasattr(test_cmd, "_skill_config")
 
     def test_skill_command_returns_direct_result(self) -> None:
-        """Verify @skill_command returns result directly (no wrapper)."""
+        """Verify @skill_command returns MCP canonical result (content[].text)."""
 
         @skill_command()
         def simple() -> str:
             """Simple function."""
             return "result"
 
-        # Call the decorated function - returns result directly
+        # Decorator normalizes return to MCP tools/call result shape
         result = simple()
-        assert result == "result"
-        # The function is not wrapped, returns raw result
+        assert isinstance(result, dict)
+        assert result.get("content") and result["content"][0].get("text") == "result"
+        assert result.get("isError") is False
         assert not isinstance(result, CommandResult)
 
 

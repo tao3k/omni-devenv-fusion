@@ -39,6 +39,10 @@ omni-tui = { path = "../../crates/omni-tui" }
 omni-knowledge = { path = "../../crates/omni-knowledge" }
 omni-sandbox = { path = "../../crates/omni-sandbox" }
 
+# Arrow IPC: analytics TableHealthReport → RecordBatch → bytes for Python pyarrow
+arrow = { workspace = true }
+arrow-ipc = { workspace = true }
+
 # Workspace dependencies (inherited)
 serde = { workspace = true }
 serde_json = { workspace = true }

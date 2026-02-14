@@ -30,8 +30,9 @@ async def test_code_search_integration(kernel):
         {"query": "class NonExistentClassXYZ123"},
     )
 
-    # Should return XML-formatted response
-    assert "<search_interaction" in result or "SEARCH:" in result
+    # MCP result shape: content[].text; extract text for assertion
+    text = result if isinstance(result, str) else (result.get("content") or [{}])[0].get("text", "")
+    assert "<search_interaction" in text or "<search_results" in text or "SEARCH:" in text
 
     # 3. Verify Session ID parameter works
     result_with_session = await kernel.execute_tool(
@@ -52,8 +53,13 @@ async def test_modular_relative_imports_integration(kernel):
             "code.code_search",
             {"query": "code search function"},
         )
-        # Verify we got a response (no import error)
+        # Verify we got a response (no import error); MCP shape: content[].text
         assert result is not None
-        assert "<search_interaction" in result or "SEARCH:" in result
+        text = (
+            result
+            if isinstance(result, str)
+            else (result.get("content") or [{}])[0].get("text", "")
+        )
+        assert "<search_interaction" in text or "<search_results" in text or "SEARCH:" in text
     except Exception as e:
         pytest.fail(f"Tool execution failed due to modular import error: {e}")

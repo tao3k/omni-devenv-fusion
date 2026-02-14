@@ -266,9 +266,10 @@ fn matched_relevant_from_dyn(hits: &[ToolSearchResult], relevant: &[(String, u8)
 async fn build_quality_store() -> (tempfile::TempDir, VectorStore) {
     let temp_dir = tempfile::tempdir().unwrap();
     let db_path = temp_dir.path().join("keyword_quality_store");
-    let store = VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(8), true)
-        .await
-        .unwrap();
+    let store =
+        VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(8), true, None, None)
+            .await
+            .unwrap();
 
     let docs = vec![
         (
@@ -620,6 +621,8 @@ async fn snapshot_keyword_backend_quality_scenarios_v3_skill_based() {
         Some(8),
         true,
         KeywordSearchBackend::Tantivy,
+        None,
+        None,
     )
     .await
     .unwrap();
@@ -881,6 +884,8 @@ async fn snapshot_keyword_backend_quality_scenarios_v4_large() {
         Some(8),
         true,
         KeywordSearchBackend::Tantivy,
+        None,
+        None,
     )
     .await
     .unwrap();

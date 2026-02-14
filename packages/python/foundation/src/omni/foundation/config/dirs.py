@@ -26,6 +26,7 @@ from omni.foundation.config.prj import (
     get_skills_dir,
 )
 from omni.foundation.config.database import (
+    get_knowledge_graph_lance_dir,
     get_vector_db_path,
     get_memory_db_path,
 )
@@ -45,6 +46,7 @@ __all__ = [
     "get_cache_dir",
     "get_config_dir",
     "get_data_dir",
+    "get_knowledge_graph_lance_dir",
     "get_prj_dir",
     "get_runtime_dir",
     "get_skills_dir",

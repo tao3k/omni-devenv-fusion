@@ -15,7 +15,9 @@ Modularized structure:
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
+from typing import Any
 
 # Import from modularized modules for backward compatibility
 from .di import (
@@ -46,6 +48,12 @@ from .types import CommandResult
 
 # Re-export for convenience
 __all__ = [
+    # MCP result contract (for agent/CLI)
+    "normalize_mcp_tool_result",
+    "is_mcp_canonical_result",
+    "MCP_TOOL_RESULT_SCHEMA_V1",
+    "MCP_RESULT_CONTENT_KEY",
+    "MCP_RESULT_IS_ERROR_KEY",
     # DI
     "_DIContainer",
     "_DI_SETTINGS",
@@ -75,6 +83,59 @@ __all__ = [
     "get_tool_annotations",
     "CommandResult",
 ]
+
+
+# =============================================================================
+# MCP tools/call result – delegate to shared schema API
+# =============================================================================
+
+from .mcp_schema import (
+    CONTENT_KEY as MCP_RESULT_CONTENT_KEY,
+    IS_ERROR_KEY as MCP_RESULT_IS_ERROR_KEY,
+    SCHEMA_NAME as MCP_TOOL_RESULT_SCHEMA_V1,
+    build_result as _mcp_build_result,
+    is_canonical as is_mcp_canonical_result,
+)
+
+
+def _text_from_raw(value: Any) -> str:
+    """Serialize a raw return value to display text."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=False)
+
+
+def normalize_mcp_tool_result(return_value: Any) -> dict[str, Any]:
+    """Normalize any skill return value to MCP tools/call result shape (shared schema API)."""
+    if hasattr(return_value, "success") and hasattr(return_value, "data"):
+        if return_value.success and return_value.data is not None:
+            return normalize_mcp_tool_result(return_value.data)
+        return _mcp_build_result(
+            getattr(return_value, "error", None) or str(return_value),
+            is_error=True,
+        )
+    if is_mcp_canonical_result(return_value):
+        return return_value
+    return _mcp_build_result(_text_from_raw(return_value), is_error=False)
+
+
+def _copy_skill_attrs(
+    wrapper: Callable, inner: Callable, original_annotations: dict[str, Any] | None = None
+) -> None:
+    """Copy skill_command metadata and annotations to wrapper."""
+    for attr in ("_is_skill_command", "_skill_config", "_injected_params"):
+        if hasattr(inner, attr):
+            setattr(wrapper, attr, getattr(inner, attr))
+    ann = (
+        original_annotations
+        if original_annotations is not None
+        else getattr(inner, "__annotations__", None)
+    )
+    if ann:
+        wrapper.__annotations__ = dict(ann)
+        wrapper.__annotations__["return"] = dict[str, Any]
 
 
 # =============================================================================
@@ -173,6 +234,9 @@ def skill_command(
     annotations = {k: v for k, v in annotations.items() if v is not None}
 
     def decorator(func: Callable) -> Callable:
+        original_annotations = getattr(func, "__annotations__", None)
+        if original_annotations is not None:
+            original_annotations = dict(original_annotations)
         # Apply auto-wiring decorator if enabled (inject_resources)
         # This wraps the function to inject Settings/ConfigPaths based on type hints
         if autowire:
@@ -303,7 +367,25 @@ def skill_command(
         # Note: Validation registry registration is handled by ToolsLoader._register_for_validation()
         # when the skill is loaded. This avoids circular dependency issues.
 
-        return func
+        # One wrapper: run inner then normalize; sync/async chosen once
+        import asyncio
+
+        _inner = func
+        _is_async = asyncio.iscoroutinefunction(_inner)
+
+        async def _async_run(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            out = await _inner(*args, **kwargs)
+            return normalize_mcp_tool_result(out)
+
+        def _sync_run(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            out = _inner(*args, **kwargs)
+            return normalize_mcp_tool_result(out)
+
+        wrapper = _async_run if _is_async else _sync_run
+        wrapper.__name__ = _inner.__name__
+        wrapper.__doc__ = _inner.__doc__
+        _copy_skill_attrs(wrapper, _inner, original_annotations)
+        return wrapper
 
     # Support @skill_command without parentheses
     if callable(name):
@@ -340,3 +422,132 @@ def get_tool_annotations(func: Callable) -> dict | None:
     if config:
         return config.get("annotations")
     return None
+
+
+# =============================================================================
+# Skill Resource Decorator (MCP Resource Registration)
+# =============================================================================
+
+
+def skill_resource(
+    name: str | None = None,
+    description: str | None = None,
+    resource_uri: str | None = None,
+    mime_type: str = "application/json",
+):
+    """Decorator to mark a function as an MCP Resource provider.
+
+    Unlike ``@skill_command`` (Tool — executes actions), ``@skill_resource``
+    declares a **read-only data endpoint** exposed via ``resources/read``.
+
+    The function is called when the MCP client reads the resource URI.
+
+    Example::
+
+        @skill_resource(
+            name="status",
+            description="Git repository status",
+            resource_uri="omni://skill/git/status",
+        )
+        async def git_status() -> dict:
+            return {"branch": "main", "clean": True}
+
+    Args:
+        name: Resource name (defaults to function name).
+        description: Human-readable description.
+        resource_uri: Full MCP resource URI (e.g. ``omni://skill/git/status``).
+            If omitted, the server will expose as ``omni://skill/{skill_name}/{name}``.
+        mime_type: MIME type for the resource content.
+    """
+
+    def decorator(func: Callable) -> Callable:
+        resource_name = name or func.__name__
+        resource_desc = description or (func.__doc__ or "").strip().split("\n")[0]
+
+        func._is_skill_resource = True  # type: ignore[attr-defined]
+        func._resource_config = {  # type: ignore[attr-defined]
+            "name": resource_name,
+            "description": resource_desc,
+            "resource_uri": resource_uri,
+            "mime_type": mime_type,
+        }
+        return func
+
+    # Support bare @skill_resource without parentheses
+    if callable(name):
+        func = name
+        name = None
+        return decorator(func)
+
+    return decorator
+
+
+def is_skill_resource(func: Callable) -> bool:
+    """Check if a function is marked with @skill_resource."""
+    return getattr(func, "_is_skill_resource", False)
+
+
+def get_resource_config(func: Callable) -> dict | None:
+    """Get the resource config attached to a function (for @skill_resource)."""
+    return getattr(func, "_resource_config", None)
+
+
+# =============================================================================
+# Prompt Decorator (MCP Prompt Template Registration)
+# =============================================================================
+
+
+def prompt(
+    name: str | None = None,
+    description: str | None = None,
+):
+    """Decorator to mark a function as an MCP Prompt template.
+
+    The function receives prompt arguments (e.g. from MCP get_prompt) and
+    returns the prompt content (string or list of messages).
+
+    Example::
+
+        @prompt(
+            name="analyze_code",
+            description="Code analysis template",
+        )
+        def analyze_code(file_path: str) -> str:
+            return f'''
+        请分析 {file_path}:
+        1. 代码结构
+        2. 潜在问题
+        '''
+
+    Args:
+        name: Prompt name (defaults to function name).
+        description: Human-readable description for list_prompts.
+    """
+
+    def decorator(func: Callable) -> Callable:
+        prompt_name = name or func.__name__
+        prompt_desc = description or (func.__doc__ or "").strip().split("\n")[0]
+
+        func._is_prompt = True  # type: ignore[attr-defined]
+        func._prompt_config = {  # type: ignore[attr-defined]
+            "name": prompt_name,
+            "description": prompt_desc,
+        }
+        return func
+
+    if callable(name):
+        func = name
+        name = None
+        return decorator(func)
+
+    return decorator
+
+
+def is_prompt(func: Callable) -> bool:
+    """Check if a function is marked with @prompt."""
+    return getattr(func, "_is_prompt", False)
+
+
+def get_prompt_config(func: Callable) -> dict | None:
+    """Get the prompt config attached to a function (for @prompt)."""
+    return getattr(func, "_prompt_config", None)

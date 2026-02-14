@@ -1,0 +1,9 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_partitioning.rs
+assertion_line: 86
+expression: view
+---
+{
+  "suggested_column": "skill_name",
+  "threshold": 10000
+}

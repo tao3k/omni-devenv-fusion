@@ -8,6 +8,10 @@ Provides database path management for:
 - Memory database (Hippocampus)
 
 Reads configuration from settings.yaml.
+
+Sync vs reindex: Both use get_database_path(name) for each DB (skills, router,
+knowledge, memory) so that "omni sync" and "omni reindex [component]" write
+to the same paths and stay aligned.
 """
 
 from pathlib import Path
@@ -19,8 +23,8 @@ def get_vector_db_path() -> Path:
     This is the unified directory for all LanceDB databases in the project.
     Individual stores append their own filenames:
     - Skills: get_vector_db_path() / "skills.lance"
-    - Router: get_vector_db_path() / "router.lance"
-    - Librarian: get_vector_db_path() / "knowledge.lance"
+    - Router: get_vector_db_path() / "router.lance" (scores only, no redundancy with skills)
+    - Knowledge: get_vector_db_path() / "knowledge.lance"
 
     Returns:
         Path to .cache/omni-vector/
@@ -37,10 +41,11 @@ def get_database_paths() -> dict[str, str]:
     All paths are relative to the vector DB base directory.
 
     Databases:
-        skills   - Main skill tools database
-        router   - Router/hybrid search index
+        skills   - Full skill/tool data (discovery + hybrid search). Single source of truth.
+        router   - Routing-only data: search-algorithm scores (e.g. vector_score, keyword_score, rrf).
+                  No duplication of skills content; used for score cache / routing decisions.
         knowledge - Knowledge base
-        memory - Long-term memory/experience storage (Hippocampus)
+        memory   - Long-term memory/experience storage (Hippocampus)
     """
     base = get_vector_db_path()
     return {
@@ -128,11 +133,32 @@ def get_memory_db_path() -> Path:
     return get_vector_db_path() / "memory.hippocampus.lance"
 
 
+def get_knowledge_graph_lance_dir() -> Path:
+    """Get the Lance directory for KnowledgeGraph entity/relation tables.
+
+    The graph is stored as two Lance tables (``kg_entities``, ``kg_relations``)
+    inside the shared ``knowledge.lance`` database. This enables:
+    - Columnar filtering on entity_type, confidence
+    - Vector ANN search over entity embeddings
+    - Unified Arrow ecosystem alongside knowledge chunks
+
+    Returns:
+        Path to knowledge.lance directory (same as knowledge DB).
+        Typically: /project/.cache/omni-vector/knowledge.lance
+
+    Usage:
+        >>> from omni.foundation.config.database import get_knowledge_graph_lance_dir
+        >>> lance_dir = get_knowledge_graph_lance_dir()
+    """
+    return get_vector_db_path() / "knowledge.lance"
+
+
 __all__ = [
     "get_vector_db_path",
     "get_database_paths",
     "get_database_path",
     "get_checkpoint_db_path",
     "get_checkpoint_table_name",
+    "get_knowledge_graph_lance_dir",
     "get_memory_db_path",
 ]

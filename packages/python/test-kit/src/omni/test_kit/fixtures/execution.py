@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json as _json
 from dataclasses import dataclass
 from typing import Any
 from unittest.mock import MagicMock
@@ -21,6 +22,31 @@ class SkillResult:
     output: Any
     error: str | None = None
     artifacts: dict | None = None
+
+    @property
+    def data(self) -> Any:
+        """Extract the actual payload from MCP tool result envelope.
+
+        Skill commands return MCP-wrapped output:
+            {"content": [{"type": "text", "text": "<json>"}], "isError": false}
+
+        This property unwraps to the parsed inner value. Falls back to
+        ``output`` if the envelope is not present.
+        """
+        if isinstance(self.output, dict) and "content" in self.output:
+            content = self.output.get("content", [])
+            if content and isinstance(content, list):
+                text = content[0].get("text", "")
+                try:
+                    return _json.loads(text)
+                except (ValueError, TypeError):
+                    return text
+        if isinstance(self.output, str):
+            try:
+                return _json.loads(self.output)
+            except (ValueError, TypeError):
+                return self.output
+        return self.output
 
 
 class SkillTester:

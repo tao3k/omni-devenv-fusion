@@ -1,0 +1,11 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_vector_index.rs
+assertion_line: 123
+expression: view
+---
+{
+  "hnsw": {
+    "column": "vector",
+    "index_type": "ivf_hnsw"
+  }
+}

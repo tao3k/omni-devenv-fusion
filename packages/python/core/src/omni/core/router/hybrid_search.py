@@ -22,7 +22,7 @@ Architecture:
     │  ┌─────────────────┬─────────────────┐  │
     │  │  LanceDB        │   Tantivy       │  │
     │  │  (Vector)       │   (Keyword)     │  │
-    │  │  weight=1.0     │   weight=1.5    │  │
+    │  │  weight=dynamic │   weight=dynamic│  │
     │  └─────────────────┴─────────────────┘  │
     │                    │                    │
     │         Weighted RRF Fusion +          │
@@ -61,6 +61,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Awaitable
 
 from omni.foundation.config.logging import get_logger
+
+# Minimum attribute overlap strength (query terms in routing_keywords/intents/category) to promote medium -> high
+_ATTR_MIN_OVERLAP_STRENGTH = 2
+# Intent-overlap boost: per-hit weight when query intent terms match tool routing_keywords/intents (data-driven)
+_INTENT_OVERLAP_BOOST_PER_HIT = 0.15
+# Minimum gap between #1 and #2 score for clear-winner high confidence
+_CLEAR_WINNER_GAP = 0.15
+
 from omni.foundation.services.vector_schema import (
     build_tool_router_result,
     parse_tool_search_payload,
@@ -78,6 +86,405 @@ _UUID_RE = re.compile(
     r"[0-9a-fA-F]{12}$"
 )
 _TOOL_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,160}$")
+
+# ---------------------------------------------------------------------------
+# Parameter-type tokens that the normalizer inserts as URL/path placeholders.
+# These are entity indicators (what the user provides), NOT intent indicators
+# (what the user wants to do). Stripped from BM25 keyword text so TF-IDF
+# ranking is driven by intent verbs, not parameter types.
+# ---------------------------------------------------------------------------
+_PARAM_TOKEN_RE = re.compile(
+    r"\b(github\s+url|url|link|https?|http)\b",
+    re.IGNORECASE,
+)
+
+# Lightweight stop words that carry no intent signal. Removing them sharpens
+# both BM25 and embedding focus on intent verbs. This list is intentionally
+# small (standard English function words); no skill-specific terms.
+_STOP_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "am",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "shall",
+        "should",
+        "can",
+        "could",
+        "may",
+        "might",
+        "must",
+        "i",
+        "me",
+        "my",
+        "we",
+        "our",
+        "you",
+        "your",
+        "he",
+        "she",
+        "it",
+        "they",
+        "them",
+        "his",
+        "her",
+        "its",
+        "their",
+        "to",
+        "of",
+        "in",
+        "on",
+        "at",
+        "for",
+        "with",
+        "from",
+        "by",
+        "about",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "and",
+        "or",
+        "but",
+        "not",
+        "no",
+        "nor",
+        "that",
+        "this",
+        "these",
+        "those",
+        "help",
+        "please",
+        "want",
+        "need",
+        "like",
+    }
+)
+
+
+def _extract_keyword_text(query: str) -> str:
+    """Produce intent-focused text for search (both BM25 and embedding).
+
+    Two-stage cleanup:
+    1. **Parameter stripping**: Remove URL/link tokens inserted by the normalizer
+       (``github url``, ``url``, ``link``). These are parameter-type indicators that
+       bias BM25 toward parameter-handling skills (e.g. crawl4ai) instead of
+       intent-matching skills (e.g. researcher).
+    2. **Stop-word removal**: Remove common function words ("help", "me", "to", etc.)
+       that dilute intent signal in both BM25 and embedding. Only a small, universal
+       set is removed — no skill-specific logic.
+
+    This function is data-driven and skill-agnostic. It scales to any number of
+    skills without modification.
+
+    Examples:
+        "help me to research github url" → "research"
+        "help me analyze github url" → "analyze"
+        "crawl url" → "crawl"
+        "git commit with message" → "git commit message"
+
+    Args:
+        query: Normalized query (after URL replacement by normalize_for_routing).
+
+    Returns:
+        Intent-focused text for search.
+    """
+    # Stage 1: strip parameter-type tokens
+    text = _PARAM_TOKEN_RE.sub("", query)
+    # Stage 1b: normalize punctuation separators (/, -, etc.) to spaces.
+    # Without this, "analyze/research" is a single Tantivy token → 0 BM25 hits.
+    # With spaces, Tantivy correctly tokenizes → "analyze" + "research" → strong hits.
+    text = re.sub(r"[/\-_]+", " ", text)
+    # Stage 2: strip stop words (token-level, preserves order)
+    tokens = text.split()
+    intent_tokens = [t for t in tokens if t.lower().strip(".,!?") not in _STOP_WORDS]
+    text = " ".join(intent_tokens)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text if text else query  # fallback to full query if everything was stripped
+
+
+def _detect_param_types(query: str) -> list[str]:
+    """Detect parameter types present in the (normalized) query.
+
+    Returns a list of detected types (e.g. ["url"]) which can be used
+    for schema-aware boosting: tools whose input_schema has a matching
+    parameter get a small bonus.
+
+    Data-driven: works for any skill; no skill-specific logic.
+    """
+    types: list[str] = []
+    q_lower = query.lower()
+    if "url" in q_lower or "link" in q_lower or "http" in q_lower:
+        types.append("url")
+    if re.search(r"(/\w[\w/.-]+|\w:\\)", query):
+        types.append("path")
+    return types
+
+
+# Boost applied per matching parameter type in a tool's input_schema
+_PARAM_SCHEMA_BOOST = 0.10
+
+
+def _match_param_type_to_schema(param_type: str, schema: Any) -> bool:
+    """Check if a tool's input_schema has a parameter matching the detected type."""
+    if not schema or not isinstance(schema, dict):
+        return False
+    props = schema.get("properties", {})
+    if not isinstance(props, dict):
+        return False
+    for name in props:
+        name_lower = name.lower()
+        if param_type == "url" and any(x in name_lower for x in ("url", "uri", "link")):
+            return True
+        if param_type == "path" and any(x in name_lower for x in ("path", "file", "directory")):
+            return True
+    return False
+
+
+def _apply_param_schema_boost(
+    results: list[dict[str, Any]], param_types: list[str]
+) -> list[dict[str, Any]]:
+    """Boost tools whose input_schema accepts detected parameter types.
+
+    This is purely data-driven: uses indexed input_schema (no hardcoded skill names).
+    Scales to any number of skills and parameter types.
+    """
+    if not results or not param_types:
+        return results
+    import json as _json
+
+    for r in results:
+        raw_schema = r.get("input_schema") or {}
+        if isinstance(raw_schema, str):
+            try:
+                raw_schema = _json.loads(raw_schema) if raw_schema.strip() else {}
+            except Exception:
+                raw_schema = {}
+        for ptype in param_types:
+            if _match_param_type_to_schema(ptype, raw_schema):
+                s = float(r.get("score") or 0)
+                f = float(r.get("final_score") or s)
+                r["score"] = s + _PARAM_SCHEMA_BOOST
+                r["final_score"] = f + _PARAM_SCHEMA_BOOST
+                break  # one boost per result
+    results.sort(key=lambda x: float(x.get("score") or 0), reverse=True)
+    return results
+
+
+def _query_terms_for_attribute_match(query: str) -> set[str]:
+    """Normalize query for attribute overlap: strip URLs, tokenize, keep words >= 2 chars."""
+    cleaned = re.sub(r"https?://\S+", " ", query)
+    tokens = re.findall(r"[A-Za-z0-9]+", cleaned.lower())
+    return {t for t in tokens if len(t) >= 2}
+
+
+def _attribute_overlap_strength(
+    query_terms: set[str],
+    routing_keywords: list[str],
+    intents: list[str],
+    category: str,
+) -> int:
+    """Count how many query terms appear in routing_keywords, intents, or category. Used for confidence."""
+    keywords_lower = [k.lower() for k in routing_keywords]
+    intents_lower = [i.lower() for i in intents]
+    cat_lower = category.lower() if category else ""
+    hits = 0
+    for term in query_terms:
+        if any(term in kw for kw in keywords_lower) or term in " ".join(keywords_lower):
+            hits += 2
+        elif any(term in it for it in intents_lower) or term in " ".join(intents_lower):
+            hits += 1
+        elif cat_lower and term in cat_lower:
+            hits += 1
+    return hits
+
+
+def _apply_attribute_confidence(
+    results: list[dict[str, Any]], effective_query: str
+) -> list[dict[str, Any]]:
+    """Promote medium -> high when query terms strongly overlap tool routing_keywords/intents/category."""
+    if not results or not effective_query:
+        return results
+    terms = _query_terms_for_attribute_match(effective_query)
+    if not terms:
+        return results
+    for r in results:
+        if r.get("confidence") != "medium":
+            continue
+        kw = r.get("routing_keywords") or []
+        meta = r.get("payload") or {}
+        meta = meta.get("metadata") or meta
+        intents_list = meta.get("intents") or r.get("intents") or []
+        cat = meta.get("category") or r.get("category") or ""
+        strength = _attribute_overlap_strength(terms, kw, intents_list, cat)
+        if strength >= _ATTR_MIN_OVERLAP_STRENGTH:
+            r["confidence"] = "high"
+            logger.debug(
+                "Attribute confidence: promoted to high",
+                id=r.get("id"),
+                overlap_strength=strength,
+            )
+    return results
+
+
+def _intent_terms_from_query(query: str) -> set[str]:
+    """Extract salient intent terms from query for attribute-based boost (data-driven; vocab from config)."""
+    if not query or not query.strip():
+        return set()
+    from omni.foundation.config.settings import get_setting
+
+    q = query.strip().lower()
+    tokens = set(re.findall(r"[a-z0-9]+", q))
+    custom = get_setting("router.search.intent_vocab", None)
+    if isinstance(custom, (list, tuple)) and len(custom) > 0:
+        intent_vocab = {str(t).strip().lower() for t in custom}
+    else:
+        intent_vocab = {
+            "research",
+            "analyze",
+            "analyzing",
+            "crawl",
+            "commit",
+            "search",
+            "find",
+            "recall",
+            "save",
+        }
+    return tokens & intent_vocab
+
+
+def _apply_intent_overlap_boost(
+    results: list[dict[str, Any]], effective_query: str
+) -> list[dict[str, Any]]:
+    """Boost results whose routing_keywords/intents overlap query intent terms (data-driven, scales to any skills)."""
+    if not results or not effective_query:
+        return results
+    intent_terms = _intent_terms_from_query(effective_query)
+    if not intent_terms:
+        return results
+    for r in results:
+        kw = r.get("routing_keywords") or []
+        meta = r.get("payload") or {}
+        meta = meta.get("metadata") if isinstance(meta, dict) else {}
+        if not isinstance(meta, dict):
+            meta = {}
+        intents_list = meta.get("intents") or r.get("intents") or []
+        cat = meta.get("category") or r.get("category") or ""
+        strength = _attribute_overlap_strength(intent_terms, kw, intents_list, cat)
+        if strength > 0:
+            boost = min(0.5, strength * _INTENT_OVERLAP_BOOST_PER_HIT)
+            s = float(r.get("score") or 0)
+            f = float(r.get("final_score") or s)
+            r["score"] = s + boost
+            r["final_score"] = f + boost
+    results.sort(key=lambda x: float(x.get("score") or 0), reverse=True)
+    return results
+
+
+def _recalibrate_confidence(
+    results: list[dict[str, Any]],
+    profile: dict[str, float] | None = None,
+) -> list[dict[str, Any]]:
+    """Re-calibrate confidence labels after Python-side score boosts.
+
+    Uses a **hybrid absolute + relative** approach:
+    - Absolute thresholds from the profile prevent labeling noise as "high".
+    - Relative thresholds from the top score prevent inflated tiers when all
+      scores are high (e.g. strong keyword matches inflate everything).
+
+    Algorithm:
+    1. Compute absolute tier from profile thresholds (same as Rust-side).
+    2. Compute relative tier from top_score ratios:
+       - high: score >= top * HIGH_RATIO (within 65% of best)
+       - medium: score >= top * MEDIUM_RATIO (within 40% of best)
+       - low: everything else
+    3. Final tier = min(absolute_tier, relative_tier).
+       This means a result must pass BOTH absolute and relative checks.
+    4. Clear-winner promotion: if #1 is far ahead of #2, promote to high.
+    """
+    if not results:
+        return results
+
+    # Load profile thresholds (same source as Rust-side calibration)
+    if profile is None:
+        from omni.foundation.config.settings import get_setting
+
+        p = get_setting("router.search.profiles.balanced", None)
+        profile = p if isinstance(p, dict) else {}
+
+    high_threshold = float(profile.get("high_threshold", 0.75))
+    medium_threshold = float(profile.get("medium_threshold", 0.50))
+    high_base = float(profile.get("high_base", 0.90))
+    high_scale = float(profile.get("high_scale", 0.05))
+    high_cap = float(profile.get("high_cap", 0.99))
+    medium_base = float(profile.get("medium_base", 0.60))
+    medium_scale = float(profile.get("medium_scale", 0.30))
+    medium_cap = float(profile.get("medium_cap", 0.89))
+    low_floor = float(profile.get("low_floor", 0.10))
+
+    # Relative thresholds based on top score
+    _HIGH_RATIO = 0.65  # within 35% of top → eligible for high
+    _MEDIUM_RATIO = 0.40  # within 60% of top → eligible for medium
+
+    top_score = float(results[0].get("score") or 0) if results else 0.0
+    rel_high = top_score * _HIGH_RATIO
+    rel_medium = top_score * _MEDIUM_RATIO
+
+    _TIER_RANK = {"high": 2, "medium": 1, "low": 0}
+
+    for idx, r in enumerate(results):
+        score = float(r.get("score") or 0)
+
+        # Absolute tier from profile thresholds
+        if score >= high_threshold:
+            abs_tier = "high"
+        elif score >= medium_threshold:
+            abs_tier = "medium"
+        else:
+            abs_tier = "low"
+
+        # Relative tier from top-score ratios
+        if score >= rel_high:
+            rel_tier = "high"
+        elif score >= rel_medium:
+            rel_tier = "medium"
+        else:
+            rel_tier = "low"
+
+        # Final tier = min(absolute, relative) → must pass both
+        conf = abs_tier if _TIER_RANK[abs_tier] <= _TIER_RANK[rel_tier] else rel_tier
+
+        # Clear winner: #1 far ahead of #2 → promote to high
+        if idx == 0 and conf != "high" and len(results) > 1:
+            second_score = float(results[1].get("score") or 0)
+            if score >= medium_threshold and (score - second_score) >= _CLEAR_WINNER_GAP:
+                conf = "high"
+
+        # Compute final_score per tier
+        if conf == "high":
+            final = min(high_base + score * high_scale, high_cap)
+        elif conf == "medium":
+            final = min(medium_base + score * medium_scale, medium_cap)
+        else:
+            final = max(score, low_floor)
+
+        r["confidence"] = conf
+        r["final_score"] = final
+
+    return results
 
 
 def _is_routable_tool_name(value: str) -> bool:
@@ -171,18 +578,48 @@ class HybridSearch:
 
         The vector store is cached globally to avoid repeated initialization.
         Embedding service is loaded lazily on first use.
+
+        Uses the skills DB path by default so that the same store (and Tantivy
+        keyword index at skills.lance/keyword_index) is used as reindex. Otherwise
+        route test would use base_path/keyword_index which sync never updates.
         """
         from omni.foundation.bridge.rust_vector import get_vector_store
+        from omni.foundation.config.database import get_database_path
+        from omni.foundation.config.dirs import get_vector_db_path
 
-        # Use get_vector_store() without path to use the default base path.
-        # This ensures consistency with DiscoveryService which also uses the default path.
-        # The Rust store will then correctly find skills.lance for the 'skills' table.
         resolved_storage_path = storage_path
-        if storage_path and storage_path != ":memory:" and storage_path.endswith(".lance"):
+        if storage_path is None:
+            # BUG FIX: get_database_path("skills") returns skills.lance subdirectory,
+            # but LanceDB has a bug where agentic_search returns empty in subdirectories.
+            # Use root vector db path instead (same as SkillDiscoveryService).
+            resolved_storage_path = str(get_vector_db_path())
+        elif storage_path != ":memory:" and storage_path.endswith(".lance"):
             resolved_storage_path = str(Path(storage_path).parent)
         self._store = get_vector_store(resolved_storage_path)
+        self._storage_path = resolved_storage_path
         # Custom embedding function (set by CLI for MCP server access)
         self._embed_func: Callable[[list[str]], Awaitable[list[list[float]]]] | None = None
+        self._relationship_graph: dict[str, list[tuple[str, float]]] | None = None
+
+    def _get_relationship_graph(self) -> dict[str, list[tuple[str, float]]] | None:
+        """Lazy-load skill relationship graph for associative rerank."""
+        if self._relationship_graph is not None:
+            return self._relationship_graph
+        try:
+            from omni.foundation.config.dirs import get_vector_db_path
+
+            from omni.core.router.skill_relationships import (
+                get_relationship_graph_path,
+                load_relationship_graph,
+            )
+
+            base = self._storage_path or get_vector_db_path()
+            path = get_relationship_graph_path(str(base) if base else None)
+            if path:
+                self._relationship_graph = load_relationship_graph(path)
+        except Exception:
+            self._relationship_graph = {}
+        return self._relationship_graph
 
     async def search(
         self,
@@ -190,7 +627,8 @@ class HybridSearch:
         limit: int = 5,
         min_score: float = 0.0,
         confidence_profile: dict[str, float] | None = None,
-        rerank: bool | None = None,
+        intent_override: str | None = None,
+        skip_translation: bool = False,
     ) -> list[dict[str, Any]]:
         """Perform hybrid search using Rust omni-vector engine.
 
@@ -198,7 +636,8 @@ class HybridSearch:
         1. Generate query embedding (semantic search)
         2. Normalize query for keyword search pipeline
         3. Call Rust search_tools for vector + keyword fusion
-        4. Calibrate confidence levels for downstream consumers
+        4. Apply metadata-aware rerank (always on in hybrid)
+        5. Calibrate confidence levels for downstream consumers
 
         Args:
             query: Natural language search query (e.g., "find files matching 'pub updated'").
@@ -206,8 +645,10 @@ class HybridSearch:
             limit: Maximum number of results to return. Default is 5.
             min_score: Minimum combined score threshold (0.0-1.0). Results below this
                 threshold are filtered out. Use 0.4 for "medium+" confidence only.
-            rerank: Optional override for Rust metadata-aware rerank stage.
-                None uses configured defaults.
+            intent_override: Optional intent hint (e.g. from an LLM). When set, used
+                instead of rule-based classification. One of "exact", "semantic", "hybrid", "category".
+            skip_translation: If True, do not translate non-English query; use as-is with embedding.
+                Speeds up routing when embedding is multilingual (e.g. route test).
 
         Returns:
             List of result dictionaries, sorted by score descending. Each dict contains:
@@ -241,36 +682,153 @@ class HybridSearch:
         See Also:
             - Rust omni-vector hybrid search for underlying algorithm
         """
-        # Get query embedding (required for vector search)
+        # Optional: translate non-English query to English (SKILL.md is English-only)
+        from omni.core.router.translate import translate_query_to_english
+
+        from omni.core.router.query_normalizer import normalize_for_routing
+
+        effective_query = await translate_query_to_english(query, enabled=not skip_translation)
+        if effective_query != query:
+            logger.info(
+                "Effective query (after translation) for routing",
+                original_preview=query[:50],
+                effective_preview=effective_query[:80],
+            )
+        effective_query = normalize_for_routing(effective_query)
+
+        # --- Intent-focused text for both BM25 and embedding ---
+        # Parameter tokens (e.g. "url", "github url") inserted by the normalizer
+        # are entity indicators, not intent. Stripping them from BOTH keyword
+        # search and embedding focuses ranking on what the user wants to DO
+        # (research, analyze, crawl) rather than what they're providing as input.
+        # This is data-driven: detects parameter patterns generically, no skill-specific rules.
+        intent_text = _extract_keyword_text(effective_query)
+        param_types = _detect_param_types(effective_query)
+        if intent_text != effective_query:
+            logger.debug(
+                "Dual-signal decomposition: intent_text=%r, param_types=%r (from %r)",
+                intent_text,
+                param_types,
+                effective_query,
+            )
+
+        # Get query embedding from intent-focused text (required for vector search)
         # Use custom embed function if set (e.g., for MCP server access)
         if self._embed_func is not None:
             # Custom embedding function (async)
-            vectors = await self._embed_func([query])
+            vectors = await self._embed_func([intent_text])
             if vectors and len(vectors) > 0:
                 query_vector = vectors[0]
             else:
                 # Fallback to local embedding
                 embed_service = self._get_embed_service()
-                query_vector = embed_service.embed(query)[0]
+                query_vector = embed_service.embed(intent_text)[0]
         else:
             # Default: use local embedding service
             embed_service = self._get_embed_service()
-            query_vector = embed_service.embed(query)[0]
+            query_vector = embed_service.embed(intent_text)[0]
 
-        # Call Rust search_tools (does vector + keyword rescue + fusion)
-        # Use cleaned query for keyword search to avoid Tantivy parse errors
-        results = await self._store.search_tools(
-            table_name="router",
-            query_vector=query_vector,
-            query_text=query,
-            limit=limit,
-            threshold=min_score,
-            confidence_profile=confidence_profile,
-            rerank=rerank,
+        # Use agentic search when available (intent + category_filter from rule-based or optional LLM).
+        from omni.foundation.config.settings import get_setting
+
+        from omni.core.router.query_intent import (
+            classify_tool_search_intent_full,
+            classify_tool_search_intent_with_llm,
         )
+
+        if intent_override is not None:
+            resolved_intent, category_filter = intent_override, None
+        elif get_setting("router.intent.use_llm", False):
+            intent_result = await classify_tool_search_intent_with_llm(effective_query)
+            if intent_result is not None:
+                resolved_intent, category_filter = (
+                    intent_result.intent,
+                    intent_result.category_filter,
+                )
+            else:
+                intent_result = classify_tool_search_intent_full(effective_query)
+                resolved_intent, category_filter = (
+                    intent_result.intent,
+                    intent_result.category_filter,
+                )
+        else:
+            intent_result = classify_tool_search_intent_full(effective_query)
+            resolved_intent, category_filter = intent_result.intent, intent_result.category_filter
+        # --- Dual-Core Fusion Weights ---
+        # Compute once, apply to both Rust search engine and Python-side bridges.
+        # This ensures a single intent analysis drives the entire pipeline.
+        fusion = None
+        try:
+            from omni.rag.dual_core import compute_fusion_weights
+
+            fusion = compute_fusion_weights(effective_query)
+        except Exception:
+            pass  # Non-fatal; defaults will be used
+
+        # Rerank is always on in hybrid search (metadata-aware boost after RRF fusion).
+        fusion_kw = {}
+        if fusion is not None:
+            fusion_kw = {
+                "semantic_weight": fusion.vector_weight,
+                "keyword_weight": fusion.keyword_weight,
+            }
+
+        if hasattr(self._store, "agentic_search"):
+            results = await self._store.agentic_search(
+                table_name="skills",
+                query_vector=query_vector,
+                query_text=intent_text,
+                limit=limit,
+                threshold=min_score,
+                intent=resolved_intent,
+                confidence_profile=confidence_profile,
+                rerank=True,
+                category_filter=category_filter,
+                **fusion_kw,
+            )
+            # Fallback: if category filter returned no results, retry without filter so we still return matches.
+            if not results and category_filter:
+                logger.debug(
+                    "Hybrid search: 0 results with category_filter=%s, retrying without filter",
+                    category_filter,
+                )
+                results = await self._store.agentic_search(
+                    table_name="skills",
+                    query_vector=query_vector,
+                    query_text=intent_text,
+                    limit=limit,
+                    threshold=min_score,
+                    intent=resolved_intent,
+                    confidence_profile=confidence_profile,
+                    rerank=True,
+                    category_filter=None,
+                    **fusion_kw,
+                )
+        else:
+            results = await self._store.search_tools(
+                table_name="skills",
+                query_vector=query_vector,
+                query_text=intent_text,
+                limit=limit,
+                threshold=min_score,
+                confidence_profile=confidence_profile,
+                rerank=True,
+            )
 
         # Format results for Python consumers
         formatted = []
+        if not results:
+            try:
+                info = await self._store.get_table_info("skills")
+                n = (info or {}).get("row_count") or 0
+                if n and int(n) > 0:
+                    logger.info(
+                        "Router returned 0 results but skills table has %s tools. "
+                        "Check that embedding.dimension in settings matches the index (e.g. run 'omni sync' and use same embedding source).",
+                        n,
+                    )
+            except Exception:
+                pass
         for raw in results:
             candidate = dict(raw)
             try:
@@ -306,7 +864,43 @@ class HybridSearch:
             router_result["score"] = raw_score
             router_result["final_score"] = final_score
             router_result["confidence"] = confidence
+            if payload.vector_score is not None:
+                router_result["vector_score"] = float(payload.vector_score)
+            if payload.keyword_score is not None:
+                router_result["keyword_score"] = float(payload.keyword_score)
             formatted.append(router_result)
+
+        formatted = _apply_attribute_confidence(formatted, effective_query)
+        formatted = _apply_intent_overlap_boost(formatted, effective_query)
+        # Schema-aware boost: tools whose input_schema accepts detected param types get a bonus
+        if param_types:
+            formatted = _apply_param_schema_boost(formatted, param_types)
+        # Associative rerank: boost tools related to top results (relationship graph)
+        graph = self._get_relationship_graph()
+        if graph:
+            from omni.core.router.skill_relationships import apply_relationship_rerank
+
+            formatted = apply_relationship_rerank(formatted, graph)
+
+        # KG query-time rerank: boost tools connected to query entities
+        # via KnowledgeGraph multi-hop traversal (Bridge 5: KG → Router)
+        # Reuses the fusion weights computed above (single intent analysis).
+        if fusion is not None:
+            try:
+                from omni.rag.dual_core import apply_kg_rerank
+
+                formatted = apply_kg_rerank(
+                    formatted, effective_query, fusion_scale=fusion.kg_rerank_scale
+                )
+            except Exception:
+                pass  # Non-fatal; KG rerank is optional
+
+        # Re-calibrate confidence after all Python-side boosts.
+        # Rust assigned confidence on pre-boost raw RRF scores; Python boosts
+        # (intent overlap, param schema, relationship rerank) can significantly
+        # increase scores. Without re-calibration, a tool boosted from 0.3 to 1.0
+        # would still show "low" confidence.
+        formatted = _recalibrate_confidence(formatted, confidence_profile)
 
         logger.debug(f"Hybrid search for '{query}': {len(formatted)} results")
         return formatted
@@ -330,24 +924,22 @@ class HybridSearch:
         return self._embed_service
 
     def set_weights(self, semantic: float, keyword: float) -> None:
-        """Set search weights (reserved for future RRF configuration).
+        """Set search weights for RRF fusion.
 
-        Currently this method is a no-op. The search uses fixed weights
-        defined in Rust (SEMANTIC_WEIGHT=1.0, KEYWORD_WEIGHT=1.5).
+        These weights are passed to the Rust search engine at query time
+        via the ``agentic_search`` API. When not set, Rust defaults apply
+        (SEMANTIC_WEIGHT=1.0, KEYWORD_WEIGHT=1.5).
 
-        This method exists for future extensibility if we want to expose
-        weight configuration to Python callers.
+        Note: This is now a live override. The ``compute_fusion_weights``
+        system may also set these dynamically per-query based on intent.
 
         Args:
-            semantic: Reserved for semantic search weight (currently ignored).
-            keyword: Reserved for keyword search weight (currently ignored).
-
-        Note:
-            To modify weights, update the constants in Rust:
-            - omni-vector/src/keyword.rs: SEMANTIC_WEIGHT, KEYWORD_WEIGHT
+            semantic: Weight for vector (semantic) search contribution.
+            keyword: Weight for BM25 keyword search contribution.
         """
-        logger.info(f"Weights requested: semantic={semantic}, keyword={keyword}")
-        logger.info("Note: runtime weights are Rust-owned; Python does not override them")
+        self._manual_semantic_weight = semantic
+        self._manual_keyword_weight = keyword
+        logger.info("Weights set: semantic=%.2f, keyword=%.2f", semantic, keyword)
 
     def get_weights(self) -> tuple[float, float]:
         """Get the current search weights used by Rust.

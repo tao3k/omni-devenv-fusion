@@ -17,6 +17,7 @@ use pyo3::prelude::*;
 
 mod analytics;
 mod doc_ops;
+mod ipc;
 mod search_ops;
 mod store;
 mod tool_ops;
@@ -27,17 +28,22 @@ pub use tool_record::PyToolRecord;
 // Re-export helper functions for use in PyVectorStore methods
 use analytics::{get_all_file_hashes_async, get_analytics_table_async};
 use doc_ops::{
-    add_documents_async, add_single_async, delete_async, delete_by_file_path_async,
-    merge_insert_documents_async, replace_documents_async,
+    add_documents_async, add_documents_partitioned_async, add_single_async, delete_async,
+    delete_by_file_path_async, merge_insert_documents_async, replace_documents_async,
 };
 use search_ops::{
-    create_index_async, load_tool_registry_async, scan_skill_tools_raw, search_hybrid_async,
-    search_optimized_async, search_tools_async,
+    agentic_search_async, create_index_async, load_tool_registry_async, scan_skill_tools_raw,
+    search_hybrid_async, search_optimized_async, search_optimized_ipc_async, search_tools_async,
+    search_tools_ipc_async,
 };
 use store::{
-    create_vector_store, store_add_columns, store_alter_columns, store_count, store_drop_columns,
-    store_drop_table, store_get_fragment_stats, store_get_table_info, store_list_versions,
-    store_new,
+    create_vector_store, store_add_columns, store_alter_columns, store_analyze_table_health,
+    store_analyze_table_health_ipc, store_auto_index_if_needed, store_check_migrations,
+    store_compact, store_count, store_create_bitmap_index, store_create_btree_index,
+    store_create_hnsw_index, store_create_index_background, store_create_optimal_vector_index,
+    store_drop_columns, store_drop_table, store_get_fragment_stats, store_get_index_cache_stats,
+    store_get_query_metrics, store_get_table_info, store_list_versions, store_migrate, store_new,
+    store_suggest_partition_column,
 };
 
 // ============================================================================
@@ -50,6 +56,8 @@ pub struct PyVectorStore {
     path: String,
     dimension: usize,
     enable_keyword_index: bool,
+    index_cache_size_bytes: Option<usize>,
+    max_cached_tables: Option<usize>,
 }
 
 #[pymethods]
@@ -59,9 +67,21 @@ impl PyVectorStore {
     // -------------------------------------------------------------------------
 
     #[new]
-    #[pyo3(signature = (path, dimension = 1536, enable_keyword_index = false))]
-    fn new(path: String, dimension: usize, enable_keyword_index: bool) -> PyResult<Self> {
-        store_new(path, dimension, enable_keyword_index)
+    #[pyo3(signature = (path, dimension = 1536, enable_keyword_index = false, index_cache_size_bytes = None, max_cached_tables = None))]
+    fn new(
+        path: String,
+        dimension: usize,
+        enable_keyword_index: bool,
+        index_cache_size_bytes: Option<usize>,
+        max_cached_tables: Option<usize>,
+    ) -> PyResult<Self> {
+        store_new(
+            path,
+            dimension,
+            enable_keyword_index,
+            index_cache_size_bytes,
+            max_cached_tables,
+        )
     }
 
     fn count(&self, table_name: String) -> PyResult<u32> {
@@ -69,6 +89,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             table_name,
         )
     }
@@ -78,6 +100,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             table_name,
         )
     }
@@ -87,6 +111,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             table_name,
         )
     }
@@ -96,6 +122,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             table_name,
         )
     }
@@ -105,6 +133,178 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+        )
+    }
+
+    fn analyze_table_health(&self, table_name: String) -> PyResult<String> {
+        store_analyze_table_health(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+        )
+    }
+
+    fn analyze_table_health_ipc(
+        &self,
+        py: Python<'_>,
+        table_name: String,
+    ) -> PyResult<Py<pyo3::types::PyBytes>> {
+        let bytes = store_analyze_table_health_ipc(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+        )?;
+        Ok(pyo3::types::PyBytes::new(py, &bytes).unbind())
+    }
+
+    fn compact(&self, table_name: String) -> PyResult<String> {
+        store_compact(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+        )
+    }
+
+    /// List pending schema migrations for a table. Returns JSON array of {from_version, to_version, description}.
+    fn check_migrations(&self, table_name: String) -> PyResult<String> {
+        store_check_migrations(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+        )
+    }
+
+    /// Run pending schema migrations for a table. Returns JSON object {applied: [[from,to],...], rows_processed}.
+    fn migrate(&self, table_name: String) -> PyResult<String> {
+        store_migrate(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+        )
+    }
+
+    fn get_query_metrics(&self, table_name: String) -> PyResult<String> {
+        store_get_query_metrics(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+        )
+    }
+
+    fn get_index_cache_stats(&self, table_name: String) -> PyResult<String> {
+        store_get_index_cache_stats(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+        )
+    }
+
+    /// Create a BTree index on a column (exact match / range). Returns index stats as JSON.
+    fn create_btree_index(&self, table_name: String, column: String) -> PyResult<String> {
+        store_create_btree_index(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+            column,
+        )
+    }
+
+    /// Create a Bitmap index on a column (low-cardinality). Returns index stats as JSON.
+    fn create_bitmap_index(&self, table_name: String, column: String) -> PyResult<String> {
+        store_create_bitmap_index(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+            column,
+        )
+    }
+
+    /// Create an IVF+HNSW vector index. Requires at least 50 rows. Returns index stats as JSON.
+    fn create_hnsw_index(&self, table_name: String) -> PyResult<String> {
+        store_create_hnsw_index(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+        )
+    }
+
+    /// Start building the vector index in a background task. Returns immediately; index builds asynchronously.
+    fn create_index_background(&self, table_name: String) -> PyResult<()> {
+        store_create_index_background(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+        )
+    }
+
+    /// Create the best vector index for table size (HNSW small tables, IVF_FLAT large). Returns index stats as JSON.
+    fn create_optimal_vector_index(&self, table_name: String) -> PyResult<String> {
+        store_create_optimal_vector_index(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+        )
+    }
+
+    /// Suggest a partition column for the table if large and schema supports it (e.g. skill_name). Returns None if not applicable.
+    fn suggest_partition_column(&self, table_name: String) -> PyResult<Option<String>> {
+        store_suggest_partition_column(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            table_name,
+        )
+    }
+
+    /// Create vector/FTS/scalar indexes if table meets row thresholds. Returns last index stats as JSON or None.
+    fn auto_index_if_needed(&self, table_name: String) -> PyResult<Option<String>> {
+        store_auto_index_if_needed(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             table_name,
         )
     }
@@ -114,6 +314,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             table_name,
             payload_json,
         )
@@ -124,6 +326,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             table_name,
             payload_json,
         )
@@ -134,6 +338,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             table_name,
             columns,
         )
@@ -155,7 +361,33 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name,
+            ids,
+            vectors,
+            contents,
+            metadatas,
+        )
+    }
+
+    fn add_documents_partitioned(
+        &self,
+        table_name: String,
+        partition_by: String,
+        ids: Vec<String>,
+        vectors: Vec<Vec<f32>>,
+        contents: Vec<String>,
+        metadatas: Vec<String>,
+    ) -> PyResult<()> {
+        add_documents_partitioned_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            &table_name,
+            &partition_by,
             ids,
             vectors,
             contents,
@@ -175,6 +407,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name,
             ids,
             vectors,
@@ -196,6 +430,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name,
             ids,
             vectors,
@@ -216,6 +452,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name,
             content,
             vector,
@@ -228,6 +466,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name,
             ids,
         )
@@ -242,6 +482,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name.unwrap_or_else(|| "skills".to_string()),
             file_paths,
         )
@@ -262,11 +504,37 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name,
             query,
             limit,
             options_json,
         )
+    }
+
+    /// Search and return Arrow IPC stream bytes (single RecordBatch) for zero-copy consumption.
+    /// Use: ``pyarrow.ipc.open_stream(io.BytesIO(bytes)).read_all()``. See search-result-batch-contract.md.
+    fn search_optimized_ipc(
+        &self,
+        py: Python<'_>,
+        table_name: String,
+        query: Vec<f32>,
+        limit: usize,
+        options_json: Option<String>,
+    ) -> PyResult<Py<pyo3::types::PyBytes>> {
+        let bytes = search_optimized_ipc_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            &table_name,
+            query,
+            limit,
+            options_json,
+        )?;
+        Ok(pyo3::types::PyBytes::new(py, &bytes).unbind())
     }
 
     fn search_hybrid(
@@ -281,6 +549,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name,
             query,
             query_text,
@@ -293,6 +563,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name,
         )
     }
@@ -327,6 +599,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &base_path,
             &table_name,
         )
@@ -346,6 +620,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &base_path,
             &skills_table,
             &router_table,
@@ -419,6 +695,23 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            &table_name,
+        )
+    }
+
+    /// List all skill-declared resources (rows with non-empty resource_uri).
+    fn list_all_resources(&self, table_name: Option<String>) -> PyResult<String> {
+        use tool_ops::list_all_resources_async;
+
+        let table_name = table_name.unwrap_or_else(|| "skills".to_string());
+        list_all_resources_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name,
         )
     }
@@ -433,6 +726,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name,
         )
     }
@@ -443,6 +738,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name,
         )
     }
@@ -475,6 +772,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name,
             query_vector,
             query_text,
@@ -482,6 +781,74 @@ impl PyVectorStore {
             threshold,
             confidence_profile_json,
             rerank,
+        )
+    }
+
+    #[pyo3(signature = (table_name, query_vector, query_text=None, limit=5, threshold=0.0, rerank=true))]
+    fn search_tools_ipc(
+        &self,
+        table_name: Option<String>,
+        query_vector: Vec<f32>,
+        query_text: Option<String>,
+        limit: usize,
+        threshold: f32,
+        rerank: bool,
+    ) -> PyResult<Vec<u8>> {
+        let table_name = table_name.unwrap_or_else(|| "skills".to_string());
+        search_tools_ipc_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            &table_name,
+            query_vector,
+            query_text,
+            limit,
+            threshold,
+            rerank,
+        )
+    }
+
+    #[pyo3(signature = (table_name, query_vector, query_text=None, limit=5, threshold=0.0, intent=None, confidence_profile_json=None, rerank=true, skill_name_filter=None, category_filter=None, semantic_weight=None, keyword_weight=None))]
+    fn agentic_search(
+        &self,
+        table_name: String,
+        query_vector: Vec<f32>,
+        query_text: Option<String>,
+        limit: usize,
+        threshold: f32,
+        intent: Option<String>,
+        confidence_profile_json: Option<String>,
+        rerank: bool,
+        skill_name_filter: Option<String>,
+        category_filter: Option<String>,
+        semantic_weight: Option<f32>,
+        keyword_weight: Option<f32>,
+    ) -> PyResult<Vec<Py<PyAny>>> {
+        let table = if table_name.is_empty() {
+            "skills".to_string()
+        } else {
+            table_name
+        };
+        agentic_search_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            &table,
+            query_vector,
+            query_text,
+            limit,
+            threshold,
+            intent,
+            confidence_profile_json,
+            rerank,
+            skill_name_filter,
+            category_filter,
+            semantic_weight,
+            keyword_weight,
         )
     }
 
@@ -496,6 +863,8 @@ impl PyVectorStore {
             &self.path,
             self.dimension,
             self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
             &table_name,
             confidence_profile_json,
         )
@@ -504,11 +873,22 @@ impl PyVectorStore {
 
 /// Create a vector store (exported as create_vector_store in Python)
 #[pyfunction]
-#[pyo3(name = "create_vector_store", signature = (path, dimension = 1536, enable_keyword_index = false))]
+#[pyo3(
+    name = "create_vector_store",
+    signature = (path, dimension = 1536, enable_keyword_index = false, index_cache_size_bytes = None, max_cached_tables = None)
+)]
 pub fn create_vector_store_py(
     path: String,
     dimension: usize,
     enable_keyword_index: bool,
+    index_cache_size_bytes: Option<usize>,
+    max_cached_tables: Option<usize>,
 ) -> PyResult<PyVectorStore> {
-    create_vector_store(path, dimension, enable_keyword_index)
+    create_vector_store(
+        path,
+        dimension,
+        enable_keyword_index,
+        index_cache_size_bytes,
+        max_cached_tables,
+    )
 }

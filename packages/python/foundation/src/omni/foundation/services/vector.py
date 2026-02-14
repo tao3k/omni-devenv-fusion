@@ -15,6 +15,7 @@ from pydantic import BaseModel, ValidationError
 from omni.foundation.config.dirs import PRJ_CACHE
 from omni.foundation.services.embedding import get_embedding_service
 from omni.foundation.services.vector_schema import (
+    VectorPayload,
     build_search_options_json,
     parse_hybrid_payload,
     parse_vector_payload,
@@ -89,6 +90,7 @@ class VectorStoreClient:
 
     _instance: VectorStoreClient | None = None
     _store: Any | None
+    _knowledge_store: Any | None = None
     _cache_path: Path
     _search_cache: SearchCache
 
@@ -107,10 +109,41 @@ class VectorStoreClient:
 
             cls._instance = super().__new__(cls)
             cls._instance._store = None
+            cls._instance._knowledge_store = None
             cls._instance._cache_path = PRJ_CACHE("omni-vector")
             cls._instance._cache_path.mkdir(parents=True, exist_ok=True)
             cls._instance._search_cache = SearchCache(max_size=500, ttl=300)
         return cls._instance
+
+    def _get_store_for_collection(self, collection: str) -> Any | None:
+        """Return the store that backs this collection.
+
+        Sync writes knowledge_chunks to get_database_path("knowledge") (knowledge.lance).
+        The default store uses the base path. So for collection "knowledge_chunks"
+        we use a separate store opened on the knowledge DB path.
+        """
+        if collection == "knowledge_chunks":
+            if self._knowledge_store is None:
+                create_store = _get_omni_vector()
+                if create_store:
+                    try:
+                        from omni.foundation.config.database import get_database_path
+                        from omni.foundation.services.index_dimension import (
+                            get_effective_embedding_dimension,
+                        )
+
+                        path = get_database_path("knowledge")
+                        dim = get_effective_embedding_dimension()
+                        self._knowledge_store = create_store(str(path), dim, True)
+                        logger.info("Knowledge VectorStore initialized", path=path)
+                    except Exception as e:
+                        logger.debug("Knowledge store init skipped: %s", e)
+            return self._knowledge_store
+        return self.store
+
+    def get_store_for_collection(self, collection: str) -> Any | None:
+        """Return the underlying store for this collection (for direct store API use)."""
+        return self._get_store_for_collection(collection)
 
     @property
     def store(self) -> Any | None:
@@ -119,8 +152,12 @@ class VectorStoreClient:
             create_store = _get_omni_vector()
             if create_store:
                 try:
-                    # Initialize with dimension from embedding service
-                    dim = get_embedding_service().dimension
+                    # Use effective dimension (respects truncate_dim) so ingest/search match
+                    from omni.foundation.services.index_dimension import (
+                        get_effective_embedding_dimension,
+                    )
+
+                    dim = get_effective_embedding_dimension()
                     # Pass True to enable auto-creation/read-write mode
                     self._store = create_store(str(self._cache_path), dim, True)
                     logger.info("VectorStore initialized", path=str(self._cache_path))
@@ -144,6 +181,7 @@ class VectorStoreClient:
         fragment_readahead: int | None = None,
         batch_readahead: int | None = None,
         scan_limit: int | None = None,
+        projection: list[str] | None = None,
     ) -> list[SearchResult]:
         """Search the vector store for similar content.
 
@@ -174,7 +212,7 @@ class VectorStoreClient:
             )
             return []
 
-        store = self.store
+        store = self._get_store_for_collection(collection)
         if not store:
             logger.warning("VectorStore not available, returning empty results")
             return []
@@ -186,6 +224,7 @@ class VectorStoreClient:
             "fragment_readahead": fragment_readahead,
             "batch_readahead": batch_readahead,
             "scan_limit": scan_limit,
+            "projection": projection,
         }
         cache_key = f"{collection}:{query}:{n_results}:{json.dumps(options_cache, sort_keys=True, default=str)}"
 
@@ -215,6 +254,8 @@ class VectorStoreClient:
                 options["batch_readahead"] = int(batch_readahead)
             if scan_limit is not None:
                 options["scan_limit"] = int(scan_limit)
+            if projection is not None:
+                options["projection"] = projection
 
             # Unified path: require optimized scanner API.
             if not hasattr(store, "search_optimized"):
@@ -228,25 +269,67 @@ class VectorStoreClient:
                 return []
 
             options_json = build_search_options_json(options)
-            results_json = store.search_optimized(collection, vector, n_results, options_json)
-
-            # Parse results through canonical payload contract
             results: list[SearchResult] = []
-            for raw in results_json:
-                payload = parse_vector_payload(raw)
-                result_id, content, metadata, distance = payload.to_search_result_fields()
-                score = payload.score
-                if score is None:
-                    score = 1.0 / (1.0 + max(distance, 0.0))
-                results.append(
-                    SearchResult(
-                        content=content,
-                        metadata=metadata,
-                        distance=distance,
-                        score=score,
-                        id=result_id,
+
+            # Prefer Arrow IPC path when available (skips JSON serialize/parse)
+            # For batch search (100+ rows), request only needed columns to reduce payload
+            _IPC_BATCH_PROJECTION_THRESHOLD = 50
+            ipc_projection: list[str] | None = None
+            if n_results >= _IPC_BATCH_PROJECTION_THRESHOLD:
+                ipc_projection = ["id", "content", "_distance", "metadata"]
+
+            if hasattr(store, "search_optimized_ipc"):
+                try:
+                    import io
+
+                    import pyarrow.ipc
+
+                    ipc_bytes = store.search_optimized_ipc(
+                        collection,
+                        vector,
+                        n_results,
+                        options_json,
+                        projection=ipc_projection,
                     )
-                )
+                    table = pyarrow.ipc.open_stream(io.BytesIO(ipc_bytes)).read_all()
+                    payloads = VectorPayload.from_arrow_table(table)
+                    for p in payloads:
+                        score = (
+                            p.score if p.score is not None else 1.0 / (1.0 + max(p.distance, 0.0))
+                        )
+                        results.append(
+                            SearchResult(
+                                content=p.content,
+                                metadata=p.metadata,
+                                distance=p.distance,
+                                score=score,
+                                id=p.id,
+                            )
+                        )
+                except Exception as ipc_err:
+                    logger.debug(
+                        "search_optimized_ipc failed, falling back to JSON path",
+                        error=str(ipc_err),
+                    )
+                    results = []
+
+            if not results and hasattr(store, "search_optimized"):
+                results_json = store.search_optimized(collection, vector, n_results, options_json)
+                for raw in results_json:
+                    payload = parse_vector_payload(raw)
+                    result_id, content, metadata, distance = payload.to_search_result_fields()
+                    score = payload.score
+                    if score is None:
+                        score = 1.0 / (1.0 + max(distance, 0.0))
+                    results.append(
+                        SearchResult(
+                            content=content,
+                            metadata=metadata,
+                            distance=distance,
+                            score=score,
+                            id=result_id,
+                        )
+                    )
 
             # Cache the results
             if use_cache:
@@ -289,7 +372,7 @@ class VectorStoreClient:
         use_cache: bool = True,
     ) -> list[SearchResult]:
         """Run Rust-backed hybrid search with canonical payload validation."""
-        store = self.store
+        store = self._get_store_for_collection(collection)
         if not store:
             logger.warning("VectorStore not available, returning empty hybrid results")
             return []
@@ -368,7 +451,7 @@ class VectorStoreClient:
         Returns:
             True if successful, False otherwise.
         """
-        store = self.store
+        store = self._get_store_for_collection(collection)
         if not store:
             return False
 
@@ -424,7 +507,7 @@ class VectorStoreClient:
         Returns:
             Number of successfully stored chunks.
         """
-        store = self.store
+        store = self._get_store_for_collection(collection)
         if not store:
             return 0
 
@@ -485,7 +568,7 @@ class VectorStoreClient:
         Returns:
             True if successful, False otherwise.
         """
-        store = self.store
+        store = self._get_store_for_collection(collection)
         if not store:
             return False
 
@@ -515,7 +598,7 @@ class VectorStoreClient:
         Returns:
             Number of entries.
         """
-        store = self.store
+        store = self._get_store_for_collection(collection)
         if not store:
             return 0
 
@@ -537,7 +620,7 @@ class VectorStoreClient:
         Returns:
             True if successful, False otherwise.
         """
-        store = self.store
+        store = self._get_store_for_collection(collection)
         if not store:
             return False
 
@@ -550,7 +633,7 @@ class VectorStoreClient:
 
     async def get_table_info(self, collection: str = "knowledge") -> dict[str, Any] | None:
         """Get table metadata from the underlying vector store."""
-        store = self.store
+        store = self._get_store_for_collection(collection)
         if not store:
             return None
 
@@ -565,7 +648,7 @@ class VectorStoreClient:
 
     async def list_versions(self, collection: str = "knowledge") -> list[dict[str, Any]]:
         """List historical versions for a collection."""
-        store = self.store
+        store = self._get_store_for_collection(collection)
         if not store:
             return []
 
@@ -580,7 +663,7 @@ class VectorStoreClient:
 
     async def get_fragment_stats(self, collection: str = "knowledge") -> list[dict[str, Any]]:
         """Get fragment-level stats for a collection."""
-        store = self.store
+        store = self._get_store_for_collection(collection)
         if not store:
             return []
 
@@ -597,7 +680,7 @@ class VectorStoreClient:
         self, collection: str, columns: list[dict[str, Any]], invalidate_cache: bool = True
     ) -> bool:
         """Add columns using schema evolution."""
-        store = self.store
+        store = self._get_store_for_collection(collection)
         if not store:
             return False
 
@@ -615,7 +698,7 @@ class VectorStoreClient:
         self, collection: str, alterations: list[dict[str, Any]], invalidate_cache: bool = True
     ) -> bool:
         """Alter columns using schema evolution."""
-        store = self.store
+        store = self._get_store_for_collection(collection)
         if not store:
             return False
 
@@ -633,7 +716,7 @@ class VectorStoreClient:
         self, collection: str, columns: list[str], invalidate_cache: bool = True
     ) -> bool:
         """Drop columns using schema evolution."""
-        store = self.store
+        store = self._get_store_for_collection(collection)
         if not store:
             return False
 

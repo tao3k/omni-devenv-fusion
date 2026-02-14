@@ -15,6 +15,9 @@ Commands:
 - dependency_build: Build the dependency index
 - dependency_list: List all indexed dependencies
 
+Resources:
+- dependency_index: Indexed crates and symbol counts
+
 Workflow:
     # 1. When Cargo.toml dependency is upgraded
     omni sync symbols
@@ -34,10 +37,35 @@ import os
 from pathlib import Path
 from typing import Any
 
-from omni.foundation.api.decorators import skill_command
+from omni.foundation.api.decorators import skill_command, skill_resource
 from omni.foundation.config.logging import get_logger
 
 logger = get_logger("skill.knowledge.dependency")
+
+
+@skill_resource(
+    name="dependency_index",
+    description="Indexed external crate dependencies and symbol counts",
+    resource_uri="omni://skill/knowledge/dependency_index",
+)
+def dependency_index_resource() -> dict:
+    """Dependency index summary as a resource."""
+    try:
+        from omni.foundation.config.skills import SKILLS_DIR
+
+        index_dir = SKILLS_DIR().parent.parent / ".cache" / "dep-index"
+        if not index_dir.exists():
+            return {"indexed_crates": 0, "total_symbols": 0}
+
+        crates = sorted(d.name for d in index_dir.iterdir() if d.is_dir())
+        total = 0
+        for crate_dir in index_dir.iterdir():
+            if crate_dir.is_dir():
+                for f in crate_dir.glob("*.json"):
+                    total += 1
+        return {"indexed_crates": len(crates), "total_symbols": total, "crates": crates}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 def _get_project_root() -> str:

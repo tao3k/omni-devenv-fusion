@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Generate markdown decision report for Tantivy vs Lance FTS."""
+"""Generate markdown decision report for Tantivy vs Lance FTS from fixed eval snapshots."""
 
 from __future__ import annotations
 
 import argparse
 import json
+from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -55,10 +56,51 @@ def _offline_recommendation(summary: dict[str, Any]) -> tuple[str, list[str]]:
     return "SCENARIO_SPLIT_OR_HYBRID", reasons
 
 
+def _per_scene_summary(snapshot_data: dict[str, Any]) -> list[str]:
+    """Build per-scene winner summary from lance_fts_details and tantivy_details."""
+    t_details = snapshot_data.get("tantivy_details") or []
+    f_details = snapshot_data.get("lance_fts_details") or []
+    if len(t_details) != len(f_details) or not t_details:
+        return []
+
+    by_scene: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    for t_row, f_row in zip(t_details, f_details, strict=True):
+        scene = (t_row.get("scene") or f_row.get("scene") or "unknown").strip()
+        t_ndcg = _to_float(t_row.get("ndcg_at_5"))
+        f_ndcg = _to_float(f_row.get("ndcg_at_5"))
+        by_scene[scene].append((t_ndcg, f_ndcg))
+
+    lines = []
+    wins_t: list[str] = []
+    wins_f: list[str] = []
+    ties: list[str] = []
+    for scene in sorted(by_scene.keys()):
+        pairs = by_scene[scene]
+        mean_t = sum(p[0] for p in pairs) / len(pairs)
+        mean_f = sum(p[1] for p in pairs) / len(pairs)
+        diff = mean_t - mean_f
+        if diff > 0.02:
+            wins_t.append(scene)
+        elif diff < -0.02:
+            wins_f.append(scene)
+        else:
+            ties.append(scene)
+
+    if wins_t or wins_f or ties:
+        lines.append("| Scene layer | Tantivy better | Lance FTS better | Tie |")
+        lines.append("|-------------|----------------|------------------|-----|")
+        lines.append(
+            f"| v4 scenes | {', '.join(wins_t) or '—'} | "
+            f"{', '.join(wins_f) or '—'} | {', '.join(ties) or '—'} |"
+        )
+    return lines
+
+
 def _compose_report(
     snapshot_path: Path,
     snapshot_data: dict[str, Any],
     llm_report: dict[str, Any] | None,
+    add_per_scene: bool = True,
 ) -> str:
     summary = snapshot_data.get("summary", {})
     decision, reasons = _offline_recommendation(summary)
@@ -142,6 +184,11 @@ def _compose_report(
             ]
         )
 
+    if add_per_scene:
+        scene_lines = _per_scene_summary(snapshot_data)
+        if scene_lines:
+            lines.extend(["", "## Per-scene (v4) summary", ""] + scene_lines + [""])
+
     lines.extend(
         [
             "",
@@ -162,8 +209,9 @@ def main() -> int:
         type=Path,
         default=Path(
             "packages/rust/crates/omni-vector/tests/snapshots/"
-            "test_keyword_backend_quality__keyword_backend_quality_scenarios_v2.snap"
+            "test_keyword_backend_quality__keyword_backend_quality_scenarios_v4_large.snap"
         ),
+        help="Insta snapshot from test_keyword_backend_quality (v4_large = 120 queries, default)",
     )
     parser.add_argument(
         "--llm-report",
@@ -176,6 +224,11 @@ def main() -> int:
         type=Path,
         default=Path("docs/testing/keyword-backend-decision-report.md"),
     )
+    parser.add_argument(
+        "--no-per-scene",
+        action="store_true",
+        help="Omit per-scene summary (e.g. for v1/v2 snapshots without scene field)",
+    )
     args = parser.parse_args()
 
     snapshot_data = _load_snapshot_json(args.snapshot)
@@ -183,7 +236,9 @@ def main() -> int:
     if args.llm_report is not None:
         llm_report = json.loads(args.llm_report.read_text(encoding="utf-8"))
 
-    report = _compose_report(args.snapshot, snapshot_data, llm_report)
+    report = _compose_report(
+        args.snapshot, snapshot_data, llm_report, add_per_scene=not args.no_per_scene
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(report, encoding="utf-8")
     print(f"Wrote decision report: {args.output}")

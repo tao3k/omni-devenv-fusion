@@ -43,19 +43,20 @@ Let the router auto-discover the right tool:
 
 ## Common Examples
 
-| Task         | Claude Desktop                                             | Claude Code CLI                                      |
-| ------------ | ---------------------------------------------------------- | ---------------------------------------------------- |
-| Git status   | `@omni("git.status")`                                      | `mcp__omniAgent__git_status`                         |
-| Run command  | `@omni("terminal.run", {"command": "ls -la"})`             | `mcp__omniAgent__terminal_run_task`                  |
-| Read files   | `@omni("filesystem.read_files", {"paths": ["file.py"]})`   | -                                                    |
-| Search code  | `@omni("code_tools.search_code", {"pattern": "def test"})` | `mcp__omniAgent__code_tools_search_code`             |
-| Smart commit | `@omni("git.smart_commit", {"action": "start"})`           | `mcp__omniAgent__git_smart_commit`                   |
-| Test project | `@omni("testing_protocol.smart_test_runner")`              | `mcp__omniAgent__testing_protocol_smart_test_runner` |
+| Task            | Claude Desktop                                                 | Claude Code CLI                                      |
+| --------------- | -------------------------------------------------------------- | ---------------------------------------------------- |
+| Git status      | `@omni("git.status")`                                          | `mcp__omniAgent__git_status`                         |
+| Run command     | `@omni("terminal.run", {"command": "ls -la"})`                 | `mcp__omniAgent__terminal_run_task`                  |
+| Read files      | `@omni("filesystem.read_files", {"paths": ["file.py"]})`       | -                                                    |
+| Search code     | `@omni("code_tools.search_code", {"pattern": "def test"})`     | `mcp__omniAgent__code_tools_search_code`             |
+| Smart commit    | `@omni("git.smart_commit", {"action": "start"})`               | `mcp__omniAgent__git_smart_commit`                   |
+| Test project    | `@omni("testing_protocol.smart_test_runner")`                  | `mcp__omniAgent__testing_protocol_smart_test_runner` |
+| Knowledge stats | `@omni("knowledge.stats", {"collection": "knowledge_chunks"})` | `mcp__omniAgent__knowledge_stats`                    |
 
 ## Pro Tips
 
 - Use `@omni("skill.discover", {"intent": "what you want to do"})` to find the right tool
-- Check `@omni("skill.list_tools")` or run `mcp__omniAgent__skill_list_tools` for all available tools
+- For all available tools: read resource `omni://skill/skill/list_tools` (MCP `list_resources` → `resources/read(uri)`)
 
 ## MCP Tool Name Format
 

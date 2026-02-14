@@ -1,6 +1,6 @@
 ---
 name: researcher
-description: Use when analyzing repositories, conducting deep research on codebases, performing architecture reviews, or exploring large projects.
+description: Use when analyzing repositories, conducting deep research on codebases, performing architecture reviews, or exploring large projects. Use when the user wants to research or analyze a git repo, a GitHub link, or a repository URL.
 metadata:
   author: omni-dev-fusion
   version: "2.0.0"
@@ -18,11 +18,26 @@ metadata:
     - "explore"
     - "investigate"
     - "study"
+    - "git"
+    - "repo"
+    - "repository"
+    - "link"
+    - "url"
+    - "github"
+    - "github url"
+    - "repository url"
+    - "research url"
   intents:
     - "Research repository"
     - "Analyze codebase"
     - "Deep research"
     - "Architecture review"
+    - "Analyze git repo or link"
+    - "Study a repository from a link"
+    - "Help me research or analyze a repository from a GitHub URL or link"
+    - "I want to analyze or research a codebase from a URL"
+    - "Do deep research on a repo I'll give you a link to"
+    - "Review the architecture of a project from its GitHub URL"
 ---
 
 # Researcher Skill

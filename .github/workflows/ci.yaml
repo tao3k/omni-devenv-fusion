@@ -130,6 +130,9 @@ jobs:
       - name: Rust gate - search perf guard
         run: secretspec run --provider env --profile default -- devenv shell -- cargo test -p omni-vector --test test_search_perf_guard
 
+      - name: Contract E2E - route test JSON (Rust -> Python -> CLI schema)
+        run: secretspec run --provider env --profile default -- devenv shell -- uv run pytest packages/python/foundation/tests/unit/services/test_contract_consistency.py::test_route_test_cli_json_validates_against_schema -v
+
       - name: Docs advisory - vector search options contract
         continue-on-error: true
         run: secretspec run --provider env --profile default -- devenv shell -- uv run python scripts/generate_vector_search_options_contract.py --check

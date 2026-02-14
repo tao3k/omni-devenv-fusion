@@ -6,19 +6,20 @@ description: List available Omni Skills and MCP tools
 
 ## Available Commands
 
-| Command             | Description                                                   |
-| ------------------- | ------------------------------------------------------------- |
-| `skill.list_index`  | List all skills in the known skills index                     |
-| `skill.list_tools`  | **List all registered MCP tools** with names and descriptions |
-| `skill.discover`    | Search skills by query                                        |
-| `skill.jit_install` | Install a skill from index                                    |
-| `skill.reload`      | Reload a skill from disk                                      |
+| Command / Resource                           | Description                                                   |
+| -------------------------------------------- | ------------------------------------------------------------- |
+| `skill.list_index`                           | List all skills in the known skills index                     |
+| **Resource** `omni://skill/skill/list_tools` | **List all registered MCP tools** (read via `resources/read`) |
+| `skill.discover`                             | Search skills by query                                        |
+| `skill.jit_install`                          | Install a skill from index                                    |
+| `skill.reload`                               | Reload a skill from disk                                      |
 
 ## Usage
 
 ### List All Registered MCP Tools
 
-`@omni("skill.list_tools")`
+Read the **resource** `omni://skill/skill/list_tools` (MCP `list_resources` then `resources/read(uri)`).  
+Not a callable tool; use resource read to get the tool list.
 
 Shows all tools currently registered in MCP:
 
@@ -40,9 +41,9 @@ Shows all tools currently registered in MCP:
 
 ## Examples
 
-| Task                 | Command                                                  |
+| Task                 | Command / Action                                         |
 | -------------------- | -------------------------------------------------------- |
-| View all tools       | `@omni("skill.list_tools")`                              |
+| View all tools       | Read resource `omni://skill/skill/list_tools`            |
 | Install Docker skill | `@omni("skill.jit_install", {"skill_id": "docker-ops"})` |
 | Find Python skills   | `@omni("skill.discover", {"intent": "python"})`          |
 | Reload git skill     | `@omni("skill.reload", {"name": "git"})`                 |

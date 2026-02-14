@@ -53,8 +53,10 @@ Table: one row per backend (Tantivy, Lance FTS). Columns:
 - **Secondary**: LLM duel signals; use only when reliability ratio is sufficient.
 - **No global replacement** unless metrics are consistently superior with non-overlapping practical CI margin (see statistical report).
 
-## Reference Reports
+## Reference
 
-- `keyword-backend-decision-report-v4.md` – Decision + LLM duel.
+- **`keyword-backend-decision.md`** – **Canonical**: fixed eval set, default/fallback, regeneration loop (`just keyword-backend-report`, `just keyword-backend-statistical`).
+- `keyword-backend-decision-report.md` – Generated decision report (v4_large).
 - `keyword-backend-statistical-report.md` – Global and scene-boundary statistics.
+- `keyword-backend-decision-report-v4.md` – Historical v4 + LLM duel.
 - `keyword-backend-detailed-comparison-v3.md` – Per-scenario breakdown.

@@ -56,7 +56,7 @@ class TestReindexCommand:
         assert result.exit_code == 0
         assert "Reindex vector databases" in result.output
 
-    @patch("omni.agent.cli.commands.reindex._reindex_skills")
+    @patch("omni.agent.cli.commands.reindex._reindex_skills_only")
     def test_reindex_skills(self, mock_reindex, runner):
         """Test 'omni reindex skills'."""
         mock_reindex.return_value = {
@@ -80,90 +80,15 @@ class TestReindexCommand:
 
         assert run_async_blocking(_sample()) == 42
 
-    @patch("omni.agent.cli.commands.reindex._reindex_skills_and_router")
-    @patch("omni.agent.cli.commands.reindex.get_database_path")
-    @patch("omni.foundation.bridge.get_vector_store")
-    @patch("omni.agent.cli.commands.reindex.run_async_blocking")
-    def test_sync_router_refreshes_skills_first(
-        self,
-        mock_run_async_blocking,
-        mock_get_vector_store,
-        mock_get_db_path,
-        mock_reindex_atomic,
-    ):
-        """Router sync must refresh skills first to keep router/skills in lockstep."""
-        from omni.agent.cli.commands.reindex import _sync_router_from_skills
-
-        mock_reindex_atomic.return_value = {
-            "status": "success",
-            "skills_tools_indexed": 12,
-            "router_tools_indexed": 12,
-        }
-        mock_get_db_path.return_value = "/tmp/router.lance"
-        mock_store = MagicMock()
-        mock_get_vector_store.return_value = mock_store
-        mock_run_async_blocking.return_value = 12
-
-        result = _sync_router_from_skills()
-
-        assert result["status"] == "success"
-        assert result["tools_indexed"] == 12
-        mock_reindex_atomic.assert_called_once_with(clear=False)
-        mock_get_vector_store.assert_not_called()
-        mock_store.index_skill_tools.assert_not_called()
-
-    @patch("omni.agent.cli.commands.reindex._reindex_skills_and_router")
-    @patch("omni.agent.cli.commands.reindex.get_database_path")
-    @patch("omni.foundation.bridge.get_vector_store")
-    @patch("omni.agent.cli.commands.reindex.run_async_blocking")
-    def test_sync_router_can_skip_skills_refresh(
-        self,
-        mock_run_async_blocking,
-        mock_get_vector_store,
-        mock_get_db_path,
-        mock_reindex_atomic,
-    ):
-        """Router sync can skip skills refresh when caller already refreshed snapshot."""
-        from omni.agent.cli.commands.reindex import _sync_router_from_skills
-
-        mock_get_db_path.return_value = "/tmp/router.lance"
-        mock_store = MagicMock()
-        mock_get_vector_store.return_value = mock_store
-        mock_run_async_blocking.return_value = 12
-
-        result = _sync_router_from_skills(refresh_skills=False)
-
-        assert result["status"] == "success"
-        assert result["tools_indexed"] == 12
-        mock_reindex_atomic.assert_not_called()
-
-    @patch("omni.agent.cli.commands.reindex._sync_router_from_skills")
-    def test_reindex_router_default_is_atomic(self, mock_sync_router, runner):
-        """`omni reindex router` should default to atomic skills+router sync."""
-        mock_sync_router.return_value = {
-            "status": "success",
-            "database": "router.lance",
-            "tools_indexed": 7,
-        }
-
+    def test_reindex_router_command_removed(self, runner):
+        """`omni reindex router` no longer exists; use `omni reindex skills`."""
         result = runner.invoke(app, ["reindex", "router"])
+        assert result.exit_code != 0
 
-        assert result.exit_code == 0
-        mock_sync_router.assert_called_once_with(refresh_skills=True)
-
-    @patch("omni.agent.cli.commands.reindex._sync_router_from_skills")
-    def test_reindex_router_only_router_flag(self, mock_sync_router, runner):
-        """`--only-router` should skip atomic skills refresh."""
-        mock_sync_router.return_value = {
-            "status": "success",
-            "database": "router.lance",
-            "tools_indexed": 7,
-        }
-
-        result = runner.invoke(app, ["reindex", "router", "--only-router"])
-
-        assert result.exit_code == 0
-        mock_sync_router.assert_called_once_with(refresh_skills=False)
+    def test_sync_router_command_removed(self, runner):
+        """`omni sync router` no longer exists; use `omni sync skills`."""
+        result = runner.invoke(app, ["sync", "router"])
+        assert result.exit_code != 0
 
     @patch("omni.agent.cli.commands.reindex.get_setting")
     @patch("omni.agent.cli.commands.reindex._read_embedding_signature")
@@ -189,7 +114,7 @@ class TestReindexCommand:
         assert result["status"] == "initialized"
         mock_write_sig.assert_called_once()
 
-    @patch("omni.agent.cli.commands.reindex._reindex_skills_and_router")
+    @patch("omni.agent.cli.commands.reindex._reindex_skills_only")
     @patch("omni.agent.cli.commands.reindex.get_setting")
     @patch("omni.agent.cli.commands.reindex._read_embedding_signature")
     @patch("omni.agent.cli.commands.reindex._write_embedding_signature")
@@ -198,7 +123,7 @@ class TestReindexCommand:
         mock_write_sig,
         mock_read_sig,
         mock_get_setting,
-        mock_reindex_atomic,
+        mock_reindex_skills,
     ):
         from omni.agent.cli.commands.reindex import ensure_embedding_index_compatibility
 
@@ -213,14 +138,167 @@ class TestReindexCommand:
             "embedding.dimension": 1024,
             "embedding.provider": "",
         }.get(key, default)
-        mock_reindex_atomic.return_value = {
+        mock_reindex_skills.return_value = {
             "status": "success",
             "skills_tools_indexed": 69,
-            "router_tools_indexed": 69,
         }
 
         result = ensure_embedding_index_compatibility(auto_fix=True)
 
         assert result["status"] == "reindexed"
-        mock_reindex_atomic.assert_called_once_with(clear=True)
+        mock_reindex_skills.assert_called_once_with(clear=True)
         mock_write_sig.assert_called_once()
+
+
+class TestSyncReindexUnifiedPath:
+    """Ensure sync and reindex use the same skills path and API (unified contract).
+
+    Prevents regression where sync writes to a different store/path than reindex
+    or route test reads from, which would make 'omni sync' appear to have no effect.
+    """
+
+    @pytest.mark.asyncio
+    async def test_sync_skills_uses_get_database_path_skills(self):
+        """_sync_skills must use get_database_path('skills') so it writes to the same DB as reindex."""
+        from omni.agent.cli.commands.sync import _sync_skills
+
+        with (
+            patch(
+                "omni.foundation.config.database.get_database_path",
+                return_value="/cache/omni-vector/skills.lance",
+            ) as mock_get_path,
+            patch("omni.foundation.bridge.rust_vector.get_vector_store") as mock_get_store,
+            patch("omni.foundation.config.skills.SKILLS_DIR", return_value=__file__),
+        ):
+            mock_store = MagicMock()
+            mock_store.index_skill_tools_dual = AsyncMock(return_value=(3, 3))
+            mock_get_store.return_value = mock_store
+
+            with (
+                patch(
+                    "omni.agent.cli.commands.reindex._build_relationship_graph_after_skills_reindex",
+                ) as mock_build_graph,
+                patch(
+                    "omni.foundation.services.index_dimension.ensure_embedding_signature_written",
+                ),
+                patch(
+                    "omni.core.skills.discovery.SkillDiscoveryService",
+                ) as mock_discovery_cls,
+            ):
+                mock_discovery_cls.return_value.discover_all = AsyncMock(return_value=[MagicMock()])
+
+                await _sync_skills()
+
+        mock_get_path.assert_called_once_with("skills")
+        mock_get_store.assert_called_once_with("/cache/omni-vector/skills.lance")
+        mock_build_graph.assert_called_once_with("/cache/omni-vector/skills.lance")
+
+    @pytest.mark.asyncio
+    async def test_sync_skills_uses_index_skill_tools_dual(self):
+        """_sync_skills must use index_skill_tools_dual(skills_path, 'skills', 'skills') like reindex."""
+        from omni.agent.cli.commands.sync import _sync_skills
+
+        with (
+            patch(
+                "omni.foundation.config.database.get_database_path",
+                return_value="/cache/omni-vector/skills.lance",
+            ),
+            patch("omni.foundation.bridge.rust_vector.get_vector_store") as mock_get_store,
+            patch("omni.foundation.config.skills.SKILLS_DIR", return_value=__file__),
+        ):
+            mock_store = MagicMock()
+            mock_dual = AsyncMock(return_value=(2, 2))
+            mock_store.index_skill_tools_dual = mock_dual
+            mock_get_store.return_value = mock_store
+
+            with (
+                patch(
+                    "omni.agent.cli.commands.reindex._build_relationship_graph_after_skills_reindex",
+                ),
+                patch(
+                    "omni.foundation.services.index_dimension.ensure_embedding_signature_written",
+                ),
+                patch(
+                    "omni.core.skills.discovery.SkillDiscoveryService",
+                ) as mock_discovery_cls,
+            ):
+                mock_discovery_cls.return_value.discover_all = AsyncMock(return_value=[])
+
+                await _sync_skills()
+
+        mock_dual.assert_called_once()
+        call_args = mock_dual.call_args
+        assert call_args[0][1] == "skills"
+        assert call_args[0][2] == "skills"
+
+    @pytest.mark.asyncio
+    async def test_sync_skills_builds_relationship_graph(self):
+        """_sync_skills must build the relationship graph after indexing (same as reindex)."""
+        from omni.agent.cli.commands.sync import _sync_skills
+
+        with (
+            patch(
+                "omni.foundation.config.database.get_database_path",
+                return_value="/cache/omni-vector/skills.lance",
+            ),
+            patch("omni.foundation.bridge.rust_vector.get_vector_store") as mock_get_store,
+            patch("omni.foundation.config.skills.SKILLS_DIR", return_value=__file__),
+        ):
+            mock_store = MagicMock()
+            mock_store.index_skill_tools_dual = AsyncMock(return_value=(1, 1))
+            mock_get_store.return_value = mock_store
+
+            with (
+                patch(
+                    "omni.agent.cli.commands.reindex._build_relationship_graph_after_skills_reindex",
+                ) as mock_build_graph,
+                patch(
+                    "omni.foundation.services.index_dimension.ensure_embedding_signature_written",
+                ),
+                patch(
+                    "omni.core.skills.discovery.SkillDiscoveryService",
+                ) as mock_discovery_cls,
+            ):
+                mock_discovery_cls.return_value.discover_all = AsyncMock(return_value=[])
+
+                await _sync_skills()
+
+        mock_build_graph.assert_called_once_with("/cache/omni-vector/skills.lance")
+
+    def test_reindex_skills_only_uses_get_database_path_skills(self):
+        """_reindex_skills_only must use get_database_path('skills') for the store path."""
+        from omni.agent.cli.commands.reindex import _reindex_skills_only
+
+        with (
+            patch(
+                "omni.agent.cli.commands.reindex.get_database_path",
+                return_value="/cache/omni-vector/skills.lance",
+            ) as mock_get_path,
+            patch(
+                "omni.foundation.bridge.RustVectorStore",
+            ) as mock_store_cls,
+            patch(
+                "omni.agent.cli.commands.reindex._reindex_lock",
+            ) as mock_lock,
+            patch(
+                "omni.agent.cli.commands.reindex._build_relationship_graph_after_skills_reindex",
+            ),
+        ):
+            mock_lock.return_value.__enter__ = lambda self: None
+            mock_lock.return_value.__exit__ = lambda self, *a: None
+
+            mock_store = MagicMock()
+            mock_store.drop_table = AsyncMock(return_value=None)
+            mock_dual = AsyncMock(return_value=(4, 4))
+            mock_store.index_skill_tools_dual = mock_dual
+            mock_store.list_all = AsyncMock(return_value=[])  # for _validate_skills_schema
+            mock_store_cls.return_value = mock_store
+
+            result = _reindex_skills_only(clear=False)
+
+        assert result.get("status") == "success"
+        mock_get_path.assert_called_with("skills")
+        mock_dual.assert_called_once()
+        call_args = mock_dual.call_args[0]
+        assert call_args[1] == "skills"
+        assert call_args[2] == "skills"

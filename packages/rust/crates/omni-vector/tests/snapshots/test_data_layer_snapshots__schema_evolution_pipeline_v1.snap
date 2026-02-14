@@ -9,9 +9,9 @@ expression: view
     "renamed_custom_label": true
   },
   "versions": {
-    "added": 3,
-    "dropped": 5,
-    "renamed": 4,
-    "seed": 2
+    "added": 2,
+    "dropped": 4,
+    "renamed": 3,
+    "seed": 1
   }
 }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .completions import register_completions_command
+from .dashboard import register_dashboard_command
 from .db import db_app, register_db_command
 from .knowledge import register_knowledge_command
 from .mcp import register_mcp_command
@@ -17,6 +18,7 @@ __all__ = [
     "get_database_path",
     "get_database_paths",
     "register_completions_command",
+    "register_dashboard_command",
     "register_db_command",
     "register_knowledge_command",
     "register_mcp_command",

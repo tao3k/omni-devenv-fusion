@@ -158,21 +158,38 @@ def router_search_json_schema() -> dict:
     return RouterSearchConfig.model_json_schema()
 
 
+# Default schema file in packages/shared (SSOT for router search config schema).
+_SHARED_ROUTER_SEARCH_CONFIG_SCHEMA = (
+    "packages/shared/schemas/omni.router.search_config.v1.schema.json"
+)
+
+
 def resolve_router_schema_path(schema_path: str | Path | None = None) -> Path:
-    """Resolve output path for router schema file.
+    """Resolve path to router search config schema file.
 
     Priority:
     1. Explicit `schema_path` argument
     2. `router.search.schema_file` from merged settings
-    3. Default: `<conf-dir>/schemas/router.search.schema.json` (`--conf` aware)
+    3. Default: project root's packages/shared/schemas/omni.router.search_config.v1.schema.json
+
+    Paths starting with "packages/shared/" are resolved relative to project root;
+    other relative paths are resolved relative to conf_dir (--conf).
     """
     if schema_path is not None:
         return Path(schema_path)
 
-    configured = get_setting("router.search.schema_file", "schemas/router.search.schema.json")
+    configured = get_setting(
+        "router.search.schema_file",
+        _SHARED_ROUTER_SEARCH_CONFIG_SCHEMA,
+    )
     configured_path = Path(str(configured))
     if configured_path.is_absolute():
         return configured_path
+    # SSOT: resolve packages/shared/... relative to project root
+    if str(configured_path).replace("\\", "/").startswith("packages/shared/"):
+        from omni.foundation.runtime.gitops import get_project_root
+
+        return get_project_root() / configured_path
     conf_dir = Path(get_settings().conf_dir)
     return conf_dir / configured_path
 

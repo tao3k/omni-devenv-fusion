@@ -135,12 +135,8 @@ async fn test_memory_mode_path_computation() {
 
 #[tokio::test]
 async fn test_memory_mode_add_documents_twice_without_dataset_exists_error() {
-    // Regression: memory mode must not try Dataset::write over an existing dataset path.
-    let mem_table_path = std::env::temp_dir().join("omni_lance_skills");
-    if mem_table_path.exists() {
-        std::fs::remove_dir_all(&mem_table_path).unwrap();
-    }
-
+    // Regression: memory mode must not try Dataset::write over an existing dataset.
+    // Each store gets a unique temp path (omni_lance/{id}/{table}) so no cross-run collision.
     let store = VectorStore::new(":memory:", Some(1536)).await.unwrap();
 
     store
@@ -221,10 +217,15 @@ async fn test_reindex_after_drop_with_keyword_index() {
     let db_path = temp_dir.path().join("test_reindex_kw");
 
     // Create store with keyword index enabled
-    let mut store =
-        VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(1536), true)
-            .await
-            .unwrap();
+    let mut store = VectorStore::new_with_keyword_index(
+        db_path.to_str().unwrap(),
+        Some(1536),
+        true,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     // Add initial documents
     store
@@ -274,9 +275,15 @@ async fn test_reindex_after_drop_with_keyword_index() {
     );
 
     // Recreate store (simulating what Python code does with new PyVectorStore)
-    let store2 = VectorStore::new_with_keyword_index(db_path.to_str().unwrap(), Some(1536), true)
-        .await
-        .unwrap();
+    let store2 = VectorStore::new_with_keyword_index(
+        db_path.to_str().unwrap(),
+        Some(1536),
+        true,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     // Add new documents with new store instance
     store2

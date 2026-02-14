@@ -54,6 +54,7 @@ pub mod skills;
 // ============================================================================
 
 pub use skills::{
+    CanonicalSkillPayload, CanonicalToolEntry,
     metadata::{
         AssetRecord, DataRecord, DecoratorArgs, DocsAvailable, IndexToolEntry, ReferencePath,
         ReferenceRecord, ScanConfig, SkillIndexEntry, SkillMetadata, SkillStructure, SnifferRule,

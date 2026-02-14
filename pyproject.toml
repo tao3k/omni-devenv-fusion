@@ -62,7 +62,6 @@ members = ["packages/python/*"]
 packages = []
 bypass-selection = true
 
-
 [tool.ruff]
 target-version = "py313"
 line-length = 100

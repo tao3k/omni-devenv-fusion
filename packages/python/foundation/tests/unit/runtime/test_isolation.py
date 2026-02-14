@@ -170,9 +170,10 @@ class TestIntegration:
     @pytest.mark.slow
     def test_run_skill_command_with_crawl4ai_skill(self):
         """Integration test: run crawl4ai skill via isolation."""
+        from omni.foundation.config.skills import SKILLS_DIR
         from omni.foundation.runtime.isolation import run_skill_command
 
-        skill_dir = Path(__file__).parent.parent.parent.parent / "assets" / "skills" / "crawl4ai"
+        skill_dir = SKILLS_DIR(skill="crawl4ai")
 
         if not (skill_dir / "pyproject.toml").exists():
             pytest.skip("crawl4ai skill not installed")

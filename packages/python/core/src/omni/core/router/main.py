@@ -217,9 +217,7 @@ class OmniRouter:
             fetch_limit = limit * (max_attempts - fetch_attempts + 2)
             # Rust emits canonical final_score/confidence; thresholding is applied on final_score
             # below to avoid pre-filtering out semantically-relevant low-raw/high-calibrated matches.
-            matches = await self._hybrid.search(
-                query, limit=fetch_limit, min_score=0.0, rerank=self._rerank
-            )
+            matches = await self._hybrid.search(query, limit=fetch_limit, min_score=0.0)
 
             # Convert matches to RouteResults
             seen_commands: set[str] = {f"{r.skill_name}.{r.command_name}" for r in results}

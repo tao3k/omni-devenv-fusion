@@ -15,13 +15,18 @@ Usage:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from omni.foundation.api.decorators import (
     get_script_config,
     inject_resources,
+    is_mcp_canonical_result,
     is_skill_command,
+    normalize_mcp_tool_result,
     skill_command,
 )
 from omni.foundation.api.types import CommandResult
@@ -620,3 +625,15 @@ class TestDecoratorEdgeCases:
 
         assert "inject_settings" in exec_config
         assert exec_config["inject_settings"] == ["api.key", "debug"]
+
+
+def test_mcp_tool_result_validates_against_shared_schema():
+    """Normalized MCP tool results must conform to shared schema (mcp_schema API, CI drift guard)."""
+    from omni.foundation.api.mcp_schema import get_schema_path, validate
+
+    if not get_schema_path().exists():
+        pytest.skip("Shared schema not found (project_root may be overridden in this worker)")
+    for raw in [None, "ok", {"k": "v"}, [1, 2]]:
+        result = normalize_mcp_tool_result(raw)
+        assert is_mcp_canonical_result(result)
+        validate(result)

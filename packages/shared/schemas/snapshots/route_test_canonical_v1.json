@@ -1,0 +1,51 @@
+{
+  "schema": "omni.router.route_test.v1",
+  "query": "git commit",
+  "count": 1,
+  "threshold": 0.4,
+  "limit": 5,
+  "confidence_profile": { "name": "balanced", "source": "active-profile" },
+  "stats": {
+    "semantic_weight": 1,
+    "keyword_weight": 1.5,
+    "rrf_k": 10,
+    "strategy": "weighted_rrf_field_boosting"
+  },
+  "results": [
+    {
+      "id": "git.commit",
+      "name": "git.commit",
+      "description": "Commit changes",
+      "skill_name": "git",
+      "tool_name": "git.commit",
+      "command": "commit",
+      "file_path": "assets/skills/git/scripts/commit.py",
+      "score": 0.82,
+      "vector_score": 0.75,
+      "keyword_score": 0.88,
+      "final_score": 0.91,
+      "confidence": "high",
+      "routing_keywords": ["git", "commit"],
+      "intents": ["version control", "commit"],
+      "category": "vcs",
+      "input_schema": {
+        "type": "object",
+        "properties": { "message": { "type": "string" } }
+      },
+      "payload": {
+        "type": "command",
+        "description": "Commit changes",
+        "metadata": {
+          "tool_name": "git.commit",
+          "routing_keywords": ["git", "commit"],
+          "input_schema": {
+            "type": "object",
+            "properties": { "message": { "type": "string" } }
+          },
+          "intents": ["version control", "commit"],
+          "category": "vcs"
+        }
+      }
+    }
+  ]
+}

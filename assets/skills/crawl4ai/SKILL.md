@@ -1,6 +1,6 @@
 ---
 name: crawl4ai
-description: Use when crawling web pages, extracting markdown content, or scraping website data with intelligent chunking and skeleton planning.
+description: Use when crawling web pages, extracting markdown content, or scraping website data with intelligent chunking and skeleton planning. Use when the user provides a URL or link to fetch or crawl.
 metadata:
   author: omni-dev-fusion
   version: "0.2.1"
@@ -12,6 +12,10 @@ metadata:
     - "extract"
     - "fetch"
     - "url"
+    - "link"
+    - "research"
+    - "research url"
+    - "analyze page"
     - "html"
     - "markdown"
     - "content"
@@ -25,6 +29,9 @@ metadata:
     - "Crawl a web page"
     - "Extract markdown content"
     - "Scrape website data"
+    - "Open or fetch a URL or link"
+    - "Research a URL or link"
+    - "Help me research a web page"
     - "Perform deep crawl"
     - "Get document skeleton/TOC"
     - "Extract specific sections from web page"

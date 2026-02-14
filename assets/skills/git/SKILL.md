@@ -1,6 +1,6 @@
 ---
 name: git
-description: Use when committing code, managing branches, pushing to remote, creating pull requests, or performing version control operations.
+description: Use when committing code, managing branches, pushing to remote, creating pull requests, or performing version control operations. Conforms to packages/shared/schemas/skill-routing-value-standard.md.
 metadata:
   author: omni-dev-fusion
   version: "2.0.0"

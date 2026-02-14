@@ -2,7 +2,7 @@
 
 > Single contract for tool search, vector search, and hybrid search. No legacy fields; CI and CLI enforce the contract.
 
-See also: [Schema Singularity](schema-singularity.md) §6, [Vector Search Options Contract](vector-search-options-contract.md).
+See also: [Schema Singularity](schema-singularity.md) §6, [Vector Search Options Contract](vector-search-options-contract.md), [Routing Search Schema](routing-search-schema.md) (which value uses semantic vs keyword vs intent search).
 
 ---
 
@@ -62,7 +62,7 @@ See also: [Schema Singularity](schema-singularity.md) §6, [Vector Search Option
 | `count`, `threshold`, `limit` | number | Result counts and thresholds                                               |
 | `confidence_profile`          | object | `name`, `source`                                                           |
 
-Each item in `results` must use `routing_keywords`; `keywords` is forbidden.
+Each item in `results` must use `routing_keywords`; `keywords` is forbidden. The exact result-item shape is driven by the routing algorithm (Rust `ToolSearchResult` → tool_search.v1 → Python adds `id`, `command`, `payload`). See [Route Test Result Shape](route-test-result-shape.md) and canonical snapshot `packages/shared/schemas/snapshots/route_test_canonical_v1.json`.
 
 ---
 

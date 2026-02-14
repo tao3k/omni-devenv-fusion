@@ -1,43 +1,20 @@
 """
 skill/scripts/list_tools.py - List All Registered MCP Tools (Alias-Aware)
 
-Lists all registered MCP tools from loaded skills with descriptions.
-Applies command aliases and documentation overrides from settings.yaml.
-Uses common omni tool definition from omni.core.omni_tool.
+Exposed as an MCP Resource (read-only). Lists all registered MCP tools from
+loaded skills with descriptions. Applies command aliases and documentation
+overrides from settings.yaml. Uses common omni tool definition from omni.core.omni_tool.
 """
 
-from omni.foundation.api.decorators import skill_command
+from omni.foundation.api.decorators import skill_resource
 from omni.core.omni_tool import get_omni_tool_list_entry
 
 
-@skill_command(
+@skill_resource(
     name="list_tools",
-    category="debug",  # Changed from "view" to "debug" - signals diagnostic use only
-    read_only=True,  # This tool only reads/returns information, no modifications
-    idempotent=True,  # Same input always returns same output
-    description="""
-    [DIAGNOSTIC/DEBUG ONLY] Intentionally limited-use tool for skill/tool exploration.
-    DO NOT use during normal task workflows. Only request when debugging or learning.
-
-    List all registered MCP tools with names, descriptions, and usage information.
-    Applies overrides from settings.yaml.
-
-    When to use:
-    - Exploring available omni commands during debugging
-    - Checking if a specific tool exists
-    - Generating tool inventory for documentation
-
-    When NOT to use:
-    - As part of normal task completion
-    - When you already know the tool you need
-    - In automated workflows (use specific tool calls instead)
-
-    Args:
-        - compact: bool = false - If true, shows minimal output with tool names only
-
-    Returns:
-        Markdown-formatted list of all tools grouped by skill.
-    """,
+    description="List all registered MCP tools with names, descriptions, and usage (debug/diagnostic)",
+    resource_uri="omni://skill/skill/list_tools",
+    mime_type="text/markdown",
 )
 def list_tools(compact: bool = False) -> str:
     from omni.core.kernel import get_kernel

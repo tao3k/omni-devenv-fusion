@@ -1,0 +1,27 @@
+{
+  "schema": "omni.router.routing_search.v1",
+  "semantic": {
+    "embedding_source": {
+      "template": "COMMAND: {tool_name}\nDESCRIPTION: {description}\nINTENTS: {intents}",
+      "fields": ["tool_name", "description", "intents"]
+    }
+  },
+  "keyword": {
+    "fields": [
+      { "name": "tool_name", "boost": 5.0, "in_query_parser": true },
+      { "name": "intents", "boost": 4.0, "in_query_parser": true },
+      { "name": "keywords", "boost": 3.0, "in_query_parser": true },
+      { "name": "description", "boost": 1.0, "in_query_parser": true },
+      { "name": "category", "boost": 0, "in_query_parser": false }
+    ]
+  },
+  "intent": {
+    "strategies": {
+      "exact": "keyword_only",
+      "semantic": "vector_only",
+      "hybrid": "hybrid"
+    },
+    "category_filter_values": ["file_discovery"],
+    "rerank_fields": ["routing_keywords", "intents", "description", "category"]
+  }
+}

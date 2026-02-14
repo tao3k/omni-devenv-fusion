@@ -2,7 +2,7 @@
 omni_tool.py - Master Omni Tool Definition
 
 Centralized definition of the highest-authority universal gateway tool.
-Used by MCP server and skill.list_tools command.
+Used by MCP server and the list_tools resource (omni://skill/skill/list_tools).
 
 Usage:
     from omni.core.omni_tool import get_omni_tool_info, OMNI_TOOL_DESCRIPTION
@@ -11,7 +11,7 @@ Usage:
     info = get_omni_tool_info()
     mcp_tools.append(Tool(name="omni", description=info["description"], inputSchema=info["inputSchema"]))
 
-    # For skill.list_tools command
+    # For list_tools resource output
     info = get_omni_tool_info()
     tools.append({"skill": "omni", "command": "omni", "display_name": "omni", "description": info["description"], "is_aliased": False})
 """
@@ -58,10 +58,10 @@ def get_omni_tool_info() -> dict:
 
 
 def get_omni_tool_list_entry() -> dict:
-    """Get omni tool entry for skill.list_tools output.
+    """Get omni tool entry for list_tools resource output.
 
     Returns:
-        Dict formatted for the tools list in skill.list_tools.
+        Dict formatted for the tools list (omni://skill/skill/list_tools).
     """
     return {
         "skill": "omni",

@@ -8,7 +8,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-lance = "1.0"
+lance = "2.0"
 
 [lints]
 workspace = true

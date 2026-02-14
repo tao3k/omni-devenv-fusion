@@ -257,7 +257,7 @@
       },
       "locked": {
         "lastModified": 1768691457,
-        "narHash": "sha256-EHoDcmEoNuXqAiam7SXb6lxHM2lH08d+izQGtaN38YM=",
+        "narHash": "sha256-mxU6Mdx/9GxVYdfnvb0Yzrvi6DpJN2QxREERwTl4k3o=",
         "owner": "tao3k",
         "repo": "omnibus",
         "rev": "ac858a4921a536e98781ce6dd8b848682967c3a6",

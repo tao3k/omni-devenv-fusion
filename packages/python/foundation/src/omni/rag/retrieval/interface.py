@@ -29,17 +29,20 @@ class RetrievalConfig:
     fragment_readahead: int | None = None
     batch_readahead: int | None = None
     scan_limit: int | None = None
+    projection: list[str] | None = None
     keywords: list[str] | None = None
 
     def to_vector_search_kwargs(self) -> dict[str, Any]:
-        """Render scanner/search kwargs aligned with Rust options contract."""
-        return {
+        """Render scanner/search kwargs aligned with Rust options contract (excludes None)."""
+        out: dict[str, Any] = {
             "where_filter": self.where_filter,
             "batch_size": self.batch_size,
             "fragment_readahead": self.fragment_readahead,
             "batch_readahead": self.batch_readahead,
             "scan_limit": self.scan_limit,
+            "projection": self.projection,
         }
+        return {k: v for k, v in out.items() if v is not None}
 
 
 class RetrievalBackend(Protocol):

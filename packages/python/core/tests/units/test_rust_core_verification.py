@@ -53,16 +53,17 @@ class TestDatabasePaths:
 
     def test_get_database_paths(self):
         """Test that get_database_paths returns all required paths."""
-        from omni.agent.cli.commands.reindex import get_database_paths
+        from omni.foundation.config import get_database_paths
 
         paths = get_database_paths()
         assert "skills" in paths, "Missing skills path"
         assert "router" in paths, "Missing router path"
         assert "knowledge" in paths, "Missing knowledge path"
+        assert "memory" in paths, "Missing memory path"
 
     def test_paths_end_with_lance(self):
-        """Test that database paths end with .lance extension."""
-        from omni.agent.cli.commands.reindex import get_database_paths
+        """Test that database paths end with expected extension."""
+        from omni.foundation.config import get_database_paths
 
         paths = get_database_paths()
         assert paths["skills"].endswith("skills.lance")
@@ -78,14 +79,6 @@ class TestReindexWorkflow:
         from omni.agent.cli.commands.reindex import _reindex_skills
 
         result = _reindex_skills(clear=True)
-        assert result["status"] == "success"
-        assert result.get("tools_indexed", 0) > 0
-
-    def test_sync_router_from_skills(self, project_root):
-        """Test that router can be synced from skills."""
-        from omni.agent.cli.commands.reindex import _sync_router_from_skills
-
-        result = _sync_router_from_skills()
         assert result["status"] == "success"
         assert result.get("tools_indexed", 0) > 0
 
@@ -164,11 +157,11 @@ class TestRouterSearch:
 
         RouterRegistry.reset_all()
         with tempfile.TemporaryDirectory(prefix="rust-core-router-") as tmpdir:
-            storage_path = str(Path(tmpdir) / "router.lance")
+            storage_path = str(Path(tmpdir) / "skills.lance")
             store = RustVectorStore(storage_path, enable_keyword_index=True)
             from omni.foundation.config.prj import get_skills_dir
 
-            asyncio.run(store.index_skill_tools_dual(str(get_skills_dir()), "skills", "router"))
+            asyncio.run(store.index_skill_tools_dual(str(get_skills_dir()), "skills", "skills"))
             router = OmniRouter(storage_path=storage_path)
             yield router
         RouterRegistry.reset_all()
@@ -210,11 +203,11 @@ class TestSkillDiscoverPattern:
 
         RouterRegistry.reset_all()
         with tempfile.TemporaryDirectory(prefix="rust-core-discover-") as tmpdir:
-            storage_path = str(Path(tmpdir) / "router.lance")
+            storage_path = str(Path(tmpdir) / "skills.lance")
             store = RustVectorStore(storage_path, enable_keyword_index=True)
             from omni.foundation.config.prj import get_skills_dir
 
-            asyncio.run(store.index_skill_tools_dual(str(get_skills_dir()), "skills", "router"))
+            asyncio.run(store.index_skill_tools_dual(str(get_skills_dir()), "skills", "skills"))
             router = OmniRouter(storage_path=storage_path)
             yield router
         RouterRegistry.reset_all()

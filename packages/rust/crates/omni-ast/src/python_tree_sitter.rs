@@ -64,6 +64,49 @@ impl TreeSitterPythonParser {
         functions
     }
 
+    /// Find all decorated functions with any of the specified decorator names
+    pub fn find_decorated_functions_any(
+        &mut self,
+        code: &str,
+        decorator_names: &[&str],
+    ) -> Vec<DecoratedFunction> {
+        let tree = match self.parser.parse(code, None) {
+            Some(t) => t,
+            None => return Vec::new(),
+        };
+
+        let mut functions = Vec::new();
+
+        let query = match Query::new(&self.language, "(function_definition) @func") {
+            Ok(q) => q,
+            Err(_) => return Vec::new(),
+        };
+
+        let root = tree.root_node();
+        let mut cursor = QueryCursor::new();
+
+        let capture_names = query.capture_names();
+        let mut matches = cursor.matches(&query, root, code.as_bytes());
+        while let Some(m) = matches.next() {
+            for capture in m.captures {
+                if let Some(capture_name) = capture_names.get(capture.index as usize) {
+                    if *capture_name == "func" {
+                        let func_node = capture.node;
+                        if let Some(func) =
+                            self.parse_function_any(&func_node, code, decorator_names)
+                        {
+                            if func.decorator.is_some() {
+                                functions.push(func);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        functions
+    }
+
     fn parse_function(
         &self,
         node: &Node,
@@ -75,6 +118,27 @@ impl TreeSitterPythonParser {
         let docstring = self.get_docstring(node, code);
         let text = node.utf8_text(code.as_bytes()).unwrap_or("").to_string();
         let decorator = self.find_decorator(node, code, decorator_name);
+
+        Some(DecoratedFunction {
+            name: func_name,
+            parameters: params,
+            docstring,
+            text,
+            decorator,
+        })
+    }
+
+    fn parse_function_any(
+        &self,
+        node: &Node,
+        code: &str,
+        decorator_names: &[&str],
+    ) -> Option<DecoratedFunction> {
+        let func_name = self.get_function_name(node, code);
+        let params = self.get_parameters(node, code);
+        let docstring = self.get_docstring(node, code);
+        let text = node.utf8_text(code.as_bytes()).unwrap_or("").to_string();
+        let decorator = self.find_decorator_any(node, code, decorator_names);
 
         Some(DecoratedFunction {
             name: func_name,
@@ -270,6 +334,31 @@ impl TreeSitterPythonParser {
         None
     }
 
+    /// Find a decorator with any of the specified names
+    fn find_decorator_any(
+        &self,
+        func_node: &Node,
+        code: &str,
+        decorator_names: &[&str],
+    ) -> Option<DecoratorInfo> {
+        if let Some(parent) = func_node.parent() {
+            let children: Vec<Node> = parent.children(&mut parent.walk()).collect();
+            let func_index = children.iter().position(|n| n.id() == func_node.id())?;
+
+            for i in (0..func_index).rev() {
+                let child = &children[i];
+                if child.kind() == "decorator" {
+                    if let Some(info) = self.parse_decorator(child, code) {
+                        if decorator_names.iter().any(|name| info.name == *name) {
+                            return Some(info);
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
     fn parse_decorator(&self, node: &Node, code: &str) -> Option<DecoratorInfo> {
         let decorator_text = node
             .utf8_text(code.as_bytes())
@@ -297,6 +386,7 @@ impl TreeSitterPythonParser {
                     category: args.get("category").cloned(),
                     destructive,
                     read_only,
+                    resource_uri: args.get("resource_uri").cloned(),
                 },
             });
         }
@@ -455,6 +545,8 @@ pub struct DecoratorArguments {
     pub destructive: Option<bool>,
     /// Whether tool is read-only.
     pub read_only: Option<bool>,
+    /// MCP Resource URI (e.g. `omni://skill/git/status`).
+    pub resource_uri: Option<String>,
 }
 
 /// Information about a function parameter

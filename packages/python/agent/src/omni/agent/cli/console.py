@@ -218,19 +218,32 @@ def cli_log_handler(message: str) -> None:
     err_console.print(f"{prefix} {message}", style=style)
 
 
+# Known metadata field names (from MCP tool result schema and execution context)
+_METADATA_FIELDS = {
+    "isError",
+    "error",
+    "execution_time",
+    "execution_time_ms",
+    "skill_name",
+    "command_name",
+    "timestamp",
+    "version",
+    "schema_version",
+}
+
+
 def print_metadata_box(result: Any) -> None:
     """Draw a beautiful metadata box on stderr.
+
+    Only shows true metadata fields (isError, execution_time, etc.)
+    not business data (status, document_count, etc.)
 
     Args:
         result: The skill execution result
     """
     if isinstance(result, dict):
-        # Extract metadata (exclude main content fields to keep box clean)
-        metadata = {
-            k: v
-            for k, v in result.items()
-            if k not in ["markdown", "content", "raw_output", "data"]
-        }
+        # Extract only known metadata fields
+        metadata = {k: v for k, v in result.items() if k in _METADATA_FIELDS}
         if metadata:
             err_console.print(
                 Panel(
@@ -278,12 +291,17 @@ def print_result(result: Any, is_tty: bool = False, json_output: bool = False) -
             content = result["data"].get("content", result["data"].get("markdown", ""))
             metadata = result["data"].get("metadata", {})
         else:
-            # Handle isolation.py direct format: content / metadata
-            # Or plain dict like {'message': '...', ...} from @skill_command
-            content = result.get("content", result.get("markdown"))
+            # MCP canonical shape from @skill_command: content = [{ "type": "text", "text": "..." }]
+            raw_content = result.get("content", result.get("markdown"))
+            if isinstance(raw_content, list) and raw_content and isinstance(raw_content[0], dict):
+                content = raw_content[0].get("text", "")
+            else:
+                content = raw_content
             metadata = result.get("metadata", {})
+            if "isError" in result:
+                metadata["isError"] = result["isError"]
             # If no content/markdown key, show full result as JSON
-            if not content:
+            if content is None or content == "":
                 content = json.dumps(result, indent=2, ensure_ascii=False)
                 metadata = {}
     elif isinstance(result, str):

@@ -43,6 +43,13 @@ from .router import (
     UnifiedRouter,
 )
 from .sniffer import ActivationRule, ContextualSniffer, IntentSniffer
+from .query_intent import (
+    ToolSearchIntentResult,
+    classify_tool_search_intent,
+    classify_tool_search_intent_full,
+    classify_tool_search_intent_with_llm,
+)
+from .translate import enrich_routing_keywords, translate_query_to_english
 
 __all__ = [
     # Cache
@@ -71,6 +78,14 @@ __all__ = [
     "IntentSniffer",
     "ContextualSniffer",
     "ActivationRule",
+    # Intent classification (agentic search; sample-aligned with report + Rust)
+    "classify_tool_search_intent",
+    "classify_tool_search_intent_full",
+    "classify_tool_search_intent_with_llm",
+    "ToolSearchIntentResult",
+    # LLM layer (translation + catalog enrichment)
+    "translate_query_to_english",
+    "enrich_routing_keywords",
     # Facade
     "OmniRouter",
     "RouterRegistry",

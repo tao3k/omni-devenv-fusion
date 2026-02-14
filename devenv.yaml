@@ -12,6 +12,9 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs-latest
+  worktrunk:
+    url: github:max-sixty/worktrunk/main
+
 allowUnfree: true
 secretspec:
   enable: true

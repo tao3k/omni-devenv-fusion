@@ -1,32 +1,36 @@
-import pytest
-import sys
 import json
-from pathlib import Path
 
-# Add skill scripts to path to import search_graph
-skill_scripts = Path(__file__).parents[1] / "scripts"
-sys.path.append(str(skill_scripts))
+import pytest
 
-# Now import the skill command
-from graph import search_graph
+from graph import search_graph  # noqa: E402  (skill scripts on sys.path via conftest)
 
-# Import fixtures - conftest.py in test directory provides these
-# mock_knowledge_graph_store is provided by omni.test_kit.fixtures.rag via conftest.py
+
+def _unwrap(result):
+    """Unwrap MCP tool result envelope to get the inner payload dict."""
+    if isinstance(result, dict) and "content" in result:
+        text = result["content"][0].get("text", "")
+        try:
+            return json.loads(text)
+        except (ValueError, TypeError):
+            return text
+    if isinstance(result, str):
+        try:
+            return json.loads(result)
+        except (ValueError, TypeError):
+            return result
+    return result
 
 
 @pytest.mark.asyncio
 async def test_search_graph_entities(mock_knowledge_graph_store):
     """Test searching for entities using the skill command."""
-    # Setup mock data
     mock_knowledge_graph_store.add_entity(
         {"name": "Python", "entity_type": "SKILL", "description": "Programming language"}
     )
 
-    # Call skill command
-    result_json = await search_graph(query="Python", mode="entities")
-    result = json.loads(result_json)
+    raw = await search_graph(query="Python", mode="entities")
+    result = _unwrap(raw)
 
-    # Verify
     assert "entity" in result
     assert result["entity"]["name"] == "Python"
     assert result["entity"]["entity_type"] == "SKILL"
@@ -44,11 +48,9 @@ async def test_search_graph_relations(mock_knowledge_graph_store):
         }
     )
 
-    # Call skill command
-    result_json = await search_graph(query="Developer", mode="relations")
-    result = json.loads(result_json)
+    raw = await search_graph(query="Developer", mode="relations")
+    result = _unwrap(raw)
 
-    # Verify
     assert "relations" in result
     assert len(result["relations"]) == 1
     assert result["relations"][0]["target"] == "Python"
@@ -57,23 +59,17 @@ async def test_search_graph_relations(mock_knowledge_graph_store):
 @pytest.mark.asyncio
 async def test_search_graph_hybrid(mock_knowledge_graph_store):
     """Test hybrid search (entity + neighbors)."""
-    # Setup graph: Dev -> USES -> Python
     mock_knowledge_graph_store.add_entity({"name": "Developer", "entity_type": "PERSON"})
     mock_knowledge_graph_store.add_entity({"name": "Python", "entity_type": "SKILL"})
     mock_knowledge_graph_store.add_relation(
         {"source": "Developer", "target": "Python", "relation_type": "USES"}
     )
 
-    # Call skill command
-    result_json = await search_graph(query="Developer", mode="hybrid")
-    result = json.loads(result_json)
+    raw = await search_graph(query="Developer", mode="hybrid")
+    result = _unwrap(raw)
 
-    # Verify entity found
     assert result.get("entity", {}).get("name") == "Developer"
 
-    # Verify related entities (multi-hop mock)
-    # Note: MockPyKnowledgeGraph.multi_hop_search needs to find "Python"
-    # The simple mock implementation looks for direct relations.
     related = result.get("related_entities", [])
     assert len(related) > 0
     assert any(e["name"] == "Python" for e in related)
@@ -82,7 +78,6 @@ async def test_search_graph_hybrid(mock_knowledge_graph_store):
 @pytest.mark.asyncio
 async def test_search_graph_backend_missing(monkeypatch):
     """Test error handling when backend is missing."""
-    # Force backend to None
     from omni.rag.graph import KnowledgeGraphStore
 
     def mock_init_none(self):
@@ -90,11 +85,10 @@ async def test_search_graph_backend_missing(monkeypatch):
 
     monkeypatch.setattr(KnowledgeGraphStore, "__init__", mock_init_none)
 
-    result_json = await search_graph(query="Python")
+    raw = await search_graph(query="Python")
+    result = _unwrap(raw)
 
-    # It might return an error string directly, not JSON
-    if result_json.startswith("{"):
-        result = json.loads(result_json)
+    if isinstance(result, dict):
         assert result.get("error") or result.get("status") == "error"
     else:
-        assert "not available" in result_json or "failed" in result_json.lower()
+        assert "not available" in result or "failed" in result.lower()

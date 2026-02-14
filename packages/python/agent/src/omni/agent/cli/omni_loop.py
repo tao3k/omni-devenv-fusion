@@ -193,6 +193,25 @@ async def run_task(task: str, max_steps: int | None):
 
     # Report
     _print_enrich_result(task, result, agent)
+
+    # Persist last-session metrics for `omni dashboard`
+    stats = agent.context.stats()
+    from omni.agent.cli.session_metrics import write_session_metrics
+
+    write_session_metrics(
+        {
+            "task": task,
+            "session_id": getattr(agent, "session_id", "N/A"),
+            "step_count": agent.step_count
+            if hasattr(agent, "step_count")
+            else stats.get("turn_count", 0),
+            "tool_calls": getattr(agent, "tool_calls_count", stats.get("tool_calls", 0)),
+            "est_tokens": stats.get("estimated_tokens", 0),
+            "system_messages": stats.get("system_messages", 0),
+            "total_messages": stats.get("total_messages", 0),
+        }
+    )
+
     return result
 
 

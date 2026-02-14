@@ -9,6 +9,8 @@ pub(crate) fn get_all_file_hashes_async(
     path: &str,
     dimension: usize,
     enable_kw: bool,
+    index_cache_size_bytes: Option<usize>,
+    max_cached_tables: Option<usize>,
     table_name: &str,
 ) -> PyResult<String> {
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -17,9 +19,15 @@ pub(crate) fn get_all_file_hashes_async(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(path, Some(dimension), enable_kw)
-            .await
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let store = VectorStore::new_with_keyword_index(
+            path,
+            Some(dimension),
+            enable_kw,
+            index_cache_size_bytes,
+            super::store::cache_config_from_max(max_cached_tables),
+        )
+        .await
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         store
             .get_all_file_hashes(table_name)
             .await
@@ -33,6 +41,8 @@ pub(crate) fn get_analytics_table_async(
     path: &str,
     dimension: usize,
     enable_kw: bool,
+    index_cache_size_bytes: Option<usize>,
+    max_cached_tables: Option<usize>,
     table_name: &str,
 ) -> PyResult<Py<PyAny>> {
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -41,9 +51,15 @@ pub(crate) fn get_analytics_table_async(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     let json_tools = rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(path, Some(dimension), enable_kw)
-            .await
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let store = VectorStore::new_with_keyword_index(
+            path,
+            Some(dimension),
+            enable_kw,
+            index_cache_size_bytes,
+            super::store::cache_config_from_max(max_cached_tables),
+        )
+        .await
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         store
             .list_all_tools(table_name)
             .await

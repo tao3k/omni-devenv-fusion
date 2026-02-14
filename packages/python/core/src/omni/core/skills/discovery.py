@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any
 
 from omni.foundation.config.dirs import get_skills_dir
 from omni.foundation.config.logging import get_logger
-from omni.foundation.services.vector_schema import parse_tool_router_result
+from omni.foundation.services.vector_schema import parse_tool_search_payload
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
@@ -393,7 +393,11 @@ class SkillDiscoveryService:
         return len(self._registry)
 
     async def search_tools_async(
-        self, query: str, limit: int = 10, threshold: float = 0.1
+        self,
+        query: str,
+        limit: int = 10,
+        threshold: float = 0.1,
+        intent_override: str | None = None,
     ) -> list[ToolMatch]:
         """
         Search for tools matching the given intent/query.
@@ -405,6 +409,8 @@ class SkillDiscoveryService:
             query: Natural language intent (e.g., "read markdown files")
             limit: Maximum number of results to return
             threshold: Minimum score threshold (0.0-1.0)
+            intent_override: Optional intent hint (e.g. from an LLM). When set, used
+                instead of rule-based classification ("exact", "semantic", "hybrid", "category").
 
         Returns:
             List of ToolMatch objects sorted by score
@@ -432,15 +438,31 @@ class SkillDiscoveryService:
                 logger.warning(f"Embedding failed: {embed_err}, using keyword-only search")
                 query_vector = []
 
-            # Use Rust search_tools with Weighted RRF + Field Boosting
-            # Use cleaned query for keyword rescue to avoid Tantivy parse errors
-            results = await store.search_tools(
-                table_name="skills",
-                query_vector=query_vector,
-                query_text=keyword_query,
-                limit=limit * 2,
-                threshold=0.0,
+            # Use agentic search when available (intent: exact vs hybrid).
+            from omni.core.router.query_intent import classify_tool_search_intent
+
+            intent = (
+                intent_override
+                if intent_override is not None
+                else classify_tool_search_intent(keyword_query)
             )
+            if hasattr(store, "agentic_search"):
+                results = await store.agentic_search(
+                    table_name="skills",
+                    query_vector=query_vector,
+                    query_text=keyword_query,
+                    limit=limit * 2,
+                    threshold=0.0,
+                    intent=intent,
+                )
+            else:
+                results = await store.search_tools(
+                    table_name="skills",
+                    query_vector=query_vector,
+                    query_text=keyword_query,
+                    limit=limit * 2,
+                    threshold=0.0,
+                )
 
             matches = []
             for r in results:
@@ -450,7 +472,7 @@ class SkillDiscoveryService:
 
                 parsed = None
                 try:
-                    parsed = parse_tool_router_result(dict(r))
+                    parsed = parse_tool_search_payload(dict(r))
                 except Exception:
                     parsed = None
 

@@ -38,9 +38,13 @@ if sys.version_info >= (3, 13):
 import typer
 from mcp import types
 from rich.panel import Panel
+from typing import TYPE_CHECKING, Any
 
 from omni.foundation.config.logging import configure_logging, get_logger
 from omni.foundation.utils.asyncio import run_async_blocking
+
+if TYPE_CHECKING:
+    from omni.agent.server import AgentMCPHandler
 
 # =============================================================================
 # Lightweight HTTP Server for Embedding (STDIO mode only)
@@ -228,6 +232,55 @@ _i_started_server = False
 
 
 # =============================================================================
+# MCP Session Handler for SSE Transport
+# =============================================================================
+
+
+async def _run_mcp_session(
+    handler: "AgentMCPHandler",
+    read_stream: Any,
+    write_stream: Any,
+) -> None:
+    """Run MCP session by processing messages from read_stream and writing to write_stream.
+
+    This bridges the SSE transport streams with the AgentMCPHandler.
+    """
+    import anyio
+    from mcp.types import JSONRPCRequest, JSONRPCResponse
+
+    logger = get_logger("omni.mcp.session")
+
+    async def read_messages():
+        """Read messages from the read_stream and process them."""
+        try:
+            async for session_message in read_stream:
+                # SessionMessage contains the MCP message
+                message = session_message.message
+                logger.debug(f"Received MCP message: {message.method}")
+
+                # Handle the message using handler
+                if hasattr(message, "id") and message.id is not None:
+                    # It's a request (expects response)
+                    request_dict = message.model_dump(by_alias=True, exclude_none=True)
+                    response = await handler.handle_request(request_dict)
+                    # Send response back
+                    await write_stream.send(session_message.response(response))
+                else:
+                    # It's a notification (no response expected)
+                    await handler.handle_notification(
+                        message.method,
+                        message.params.model_dump(by_alias=True) if message.params else None,
+                    )
+        except anyio.BrokenResourceError:
+            logger.info("SSE session closed")
+        except Exception as e:
+            logger.error(f"Error in MCP session: {e}")
+
+    # Run the message processing task
+    await read_messages()
+
+
+# =============================================================================
 
 from ..console import err_console
 
@@ -407,7 +460,7 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
 
                 run_async_blocking(run_stdio())
 
-            else:  # SSE mode
+            else:  # SSE mode - uses sse.py module
                 # Configure logging
                 log_level = "DEBUG" if verbose else "INFO"
                 configure_logging(level=log_level)
@@ -421,44 +474,80 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                     )
                 )
 
-                # Use omni.mcp SSE transport with AgentMCPHandler
+                # Create handler (lightweight, no initialization yet)
                 from omni.agent.server import create_agent_handler
-                from omni.mcp import MCPServer
-                from omni.mcp.transport.sse import SSEServer
 
                 handler = create_agent_handler()
                 _handler_ref = handler
-                _setup_signal_handler(handler)
 
-                # Initialize embedding service FIRST (auto-detects, starts HTTP server on 18501)
+                # Import SSE server
+                from omni.agent.mcp_server.sse import run_sse
+
+                # Start SSE server FIRST (so MCP clients can connect immediately)
+                # Use threading to run server in background while we initialize services
+                import threading
+
+                server_ready = threading.Event()
+                server_error = [None]
+
+                def run_server():
+                    try:
+                        asyncio.run(run_sse(handler, host, port))
+                    except Exception as e:
+                        server_error[0] = e
+
+                server_thread = threading.Thread(target=run_server, daemon=True)
+                server_thread.start()
+
+                # Wait for server to be ready
+                import time
+
+                for _ in range(50):  # 5 seconds max wait
+                    time.sleep(0.1)
+                    try:
+                        import httpx
+
+                        resp = httpx.get(f"http://{host}:{port}/health", timeout=0.5)
+                        if resp.status_code == 200:
+                            break
+                    except Exception:
+                        pass
+                else:
+                    logger.warning("Server health check timed out, continuing...")
+
+                logger.info(f"✅ SSE server started on http://{host}:{port}")
+
+                # Now initialize services in background
+                # Initialize embedding service
                 from omni.foundation.services.embedding import get_embedding_service
 
                 embed_svc = get_embedding_service()
                 embed_svc.initialize()
                 logger.info("✅ Embedding service initialized")
 
-                # Note: Embedding tools (embed_texts, embed_single) are handled
-                # directly by AgentMCPHandler via preloaded embedding service
+                # Initialize handler
+                run_async_blocking(handler.initialize())
+                logger.info("✅ MCP handler initialized")
 
-                server = SSEServer(handler, host=host, port=port)
+                # Start model loading in background
+                embed_svc.start_model_loading()
+                logger.info("🔄 Embedding model loading in background...")
 
-                async def run_sse():
-                    try:
-                        await handler.initialize()
-                        # Start model loading AFTER server starts (non-blocking)
-                        embed_svc.start_model_loading()
-                        logger.info("🔄 Embedding model loading in background...")
-                        await server.start()
-                        # Keep running until interrupted
-                        while not _shutdown_requested:
-                            await asyncio.sleep(1)
-                        await server.stop()  # Stop SSE server
-                        await _graceful_shutdown(handler)
-                    except asyncio.CancelledError:
-                        logger.info("SSE server cancelled")
-                        await _graceful_shutdown(handler)
+                # Keep main thread alive
+                try:
+                    server_thread.join()
+                except KeyboardInterrupt:
+                    logger.info("Server stopped")
 
-                run_async_blocking(run_sse())
+                def shutdown_handler(signum, frame):
+                    logger.info("Shutdown signal received")
+                    raise KeyboardInterrupt()
+
+                signal.signal(signal.SIGINT, shutdown_handler)
+                signal.signal(signal.SIGTERM, shutdown_handler)
+
+                # Run SSE server
+                asyncio.run(run_sse(handler, host, port))
 
         except KeyboardInterrupt:
             shutdown_logger = get_logger("omni.mcp.shutdown")

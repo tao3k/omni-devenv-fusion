@@ -1,0 +1,14 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_observability.rs
+assertion_line: 95
+expression: view
+---
+{
+  "fragment_count": 1,
+  "fragmentation_ratio": 0.02,
+  "indices_count": 0,
+  "recommendations": [
+    "run_compaction"
+  ],
+  "row_count": 50
+}

@@ -1,0 +1,143 @@
+{
+  "$defs": {
+    "RouterConfidenceProfile": {
+      "additionalProperties": false,
+      "description": "Validated confidence profile values.",
+      "properties": {
+        "high_threshold": {
+          "default": 0.75,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "High Threshold",
+          "type": "number"
+        },
+        "medium_threshold": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Medium Threshold",
+          "type": "number"
+        },
+        "high_base": {
+          "default": 0.9,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "High Base",
+          "type": "number"
+        },
+        "high_scale": {
+          "default": 0.05,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "High Scale",
+          "type": "number"
+        },
+        "high_cap": {
+          "default": 0.99,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "High Cap",
+          "type": "number"
+        },
+        "medium_base": {
+          "default": 0.6,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Medium Base",
+          "type": "number"
+        },
+        "medium_scale": {
+          "default": 0.3,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Medium Scale",
+          "type": "number"
+        },
+        "medium_cap": {
+          "default": 0.89,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Medium Cap",
+          "type": "number"
+        },
+        "low_floor": {
+          "default": 0.1,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Low Floor",
+          "type": "number"
+        }
+      },
+      "title": "RouterConfidenceProfile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Validated router search configuration.",
+  "properties": {
+    "active_profile": {
+      "default": "balanced",
+      "title": "Active Profile",
+      "type": "string"
+    },
+    "auto_profile_select": {
+      "default": true,
+      "title": "Auto Profile Select",
+      "type": "boolean"
+    },
+    "profiles": {
+      "additionalProperties": {
+        "$ref": "#/$defs/RouterConfidenceProfile"
+      },
+      "title": "Profiles",
+      "type": "object"
+    },
+    "default_limit": {
+      "default": 10,
+      "minimum": 1,
+      "title": "Default Limit",
+      "type": "integer"
+    },
+    "default_threshold": {
+      "default": 0.2,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Default Threshold",
+      "type": "number"
+    },
+    "rerank": {
+      "default": true,
+      "title": "Rerank",
+      "type": "boolean"
+    },
+    "semantic_weight": {
+      "default": 0.7,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Semantic Weight",
+      "type": "number"
+    },
+    "keyword_weight": {
+      "default": 0.3,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Keyword Weight",
+      "type": "number"
+    },
+    "adaptive_threshold_step": {
+      "default": 0.15,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Adaptive Threshold Step",
+      "type": "number"
+    },
+    "adaptive_max_attempts": {
+      "default": 3,
+      "minimum": 1,
+      "title": "Adaptive Max Attempts",
+      "type": "integer"
+    }
+  },
+  "title": "RouterSearchConfig",
+  "type": "object"
+}

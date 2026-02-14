@@ -23,6 +23,9 @@ toml = "0.8"
 chrono = { workspace = true }
 uuid = { workspace = true }
 
+# Async stream combinators (for Lance scan → collect)
+futures = "0.3"
+
 # Path resolution
 dirs = "5"
 walkdir = "2"

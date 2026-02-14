@@ -127,7 +127,8 @@ async def recall(
 
             embedding_service = get_embedding_service()
             vector = embedding_service.embed(query)[0]
-            json_results = vector_store.store.search_hybrid(collection, vector, keywords, limit)
+            store = vector_store.get_store_for_collection(collection)
+            json_results = store.search_hybrid(collection, vector, keywords, limit) if store else []
         else:
             # Pure semantic search via VectorStoreClient
             raw_results = await vector_store.search(query, limit, collection)
@@ -148,14 +149,21 @@ async def recall(
                     )
                 )
 
+            # === Dual-Core Bridges: ZK Link + KG Entity Boost ===
+            # Bridge 1: Boost results whose source docs share ZK links.
+            # Bridge 1b: Boost results connected to query entities in KG.
+            # Both are non-blocking: if unavailable, results pass through.
+            result_dicts = [r.to_dict() for r in results]
+            result_dicts = await _apply_dual_core_recall_boost(result_dicts, query)
+
             # Format response
             response = {
                 "query": query,
                 "keywords": keywords,
                 "collection": collection,
-                "found": len(results),
+                "found": len(result_dicts),
                 "status": "success",
-                "results": [r.to_dict() for r in results],
+                "results": result_dicts,
             }
 
             return json.dumps(response, indent=2, ensure_ascii=False)
@@ -182,14 +190,18 @@ async def recall(
                 logger.debug(f"Failed to parse search result: {e}")
                 continue
 
+        # === Dual-Core Bridges: ZK Link + KG Entity Boost ===
+        result_dicts = [r.to_dict() for r in results]
+        result_dicts = await _apply_dual_core_recall_boost(result_dicts, query)
+
         # Format response
         response = {
             "query": query,
             "keywords": keywords,
             "collection": collection,
-            "found": len(results),
+            "found": len(result_dicts),
             "status": "success",
-            "results": [r.to_dict() for r in results],
+            "results": result_dicts,
         }
 
         return json.dumps(response, indent=2, ensure_ascii=False)
@@ -388,7 +400,9 @@ async def clear(collection: str = "knowledge_chunks") -> str:
             )
 
         # Drop and recreate the table
-        vector_store.store.drop_table(collection)
+        store = vector_store.get_store_for_collection(collection)
+        if store:
+            store.drop_table(collection)
 
         return json.dumps(
             {
@@ -407,6 +421,50 @@ async def clear(collection: str = "knowledge_chunks") -> str:
             },
             indent=2,
         )
+
+
+# =============================================================================
+# Dual-Core Recall Bridges (ZK Link + KG Entity)
+# =============================================================================
+
+
+async def _apply_dual_core_recall_boost(
+    result_dicts: list[dict],
+    query: str,
+) -> list[dict]:
+    """Apply all dual-core bridges to recall results (non-blocking).
+
+    Pipeline:
+    1. Compute dynamic fusion weights from Rust intent extractor.
+    2. Bridge 1: ZK link proximity boost (scaled by fusion weights).
+    3. Bridge 1b: KG entity boost (scaled by fusion weights).
+
+    If any bridge is unavailable, results pass through unchanged.
+    """
+    try:
+        from omni.rag.dual_core import (
+            apply_kg_recall_boost,
+            compute_fusion_weights,
+            zk_link_proximity_boost,
+        )
+
+        # Shared intent analysis — computed once, used by all bridges
+        fusion = compute_fusion_weights(query)
+
+        # Bridge 1: ZK link proximity
+        result_dicts = await zk_link_proximity_boost(
+            result_dicts, query, fusion_scale=fusion.zk_proximity_scale
+        )
+
+        # Bridge 1b: KG entity boost
+        result_dicts = apply_kg_recall_boost(
+            result_dicts, query, fusion_scale=fusion.zk_entity_scale
+        )
+
+    except Exception as e:
+        logger.debug("Dual-core recall boost skipped: %s", e)
+
+    return result_dicts
 
 
 # =============================================================================

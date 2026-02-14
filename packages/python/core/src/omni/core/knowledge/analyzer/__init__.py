@@ -9,7 +9,6 @@ from __future__ import annotations
 from typing import Any
 
 from omni.foundation.config.logging import get_logger
-from omni.foundation.utils.asyncio import run_async_blocking
 
 logger = get_logger("omni.core.knowledge.analyzer")
 
@@ -17,14 +16,10 @@ logger = get_logger("omni.core.knowledge.analyzer")
 def get_knowledge_dataframe(collection: str = "knowledge"):
     """Get all knowledge entries as a PyArrow Table for analytics.
 
+    Uses store.list_all_arrow() for Arrow-native path (no dict list → Table conversion).
     Returns:
         PyArrow Table with available columns (id, content, source, type, etc.)
     """
-    try:
-        import pyarrow as pa
-    except ImportError:
-        raise ImportError("pyarrow is required for analytics. Install with: pip install pyarrow")
-
     try:
         from omni.foundation.config import get_database_path
 
@@ -35,14 +30,11 @@ def get_knowledge_dataframe(collection: str = "knowledge"):
 
         store = get_vector_store(index_path=storage_path)
 
-        # Get all entries as list of dicts
-        entries = run_async_blocking(store.list_all(collection))
-
-        if not entries:
+        # Arrow-native: get Table directly (replaces list_all + from_pylist)
+        table = store.list_all_arrow(collection)
+        if table is None or table.num_rows == 0:
             return None
-
-        # Convert to PyArrow Table
-        return pa.Table.from_pylist(entries)
+        return table
     except Exception as e:
         raise RuntimeError(f"Failed to get knowledge analytics table: {e}")
 

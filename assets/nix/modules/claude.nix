@@ -19,11 +19,11 @@ in
     ANTHROPIC_AUTH_TOKEN = config.secretspec.secrets.MINIMAX_API_KEY;
     API_TIMEOUT_MS = "2000000";
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"; # Note: Convert to string
-    ANTHROPIC_MODEL = "MiniMax-M2.1";
-    ANTHROPIC_SMALL_FAST_MODEL = "MiniMax-M2.1";
-    ANTHROPIC_DEFAULT_SONNET_MODEL = "MiniMax-M2.1";
-    ANTHROPIC_DEFAULT_OPUS_MODEL = "MiniMax-M2.1";
-    ANTHROPIC_DEFAULT_HAIKU_MODEL = "MiniMax-M2.1";
+    ANTHROPIC_MODEL = "MiniMax-M2.5";
+    ANTHROPIC_SMALL_FAST_MODEL = "MiniMax-M2.5";
+    ANTHROPIC_DEFAULT_SONNET_MODEL = "MiniMax-M2.5";
+    ANTHROPIC_DEFAULT_OPUS_MODEL = "MiniMax-M2.5";
+    ANTHROPIC_DEFAULT_HAIKU_MODEL = "MiniMax-M2.5";
   };
   claude.code.hooks = {
     # PostToolUse = {
@@ -63,18 +63,17 @@ in
         MINIMAX_API_RESOURCE_MODE = "url";
       };
     };
-
     omniAgent = {
-      type = "stdio";
-      # url = "http://0.0.0.0:3002/sse";
-      command = "omni";
-      args = [
-        "mcp"
-        "--transport"
-        "stdio"
-        # "--port"
-        # "3002"
-      ];
+      type = "http";
+      url = "http://127.0.0.1:3002";
+      # command = "omni";
+      # args = [
+      #   "mcp"
+      #   "--transport"
+      #   "stdio"
+      #   # "--port"
+      #   # "3002"
+      # ];
       env = {
         OMNI_UX_MODE = "headless";
         MINIMAX_API_KEY = config.secretspec.secrets.MINIMAX_API_KEY;

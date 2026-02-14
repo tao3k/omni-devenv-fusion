@@ -121,9 +121,10 @@ def with_removed_key(payload: dict[str, Any], key: str) -> dict[str, Any]:
 def make_router_result_payload(
     **overrides: Any,
 ) -> dict[str, Any]:
-    """Build a canonical router result payload for CLI/router tests."""
+    """Build a canonical router result payload for CLI/router tests (omni.router.route_test.v1 result item)."""
     payload: dict[str, Any] = {
         "id": "git.commit",
+        "name": "git.commit",
         "description": "Commit changes",
         "skill_name": "git",
         "tool_name": "git.commit",
@@ -151,14 +152,29 @@ def parametrize_route_intent_queries(
     query_name: str = "query",
     expected_tool_name: str = "expected_tool_name",
 ) -> pytest.MarkDecorator:
-    """Parametrize common routing intents across tests."""
+    """Parametrize common routing intents across tests (including research/URL intents)."""
     return pytest.mark.parametrize(
         f"{query_name},{expected_tool_name}",
         [
             ("git commit", "git.commit"),
             ("find python files in current directory", "advanced_tools.smart_find"),
+            (
+                "Help me research https://github.com/nickel-lang/tf-ncl/blob/main/examples/aws/modules/aws-simple-ec2.ncl",
+                "researcher.run_research_graph",
+            ),
+            (
+                "帮我研究一下 https://github.com/nickel-lang/tf-ncl/blob/main/examples/aws/modules/aws-simple-ec2.ncl",
+                "researcher.run_research_graph",
+            ),
+            ("crawl this URL and extract markdown", "crawl4ai.crawl_url"),
         ],
-        ids=["git-commit-intent", "file-discovery-intent"],
+        ids=[
+            "git-commit-intent",
+            "file-discovery-intent",
+            "research-url-en",
+            "research-url-zh",
+            "crawl-url-intent",
+        ],
     )
 
 

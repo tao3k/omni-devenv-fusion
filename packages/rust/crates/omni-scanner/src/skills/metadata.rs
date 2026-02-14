@@ -201,6 +201,10 @@ pub struct DecoratorArgs {
     /// Whether this tool only reads data.
     #[serde(default)]
     pub read_only: Option<bool>,
+    /// MCP Resource URI.  When set, this command is also exposed as a
+    /// read-only MCP Resource at the given URI (e.g. `omni://skill/git/status`).
+    #[serde(default)]
+    pub resource_uri: Option<String>,
 }
 
 // =============================================================================
@@ -249,6 +253,12 @@ pub struct ToolRecord {
     /// Parameter names inferred from function signature.
     #[serde(default)]
     pub parameters: Vec<String>,
+    /// Full tool names (skill.tool) this skill tool refers to for docs (SkillToolsRefers).
+    #[serde(default)]
+    pub skill_tools_refers: Vec<String>,
+    /// MCP Resource URI.  Non-empty means this tool is also an MCP Resource.
+    #[serde(default)]
+    pub resource_uri: String,
 }
 
 impl ToolRecord {
@@ -276,6 +286,8 @@ impl ToolRecord {
             category: String::new(),
             annotations: ToolAnnotations::default(),
             parameters: Vec::new(),
+            skill_tools_refers: Vec::new(),
+            resource_uri: String::new(),
         }
     }
 
@@ -296,6 +308,8 @@ impl ToolRecord {
         annotations: ToolAnnotations,
         parameters: Vec<super::skill_command::parser::ParsedParameter>,
         input_schema: String,
+        skill_tools_refers: Vec<String>,
+        resource_uri: String,
     ) -> Self {
         // Extract parameter names from ParsedParameter vector
         let param_names: Vec<String> = parameters.iter().map(|p| p.name.clone()).collect();
@@ -314,6 +328,8 @@ impl ToolRecord {
             category,
             annotations,
             parameters: param_names,
+            skill_tools_refers,
+            resource_uri,
         }
     }
 }
@@ -417,6 +433,9 @@ pub struct SkillIndexEntry {
     /// Permissions declared by this skill (Zero Trust: empty = no access).
     #[serde(default)]
     pub permissions: Vec<String>,
+    /// Reference docs from `references/*.md` (metadata.for_tools per doc).
+    #[serde(default)]
+    pub references: Vec<ReferenceRecord>,
 }
 
 /// A tool entry in the skill index.
@@ -481,6 +500,7 @@ impl SkillIndexEntry {
             require_refs: Vec::new(),
             sniffing_rules: Vec::new(),
             permissions: Vec::new(),
+            references: Vec::new(),
         }
     }
 
@@ -628,17 +648,93 @@ impl TemplateRecord {
 // Reference Record
 // =============================================================================
 
-/// Represents a reference document discovered in a skill.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+/// Deserialize a single string or array of strings into `Vec<String>`.
+fn de_string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{self, Visitor};
+    use std::fmt;
+    struct StringOrVec;
+    impl<'de> Visitor<'de> for StringOrVec {
+        type Value = Vec<String>;
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a string or array of strings")
+        }
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<Vec<String>, E> {
+            Ok(if v.is_empty() {
+                vec![]
+            } else {
+                vec![v.to_string()]
+            })
+        }
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(
+            self,
+            mut seq: A,
+        ) -> Result<Vec<String>, A::Error> {
+            let mut out = Vec::new();
+            while let Some(s) = seq.next_element::<String>()? {
+                if !s.is_empty() {
+                    out.push(s);
+                }
+            }
+            Ok(out)
+        }
+    }
+    deserializer.deserialize_any(StringOrVec)
+}
+
+/// Deserialize `Option` of string or array of strings into `Option<Vec<String>>`.
+fn de_opt_string_or_vec<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{self, Visitor};
+    use std::fmt;
+    struct OptStringOrVec;
+    impl<'de> Visitor<'de> for OptStringOrVec {
+        type Value = Option<Vec<String>>;
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("optional string or array of strings")
+        }
+        fn visit_none<E: de::Error>(self) -> Result<Option<Vec<String>>, E> {
+            Ok(None)
+        }
+        fn visit_some<D2: serde::Deserializer<'de>>(
+            self,
+            d: D2,
+        ) -> Result<Option<Vec<String>>, D2::Error> {
+            let v = de_string_or_vec(d)?;
+            Ok(if v.is_empty() { None } else { Some(v) })
+        }
+    }
+    deserializer.deserialize_option(OptStringOrVec)
+}
+
+/// Represents a reference document discovered in a skill's `references/` directory.
+///
+/// See `docs/reference/skill-data-hierarchy-and-references.md`: references are
+/// subordinate to the skill; each may be tied to one or more skills/tools (e.g. graph docs).
+/// `for_skills` and `for_tools` are lists so one reference can apply to multiple skills or tools.
+#[derive(Debug, Clone, Deserialize, Serialize, SchemarsJsonSchema, PartialEq, Eq)]
 pub struct ReferenceRecord {
-    /// Name of the reference.
+    /// Name of the reference (e.g. filename stem).
     pub ref_name: String,
-    /// Title of the reference document.
+    /// Title of the reference document (from frontmatter or first heading).
     pub title: String,
-    /// Skill this reference belongs to.
+    /// Primary skill (first of `for_skills` or parent path); kept for backward compatibility.
     pub skill_name: String,
-    /// Path to the reference file.
+    /// Path to the reference file (relative to repo or absolute).
     pub file_path: String,
+    /// List of skills this reference applies to; derived from `for_tools` (skill part of each `skill.tool`) or from path when `for_tools` is absent.
+    #[serde(default, deserialize_with = "de_string_or_vec")]
+    pub for_skills: Vec<String>,
+    /// If set, list of full tool names this reference is for (e.g. `["git.smart_commit", "researcher.run_research_graph"]`).
+    #[serde(default, deserialize_with = "de_opt_string_or_vec", alias = "for_tool")]
+    pub for_tools: Option<Vec<String>>,
+    /// Document type: `"reference"` for references/*.md; `"comprehensive"` reserved for SKILL.md.
+    #[serde(default = "default_ref_doc_type")]
+    pub doc_type: String,
     /// Preview of the content.
     #[serde(default)]
     pub content_preview: String,
@@ -653,20 +749,47 @@ pub struct ReferenceRecord {
     pub file_hash: String,
 }
 
+fn default_ref_doc_type() -> String {
+    "reference".to_string()
+}
+
 impl ReferenceRecord {
     /// Creates a new `ReferenceRecord` with required fields.
     #[must_use]
     pub fn new(ref_name: String, title: String, skill_name: String, file_path: String) -> Self {
+        let for_skills = if skill_name.is_empty() {
+            vec![]
+        } else {
+            vec![skill_name.clone()]
+        };
         Self {
             ref_name,
             title,
             skill_name,
             file_path,
+            for_skills,
+            for_tools: None,
+            doc_type: "reference".to_string(),
             content_preview: String::new(),
             keywords: Vec::new(),
             sections: Vec::new(),
             file_hash: String::new(),
         }
+    }
+
+    /// Builder: set optional list of tools this reference is for.
+    #[must_use]
+    pub fn with_for_tools(mut self, for_tools: Option<Vec<String>>) -> Self {
+        self.for_tools = for_tools;
+        self
+    }
+
+    /// Returns true if this reference applies to the given full tool name.
+    #[must_use]
+    pub fn applies_to_tool(&self, full_tool_name: &str) -> bool {
+        self.for_tools
+            .as_ref()
+            .map_or(false, |v| v.iter().any(|t| t.as_str() == full_tool_name))
     }
 }
 
@@ -931,4 +1054,103 @@ pub fn calculate_sync_ops(scanned: Vec<ToolRecord>, existing: Vec<IndexToolEntry
     }
 
     report
+}
+
+// =============================================================================
+// Resource Record - MCP Resource metadata
+// =============================================================================
+
+/// Represents a discovered MCP Resource from @skill_resource decorated functions.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ResourceRecord {
+    /// Resource name (from decorator or function name).
+    pub name: String,
+    /// Human-readable description of the resource.
+    pub description: String,
+    /// Full resource URI (e.g., "omni://skill/knowledge/graph_stats").
+    pub resource_uri: String,
+    /// MIME type of the resource content.
+    pub mime_type: String,
+    /// Name of the skill this resource belongs to.
+    pub skill_name: String,
+    /// File path where the resource provider is defined.
+    pub file_path: String,
+    /// Name of the function implementing this resource.
+    pub function_name: String,
+    /// Hash of the source file for change detection.
+    pub file_hash: String,
+}
+
+impl ResourceRecord {
+    /// Create a new ResourceRecord.
+    #[must_use]
+    pub fn new(
+        name: String,
+        description: String,
+        resource_uri: String,
+        mime_type: String,
+        skill_name: String,
+        file_path: String,
+        function_name: String,
+        file_hash: String,
+    ) -> Self {
+        Self {
+            name,
+            description,
+            resource_uri,
+            mime_type,
+            skill_name,
+            file_path,
+            function_name,
+            file_hash,
+        }
+    }
+}
+
+// =============================================================================
+// Prompt Record - MCP Prompt metadata
+// =============================================================================
+
+/// Represents a discovered MCP Prompt from @prompt decorated functions.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PromptRecord {
+    /// Prompt name (from decorator or function name).
+    pub name: String,
+    /// Human-readable description of the prompt.
+    pub description: String,
+    /// Name of the skill this prompt belongs to.
+    pub skill_name: String,
+    /// File path where the prompt is defined.
+    pub file_path: String,
+    /// Name of the function implementing this prompt.
+    pub function_name: String,
+    /// Hash of the source file for change detection.
+    pub file_hash: String,
+    /// Parameter names for the prompt template.
+    #[serde(default)]
+    pub parameters: Vec<String>,
+}
+
+impl PromptRecord {
+    /// Create a new PromptRecord.
+    #[must_use]
+    pub fn new(
+        name: String,
+        description: String,
+        skill_name: String,
+        file_path: String,
+        function_name: String,
+        file_hash: String,
+        parameters: Vec<String>,
+    ) -> Self {
+        Self {
+            name,
+            description,
+            skill_name,
+            file_path,
+            function_name,
+            file_hash,
+            parameters,
+        }
+    }
 }

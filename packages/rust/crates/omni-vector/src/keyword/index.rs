@@ -1,5 +1,6 @@
 //! KeywordIndex - Tantivy wrapper for keyword search with BM25
 
+use std::cell::RefCell;
 use std::path::Path;
 
 use tantivy::collector::TopDocs;
@@ -8,18 +9,23 @@ use tantivy::schema::*;
 use tantivy::tokenizer::{
     AsciiFoldingFilter, LowerCaser, RemoveLongFilter, SimpleTokenizer, TextAnalyzer,
 };
-use tantivy::{Index, IndexReader, ReloadPolicy, TantivyDocument, TantivyError, Term, doc};
+use tantivy::{
+    Index, IndexReader, IndexWriter, ReloadPolicy, TantivyDocument, TantivyError, Term, doc,
+};
 
 use crate::ToolSearchResult;
 use crate::error::VectorStoreError;
 
-/// KeywordIndex - Tantivy wrapper for keyword search with BM25
-#[derive(Clone)]
+/// KeywordIndex - Tantivy wrapper for keyword search with BM25.
+/// Caches a single IndexWriter and reuses it across bulk_upsert/upsert_document/index_batch
+/// to avoid repeated writer creation/teardown.
 pub struct KeywordIndex {
     /// Tantivy index for full-text search
     index: Index,
     /// Index reader for search operations
     reader: IndexReader,
+    /// Cached writer reused across writes; one writer per index (Tantivy allows only one).
+    writer_cache: RefCell<Option<IndexWriter>>,
     /// Field handle for tool name (used for exact matching and boosting)
     pub tool_name: Field,
     /// Field handle for tool description (used for relevance scoring)
@@ -112,6 +118,7 @@ impl KeywordIndex {
         Ok(Self {
             index,
             reader,
+            writer_cache: RefCell::new(None),
             tool_name,
             description,
             category,
@@ -184,6 +191,7 @@ impl KeywordIndex {
         Ok(Self {
             index,
             reader,
+            writer_cache: RefCell::new(None),
             tool_name,
             description,
             category,
@@ -204,15 +212,18 @@ impl KeywordIndex {
         if !crate::skill::is_routable_tool_name(name) {
             return Ok(());
         }
-        let mut index_writer = self
-            .index
-            .writer(50_000_000)
-            .map_err(VectorStoreError::Tantivy)?;
-
+        let mut cache = self.writer_cache.borrow_mut();
+        if cache.is_none() {
+            *cache = Some(
+                self.index
+                    .writer(100_000_000)
+                    .map_err(VectorStoreError::Tantivy)?,
+            );
+        }
+        let writer = cache.as_mut().unwrap();
         let term = Term::from_field_text(self.tool_name, name);
-        index_writer.delete_term(term);
-
-        index_writer
+        writer.delete_term(term);
+        writer
             .add_document(doc!(
                 self.tool_name => name,
                 self.description => description,
@@ -221,30 +232,33 @@ impl KeywordIndex {
                 self.intents => intents.join(" | ")
             ))
             .map_err(VectorStoreError::Tantivy)?;
-
-        index_writer.commit().map_err(VectorStoreError::Tantivy)?;
+        writer.commit().map_err(VectorStoreError::Tantivy)?;
+        drop(cache);
         self.reader.reload().map_err(VectorStoreError::Tantivy)?;
         Ok(())
     }
 
-    /// Bulk upsert documents
+    /// Bulk upsert documents. Reuses a cached IndexWriter when possible.
     pub fn bulk_upsert<I>(&self, docs: I) -> Result<(), VectorStoreError>
     where
         I: IntoIterator<Item = (String, String, String, Vec<String>, Vec<String>)>,
     {
-        let mut index_writer = self
-            .index
-            .writer(100_000_000)
-            .map_err(VectorStoreError::Tantivy)?;
-
+        let mut cache = self.writer_cache.borrow_mut();
+        if cache.is_none() {
+            *cache = Some(
+                self.index
+                    .writer(100_000_000)
+                    .map_err(VectorStoreError::Tantivy)?,
+            );
+        }
+        let writer = cache.as_mut().unwrap();
         for (name, description, category, kw_list, intent_list) in docs {
             if !crate::skill::is_routable_tool_name(&name) {
                 continue;
             }
             let term = Term::from_field_text(self.tool_name, &name);
-            index_writer.delete_term(term);
-
-            index_writer
+            writer.delete_term(term);
+            writer
                 .add_document(doc!(
                     self.tool_name => name,
                     self.description => description,
@@ -254,33 +268,35 @@ impl KeywordIndex {
                 ))
                 .map_err(VectorStoreError::Tantivy)?;
         }
-
-        index_writer.commit().map_err(VectorStoreError::Tantivy)?;
+        writer.commit().map_err(VectorStoreError::Tantivy)?;
+        drop(cache);
         self.reader.reload().map_err(VectorStoreError::Tantivy)?;
         Ok(())
     }
 
-    /// Batch index ToolRecords
+    /// Batch index ToolRecords. Reuses cached IndexWriter when possible.
     pub fn index_batch(&self, tools: &[ToolSearchResult]) -> Result<(), TantivyError> {
-        let mut index_writer = self.index.writer(100_000_000)?;
-
+        let mut cache = self.writer_cache.borrow_mut();
+        if cache.is_none() {
+            *cache = Some(self.index.writer(100_000_000)?);
+        }
+        let writer = cache.as_mut().unwrap();
         for tool in tools {
             if !crate::skill::is_routable_tool_name(&tool.name) {
                 continue;
             }
             let term = Term::from_field_text(self.tool_name, &tool.name);
-            index_writer.delete_term(term);
-
-            index_writer.add_document(doc!(
+            writer.delete_term(term);
+            writer.add_document(doc!(
                 self.tool_name => tool.name.as_str(),
                 self.description => tool.description.as_str(),
                 self.category => tool.skill_name.as_str(),
-                self.keywords => tool.keywords.join(" "),
+                self.keywords => tool.routing_keywords.join(" "),
                 self.intents => tool.intents.join(" | ")
             ))?;
         }
-
-        index_writer.commit()?;
+        writer.commit()?;
+        drop(cache);
         self.reader.reload()?;
         Ok(())
     }
@@ -371,7 +387,7 @@ impl KeywordIndex {
                 skill_name,
                 tool_name,
                 file_path: String::new(),
-                keywords,
+                routing_keywords: keywords,
                 intents,
                 category,
             });
@@ -447,7 +463,7 @@ impl KeywordIndex {
                 skill_name: tool_name.split('.').next().unwrap_or("").to_string(),
                 tool_name,
                 file_path: "".to_string(),
-                keywords,
+                routing_keywords: keywords,
                 intents,
                 category: doc
                     .get_first(self.category)

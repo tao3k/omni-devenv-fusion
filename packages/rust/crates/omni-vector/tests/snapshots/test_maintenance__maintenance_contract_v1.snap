@@ -1,0 +1,18 @@
+---
+source: packages/rust/crates/omni-vector/tests/test_maintenance.rs
+assertion_line: 177
+expression: view
+---
+{
+  "after_auto_index": {
+    "has_fts_index": true,
+    "has_scalar_index": true,
+    "has_vector_index": true,
+    "returned_stats": true
+  },
+  "compaction": {
+    "fragments_after": 1,
+    "fragments_before": 1,
+    "fragments_removed": 0
+  }
+}

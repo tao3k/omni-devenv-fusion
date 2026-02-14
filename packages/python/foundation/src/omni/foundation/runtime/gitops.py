@@ -20,23 +20,6 @@ _project_root: Path | None = None
 _project_root_searched: bool = False  # Flag to avoid repeated searches
 
 
-def _find_project_root_from_file(file_path: Path) -> Path | None:
-    """Find project root by searching upward from a file path.
-
-    Looks for project indicators: pyproject.toml, Cargo.toml, justfile, etc.
-
-    Args:
-        file_path: Starting file path to search from.
-
-    Returns:
-        Project root path or None if not found.
-    """
-    for parent in file_path.parents:
-        if _is_project_root(parent):
-            return parent
-    return None
-
-
 def _is_project_root(path: Path) -> bool:
     """Check if path is a project root (non-git method)."""
     indicators = [".git", "justfile", "pyproject.toml", "package.json", "go.mod", "Cargo.toml"]
@@ -52,78 +35,46 @@ def clear_project_root_cache() -> None:
 
 def get_project_root() -> Path:
     """
-    Get the project root directory.
+    Get the project root directory (GitOps: must run from inside the git repo).
 
     Priority:
     1. PRJ_ROOT environment variable
-    2. Git toplevel (git rev-parse --show-toplevel)
-    3. Search upward from this module file (__file__)
-    4. Current working directory with project indicators
+    2. git rev-parse --show-toplevel (from cwd; any subdir in repo returns same toplevel)
 
-    Returns:
-        Path to project root
+    No fallback: project is required to live in a git repository.
     """
     global _project_root, _project_root_searched
 
-    # Fast path: already searched and cached
     if _project_root is not None:
         return _project_root
 
-    # Already searched but not found (to avoid repeated failures)
     if _project_root_searched:
-        # Try cwd as last resort
-        cwd = Path.cwd()
-        if _is_project_root(cwd):
-            _project_root = cwd
-            return _project_root
         raise RuntimeError(
-            "CRITICAL: Cannot determine project root. "
-            "Not in a git repository and no project indicators found. "
-            f"Current working directory: {Path.cwd()}"
+            "CRITICAL: Cannot determine project root. Set PRJ_ROOT or run from inside the git repo."
         )
 
-    _project_root_searched = True  # Mark that we've searched
+    _project_root_searched = True
 
-    # Method 1: PRJ_ROOT environment variable
     prj_root = os.environ.get("PRJ_ROOT")
     if prj_root:
-        _project_root = Path(prj_root)
+        _project_root = Path(prj_root).resolve()
         return _project_root
 
-    # Method 2: Git toplevel (Primary - GitOps)
-    # Use --git-dir to avoid slow filesystem operations in test environments
     try:
         result = subprocess.run(
             ["git", "-C", str(Path.cwd()), "rev-parse", "--show-toplevel"],
             capture_output=True,
             text=True,
-            timeout=1,  # Reduced to 1s for faster failure
+            timeout=2,
         )
-        if result.returncode == 0:
-            _project_root = Path(result.stdout.strip())
+        if result.returncode == 0 and result.stdout.strip():
+            _project_root = Path(result.stdout.strip()).resolve()
             return _project_root
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, Exception):
         pass
-    except Exception:
-        pass
-
-    # Method 3: Search upward from this module file
-    this_module = Path(__file__).resolve()
-    project_root = _find_project_root_from_file(this_module)
-    if project_root:
-        _project_root = project_root
-        return _project_root
-
-    # Method 4: Current working directory
-    cwd = Path.cwd()
-    if _is_project_root(cwd):
-        _project_root = cwd
-        return _project_root
 
     raise RuntimeError(
-        "CRITICAL: Cannot determine project root. "
-        "Not in a git repository and no project indicators found. "
-        f"Current working directory: {Path.cwd()}"
+        "CRITICAL: Not in a git repository. Run 'omni' from inside the repo or set PRJ_ROOT."
     )
 
 

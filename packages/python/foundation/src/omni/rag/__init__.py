@@ -104,6 +104,15 @@ from .zk_search import (
     get_zk_searcher,
     get_zk_hybrid_searcher,
 )
+from .dual_core import (
+    apply_kg_recall_boost,
+    build_vector_search_for_zk,
+    compute_fusion_weights,
+    enrich_skill_graph_from_zk,
+    get_dual_core_searcher,
+    register_skill_entities,
+    zk_link_proximity_boost,
+)
 from .unified_knowledge import (
     UnifiedEntity,
     UnifiedKnowledgeManager,
@@ -227,4 +236,12 @@ __all__ = [
     "create_retriever_node",
     "create_hybrid_node",
     "create_retrieval_backend",
+    # Dual-Core Fusion (ZK + LanceDB bridge)
+    "apply_kg_recall_boost",
+    "build_vector_search_for_zk",
+    "compute_fusion_weights",
+    "enrich_skill_graph_from_zk",
+    "get_dual_core_searcher",
+    "register_skill_entities",
+    "zk_link_proximity_boost",
 ]

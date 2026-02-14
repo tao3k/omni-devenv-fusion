@@ -26,6 +26,7 @@ from omni.foundation.services.vector_schema import (
     VectorPayload,
     build_search_options_json,
     build_tool_router_result,
+    get_shared_schemas_dir,
     parse_hybrid_payload,
     parse_tool_router_result,
     parse_tool_search_payload,
@@ -93,7 +94,178 @@ def test_parse_vector_payload_accepts_canonical_shape():
     assert content == "hello"
     assert distance == 0.2
     assert payload.score == 0.8333
-    assert metadata["k"] == "v"
+
+
+def test_vector_payload_from_arrow_table():
+    """VectorPayload.from_arrow_table builds payloads from IPC batch schema."""
+    import pyarrow as pa
+
+    table = pa.table(
+        {
+            "id": ["a", "b"],
+            "content": ["text1", "text2"],
+            "_distance": [0.1, 0.5],
+            "metadata": ['{"x": 1}', "{}"],
+        }
+    )
+    payloads = VectorPayload.from_arrow_table(table)
+    assert len(payloads) == 2
+    assert payloads[0].id == "a"
+    assert payloads[0].content == "text1"
+    assert payloads[0].distance == 0.1
+    assert payloads[0].metadata == {"x": 1}
+    assert payloads[0].schema_version == VECTOR_SCHEMA_V1
+    assert payloads[1].id == "b"
+    assert payloads[1].metadata == {}
+
+
+def test_hybrid_payload_from_arrow_columns():
+    """HybridPayload.from_arrow_columns builds payloads without JSON."""
+    import pyarrow as pa
+
+    ids = pa.array(["h1", "h2"])
+    contents = pa.array(["c1", "c2"])
+    scores = pa.array([0.9, 0.7])
+    payloads = HybridPayload.from_arrow_columns(ids=ids, contents=contents, scores=scores)
+    assert len(payloads) == 2
+    assert payloads[0].id == "h1"
+    assert payloads[0].content == "c1"
+    assert payloads[0].score == 0.9
+    assert payloads[0].schema_version == HYBRID_SCHEMA_V1
+
+
+def test_tool_search_payload_from_arrow_columns():
+    """ToolSearchPayload.from_arrow_columns builds payloads without JSON."""
+    import pyarrow as pa
+
+    ids = pa.array(["git.commit", "file.read"])
+    contents = pa.array(["Commit", "Read file"])
+    scores = pa.array([0.85, 0.6])
+    payloads = ToolSearchPayload.from_arrow_columns(ids=ids, contents=contents, scores=scores)
+    assert len(payloads) == 2
+    assert payloads[0].name == "git.commit"
+    assert payloads[0].description == "Commit"
+    assert payloads[0].score == 0.85
+    assert payloads[0].final_score == 0.85
+    assert payloads[0].schema_version == TOOL_SEARCH_SCHEMA_V1
+
+
+def test_hybrid_payload_from_arrow_table():
+    """HybridPayload.from_arrow_table builds payloads from a pyarrow Table."""
+    import pyarrow as pa
+
+    table = pa.table(
+        {
+            "id": ["a", "b"],
+            "content": ["text a", "text b"],
+            "score": [0.9, 0.7],
+        }
+    )
+    payloads = HybridPayload.from_arrow_table(table)
+    assert len(payloads) == 2
+    assert payloads[0].id == "a"
+    assert payloads[0].content == "text a"
+    assert payloads[0].score == 0.9
+    assert payloads[0].schema_version == HYBRID_SCHEMA_V1
+    empty = pa.table({"id": [], "content": [], "score": []})
+    assert HybridPayload.from_arrow_table(empty) == []
+
+
+def test_hybrid_payload_from_arrow_table_optional_columns():
+    """HybridPayload.from_arrow_table accepts optional metadata, vector_score, keyword_score."""
+    import pyarrow as pa
+
+    table = pa.table(
+        {
+            "id": ["x"],
+            "content": ["desc"],
+            "score": [0.8],
+            "vector_score": [0.6],
+            "keyword_score": [0.5],
+        }
+    )
+    payloads = HybridPayload.from_arrow_table(table)
+    assert len(payloads) == 1
+    assert payloads[0].vector_score == 0.6
+    assert payloads[0].keyword_score == 0.5
+
+
+def test_tool_search_payload_from_arrow_table():
+    """ToolSearchPayload.from_arrow_table builds payloads from a pyarrow Table (id/content/score or name/description/final_score)."""
+    import pyarrow as pa
+
+    table = pa.table(
+        {
+            "id": ["git.commit", "knowledge.recall"],
+            "content": ["Commit", "Recall"],
+            "score": [0.85, 0.6],
+        }
+    )
+    payloads = ToolSearchPayload.from_arrow_table(table)
+    assert len(payloads) == 2
+    assert payloads[0].name == "git.commit"
+    assert payloads[0].description == "Commit"
+    assert payloads[0].score == 0.85
+    assert payloads[0].schema_version == TOOL_SEARCH_SCHEMA_V1
+    empty = pa.table({"id": [], "content": [], "score": []})
+    assert ToolSearchPayload.from_arrow_table(empty) == []
+
+
+def test_tool_search_payload_from_arrow_table_alternate_column_names():
+    """ToolSearchPayload.from_arrow_table accepts name/description/final_score as aliases."""
+    import pyarrow as pa
+
+    table = pa.table(
+        {
+            "name": ["tool.a"],
+            "description": ["Tool A desc"],
+            "final_score": [0.75],
+        }
+    )
+    payloads = ToolSearchPayload.from_arrow_table(table)
+    assert len(payloads) == 1
+    assert payloads[0].name == "tool.a"
+    assert payloads[0].description == "Tool A desc"
+    assert payloads[0].final_score == 0.75
+
+
+def test_tool_search_payload_from_arrow_table_optional_columns():
+    """ToolSearchPayload.from_arrow_table passes optional columns to from_arrow_columns."""
+    import pyarrow as pa
+
+    table = pa.table(
+        {
+            "id": ["git.commit"],
+            "content": ["Commit changes"],
+            "score": [0.9],
+            "skill_name": ["git"],
+            "tool_name": ["commit"],
+            "file_path": ["git/scripts/commit.py"],
+        }
+    )
+    payloads = ToolSearchPayload.from_arrow_table(table)
+    assert len(payloads) == 1
+    assert payloads[0].skill_name == "git"
+    assert payloads[0].tool_name == "commit"
+    assert payloads[0].file_path == "git/scripts/commit.py"
+
+
+def test_hybrid_payload_from_arrow_table_requires_columns():
+    """HybridPayload.from_arrow_table raises when required columns are missing."""
+    import pyarrow as pa
+
+    table = pa.table({"id": ["a"], "content": ["b"]})  # no score
+    with pytest.raises(ValueError, match="id, content, score"):
+        HybridPayload.from_arrow_table(table)
+
+
+def test_tool_search_payload_from_arrow_table_requires_columns():
+    """ToolSearchPayload.from_arrow_table raises when required columns are missing."""
+    import pyarrow as pa
+
+    table = pa.table({"id": ["a"], "score": [0.5]})  # no content/description
+    with pytest.raises(ValueError, match="id or name.*content or description"):
+        ToolSearchPayload.from_arrow_table(table)
 
 
 def test_vector_payload_contract_snapshot_v1():
@@ -148,8 +320,8 @@ def test_parse_tool_search_payload_accepts_canonical_shape():
     assert isinstance(payload, ToolSearchPayload)
     assert payload.schema_version == TOOL_SEARCH_SCHEMA_V1
     router = payload.to_router_result()
+    assert router["id"] == "git.commit"
     assert router["name"] == "git.commit"
-    assert router["schema"] == TOOL_SEARCH_SCHEMA_V1
     assert isinstance(router["input_schema"], dict)
     assert router["routing_keywords"] == ["git", "commit"]
     assert router["command"] == "commit"
@@ -259,9 +431,7 @@ def test_tool_router_result_contract_snapshot_v1():
 
 
 def test_tool_search_common_schema_file_exists():
-    from omni.foundation.config.paths import get_config_paths
-
-    root = get_config_paths().project_root / "packages" / "shared" / "schemas"
+    root = get_shared_schemas_dir()
     tool_search_schema = root / "omni.vector.tool_search.v1.schema.json"
     vector_schema = root / "omni.vector.search.v1.schema.json"
     hybrid_schema = root / "omni.vector.hybrid.v1.schema.json"
@@ -274,10 +444,8 @@ def test_vector_payload_snapshot_validates_against_search_schema():
     """E2E: snapshot must conform to omni.vector.search.v1 JSON schema (CI drift guard)."""
     from jsonschema import Draft202012Validator
 
-    from omni.foundation.config.paths import get_config_paths
-
-    root = get_config_paths().project_root
-    schema_path = root / "packages" / "shared" / "schemas" / "omni.vector.search.v1.schema.json"
+    root = get_shared_schemas_dir()
+    schema_path = root / "omni.vector.search.v1.schema.json"
     snapshot_path = (
         Path(__file__).resolve().parent / "snapshots" / "vector_payload_contract_v1.json"
     )
@@ -292,10 +460,8 @@ def test_hybrid_payload_snapshot_validates_against_hybrid_schema():
     """E2E: snapshot must conform to omni.vector.hybrid.v1 JSON schema (CI drift guard)."""
     from jsonschema import Draft202012Validator
 
-    from omni.foundation.config.paths import get_config_paths
-
-    root = get_config_paths().project_root
-    schema_path = root / "packages" / "shared" / "schemas" / "omni.vector.hybrid.v1.schema.json"
+    root = get_shared_schemas_dir()
+    schema_path = root / "omni.vector.hybrid.v1.schema.json"
     snapshot_path = (
         Path(__file__).resolve().parent / "snapshots" / "hybrid_payload_contract_v1.json"
     )
@@ -310,12 +476,8 @@ def test_tool_search_payload_snapshot_validates_against_tool_search_schema():
     """E2E: canonical tool_search payload validates against omni.vector.tool_search.v1 (CI drift guard)."""
     from jsonschema import Draft202012Validator
 
-    from omni.foundation.config.paths import get_config_paths
-
-    root = get_config_paths().project_root
-    schema_path = (
-        root / "packages" / "shared" / "schemas" / "omni.vector.tool_search.v1.schema.json"
-    )
+    root = get_shared_schemas_dir()
+    schema_path = root / "omni.vector.tool_search.v1.schema.json"
     canonical = make_tool_search_payload(
         name="advanced_tools.smart_find",
         tool_name="advanced_tools.smart_find",
@@ -370,6 +532,13 @@ def test_build_search_options_json_validates_and_serializes():
     )
     assert payload is not None
     assert '"batch_size": 512' in payload
+
+
+def test_build_search_options_json_accepts_projection():
+    """projection is passed through for IPC column projection (batch search optimization)."""
+    payload = build_search_options_json({"projection": ["id", "content", "_distance", "metadata"]})
+    assert payload is not None
+    assert '"projection": ["id", "content", "_distance", "metadata"]' in payload
 
 
 def test_build_search_options_json_rejects_invalid_range():

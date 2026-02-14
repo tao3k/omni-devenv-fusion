@@ -15,10 +15,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-from omni.foundation.api.decorators import skill_command
+from omni.foundation.api.decorators import skill_command, skill_resource
 from omni.foundation.config.logging import get_logger
 from omni.foundation.config.paths import ConfigPaths
 
+from omni.rag.zk_enhancer import ZkEnhancer, get_zk_enhancer
 from omni.rag.zk_search import (
     ZkReasoningSearcher,
     ZkSearchConfig,
@@ -26,6 +27,50 @@ from omni.rag.zk_search import (
 )
 
 logger = get_logger("skill.knowledge.zk_search")
+
+
+# =============================================================================
+# Skill Resources (read-only data via omni://skill/knowledge/*)
+# =============================================================================
+
+
+@skill_resource(
+    name="zk_stats",
+    description="Zettelkasten statistics: total notes, orphans, linked notes",
+    resource_uri="omni://skill/knowledge/zk_stats",
+)
+async def zk_stats_resource() -> dict:
+    """ZK knowledge base statistics as a resource."""
+    try:
+        from omni.rag.zk_integration import ZkClient
+
+        paths = ConfigPaths()
+        client = ZkClient(str(paths.project_root))
+        return await client.get_stats()
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@skill_resource(
+    name="zk_toc",
+    description="Zettelkasten table of contents (titles and paths)",
+    resource_uri="omni://skill/knowledge/zk_toc",
+)
+async def zk_toc_resource() -> dict:
+    """ZK table of contents as a resource."""
+    try:
+        from omni.rag.zk_integration import ZkClient
+
+        paths = ConfigPaths()
+        client = ZkClient(str(paths.project_root))
+        notes = await client.list_notes()
+        return {
+            "total": len(notes),
+            "notes": [{"title": n.title, "path": n.path} for n in notes],
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 
 # Global searcher instance (lazy initialization)
 _zk_searcher: ZkReasoningSearcher | None = None
@@ -88,6 +133,11 @@ async def zk_search(
 
         results = await searcher.search(query, max_results=max_results)
 
+        # Get graph stats from the enhancer if available
+        graph_stats = {}
+        if searcher.enhancer and searcher.enhancer.graph:
+            graph_stats = searcher.enhancer.get_graph_stats()
+
         return {
             "success": True,
             "query": query,
@@ -105,6 +155,7 @@ async def zk_search(
                 }
                 for r in results
             ],
+            "graph_stats": graph_stats,
         }
     except Exception as e:
         logger.error(f"ZK search failed: {e}")
@@ -155,6 +206,26 @@ async def zk_toc(
         raise
 
 
+def _build_vector_search_func(collection: str = "knowledge_chunks") -> Any:
+    """Build a LanceDB-backed vector search function via DualCore bridge.
+
+    Returns an async callable: (query: str, limit: int) -> list[dict]
+    Uses the dual_core bridge to properly connect Core 2 (LanceDB) into
+    Core 1 (ZK) hybrid search.
+    """
+    try:
+        from omni.rag.dual_core import build_vector_search_for_zk
+
+        return build_vector_search_for_zk(collection)
+    except Exception as e:
+        logger.debug("DualCore bridge unavailable, using no-op: %s", e)
+
+        async def _noop(q: str, limit: int = 10) -> list[dict]:
+            return []
+
+        return _noop
+
+
 @skill_command(
     name="zk_hybrid_search",
     category="search",
@@ -180,22 +251,23 @@ async def zk_hybrid_search(
     use_hybrid: bool = True,
     paths: ConfigPaths | None = None,
 ) -> dict[str, Any]:
-    """Hybrid search with ZK + Vector fallback."""
+    """Hybrid search with ZK + LanceDB vector + Entity graph."""
     try:
         if paths is None:
             paths = ConfigPaths()
 
-        # Create a simple vector fallback (can be replaced with real vector search)
-        async def vector_fallback(q: str, limit: int = 10) -> list[dict]:
-            # Placeholder: In production, this would query a vector DB
-            return []
+        # Build LanceDB vector search via DualCore bridge (Core 2 → Core 1)
+        vector_fn = _build_vector_search_func()
 
         searcher = ZkHybridSearcher(
             notebook_dir=str(paths.project_root),
-            vector_search_func=vector_fallback,
+            vector_search_func=vector_fn,
         )
 
         result = await searcher.search(query, max_results=max_results, use_hybrid=use_hybrid)
+
+        # Include graph stats
+        graph_stats = searcher.enhancer.get_graph_stats() if searcher.enhancer else {}
 
         return {
             "success": True,
@@ -205,6 +277,7 @@ async def zk_hybrid_search(
             "vector_total": result["total_vector"],
             "merged": result["merged_results"][:max_results],
             "merged_total": result["total_merged"],
+            "graph_stats": graph_stats,
         }
     except Exception as e:
         logger.error(f"ZK hybrid search failed: {e}")

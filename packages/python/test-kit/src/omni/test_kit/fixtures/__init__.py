@@ -17,6 +17,13 @@ from omni.test_kit.fixtures.git import (
     gitops_verifier,
     temp_git_repo,
 )
+from omni.test_kit.fixtures.arrow import (
+    TABLE_HEALTH_IPC_COLUMNS,
+    assert_table_health_ipc_table,
+    decode_table_health_ipc_bytes,
+    make_table_health_ipc_bytes,
+    table_health_ipc_schema,
+)
 from omni.test_kit.fixtures.rag import (
     RagTestHelper,
     mock_llm_empty_response,
@@ -126,6 +133,12 @@ __all__ = [  # noqa: RUF022
     "sample_skill_with_tools",
     "WatcherTestHelper",
     "watcher_test_helper",
+    # Arrow / LanceDB analytics (table health IPC)
+    "TABLE_HEALTH_IPC_COLUMNS",
+    "assert_table_health_ipc_table",
+    "decode_table_health_ipc_bytes",
+    "make_table_health_ipc_bytes",
+    "table_health_ipc_schema",
     # RAG
     "rag_config_fixture",
     "rag_knowledge_graph_disabled",

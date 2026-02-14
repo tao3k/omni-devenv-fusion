@@ -320,6 +320,7 @@ impl ToolsScanner {
                 .collect();
 
             // Build annotations - convert tree-sitter args to DecoratorArgs
+            let resource_uri = decorator_args.and_then(|a| a.resource_uri.clone());
             let decorator_args = match decorator_args {
                 Some(ts_args) => DecoratorArgs {
                     name: ts_args.name.clone(),
@@ -327,6 +328,7 @@ impl ToolsScanner {
                     category: ts_args.category.clone(),
                     destructive: ts_args.destructive,
                     read_only: ts_args.read_only,
+                    resource_uri: ts_args.resource_uri.clone(),
                 },
                 None => DecoratorArgs::default(),
             };
@@ -354,6 +356,8 @@ impl ToolsScanner {
                 annotations,
                 parameters,
                 input_schema,
+                Vec::new(), // skill_tools_refers filled from markdown front matter (references/*.md for_tools), not decorator
+                resource_uri.unwrap_or_default(),
             ));
         }
 
@@ -529,6 +533,7 @@ impl ToolsScanner {
                 .collect();
 
             // Build annotations - convert tree-sitter args to DecoratorArgs
+            let resource_uri = decorator_args.and_then(|a| a.resource_uri.clone());
             let decorator_args = match decorator_args {
                 Some(ts_args) => DecoratorArgs {
                     name: ts_args.name.clone(),
@@ -536,6 +541,7 @@ impl ToolsScanner {
                     category: ts_args.category.clone(),
                     destructive: ts_args.destructive,
                     read_only: ts_args.read_only,
+                    resource_uri: ts_args.resource_uri.clone(),
                 },
                 None => DecoratorArgs::default(),
             };
@@ -563,6 +569,8 @@ impl ToolsScanner {
                 annotations,
                 parameters,
                 input_schema,
+                Vec::new(), // skill_tools_refers filled from markdown front matter (references/*.md for_tools), not decorator
+                resource_uri.unwrap_or_default(),
             ));
         }
 

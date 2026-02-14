@@ -1,6 +1,6 @@
 ---
 name: advanced_tools
-description: Use when finding files by name, searching code content, locating patterns with regex, exploring codebase, or batch refactoring across multiple files.
+description: Use when finding files by name, searching code content, locating patterns with regex, exploring codebase, or batch refactoring across multiple files. Conforms to packages/shared/schemas/skill-routing-value-standard.md.
 metadata:
   author: omni-dev-fusion
   version: "1.2.0"

@@ -48,6 +48,7 @@ def _run_rg_with_retry(cmd: list[str], root: str, max_retries: int = 2) -> tuple
 
 @skill_command(
     name="smart_search",
+    category="file_discovery",
     description="""
     [SEARCH] High-performance code/text search using 'ripgrep' (rg).
     
@@ -174,6 +175,7 @@ def smart_search(
 
 @skill_command(
     name="smart_find",
+    category="file_discovery",
     description="""
     [FIND] Ultra-fast file/directory discovery engine using 'fd'.
     

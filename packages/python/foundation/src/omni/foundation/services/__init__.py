@@ -12,6 +12,12 @@ Usage:
 """
 
 from .embedding import embed_batch, embed_text, get_embedding_service
+from .index_dimension import (
+    EmbeddingDimensionStatus,
+    ensure_embedding_signature_written,
+    get_embedding_dimension_status,
+    get_embedding_signature_path,
+)
 from .vector import VectorStoreClient
 
 __all__ = [
@@ -19,4 +25,8 @@ __all__ = [
     "embed_batch",
     "embed_text",
     "get_embedding_service",
+    "EmbeddingDimensionStatus",
+    "ensure_embedding_signature_written",
+    "get_embedding_dimension_status",
+    "get_embedding_signature_path",
 ]

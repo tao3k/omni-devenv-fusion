@@ -1,3 +1,9 @@
+---
+metadata:
+  for_tools: git.smart_commit
+  title: Smart Commit Workflow
+---
+
 # Smart Commit Workflow
 
 ## Architecture: Tool provides Data, LLM provides Intelligence

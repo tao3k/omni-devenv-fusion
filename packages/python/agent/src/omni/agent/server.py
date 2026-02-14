@@ -47,17 +47,6 @@ INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
 
 
-# Canonical MCP tools/call result shape so clients (e.g. Cursor) never see invalid_union
-# Result must be an object with "content" (list of { type, text }) and optional "isError"
-def _tool_result_content(text: str | None, is_error: bool = False) -> dict[str, Any]:
-    """Build MCP CallToolResult content payload. Ensures result is never null or malformed."""
-    safe_text = "" if text is None else str(text)
-    return {
-        "content": [{"type": "text", "text": safe_text}],
-        "isError": is_error,
-    }
-
-
 def _make_success_response(id_val: str | int | None, result: Any) -> JSONRPCResponse:
     """Create a success response."""
     return {
@@ -317,8 +306,13 @@ class AgentMCPHandler(MCPRequestHandler):
             return _make_error_response(req_id, INVALID_PARAMS, f"Skill not found: {skill_name}")
 
         try:
+            from omni.foundation.api.mcp_schema import build_result, is_canonical
+
             result = await skill.execute(command_name, **arguments)
-            return _make_success_response(req_id, _tool_result_content(result))
+            if is_canonical(result):
+                return _make_success_response(req_id, result)
+            text = "" if result is None else str(result)
+            return _make_success_response(req_id, build_result(text))
         except Exception as e:
             return _make_error_response(req_id, INTERNAL_ERROR, str(e))
 
@@ -353,8 +347,10 @@ class AgentMCPHandler(MCPRequestHandler):
                 "preview": [v[:10] for v in vectors] if vectors else [],
             }
 
+            from omni.foundation.api.mcp_schema import build_result
+
             logger.info(f"[MCP] Returning result: count={len(vectors)}")
-            return _make_success_response(req_id, _tool_result_content(json.dumps(result)))
+            return _make_success_response(req_id, build_result(json.dumps(result)))
         except Exception as e:
             logger.error(f"[MCP] _handle_embed_texts error: {e}")
             import traceback
@@ -385,7 +381,9 @@ class AgentMCPHandler(MCPRequestHandler):
                 "preview": vector[:10] if vector else [],
             }
 
-            return _make_success_response(req_id, _tool_result_content(json.dumps(result)))
+            from omni.foundation.api.mcp_schema import build_result
+
+            return _make_success_response(req_id, build_result(json.dumps(result)))
         except Exception as e:
             return _make_error_response(req_id, INTERNAL_ERROR, str(e))
 

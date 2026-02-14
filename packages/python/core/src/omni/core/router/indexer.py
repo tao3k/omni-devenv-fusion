@@ -129,11 +129,11 @@ class SkillIndexer:
         """
         from omni.foundation.config.settings import get_setting
 
-        # Use unified path if not specified
+        # Use unified base path if not specified (single skills table for routing and discovery).
         if storage_path is None:
             from omni.foundation.config.dirs import get_vector_db_path
 
-            storage_path = str(get_vector_db_path() / "router.lance")
+            storage_path = str(get_vector_db_path())
 
         # Use dimension from settings.yaml (default to 1024 for LLM provider)
         if dimension is None:
@@ -277,17 +277,29 @@ class SkillIndexer:
                 if cmd_name.startswith(f"{skill_name}."):
                     cmd_name = cmd_name[len(skill_name) + 1 :]
                 cmd_desc = cmd.get("description", "") or cmd_name
-                cmd_keywords = cmd.get("routing_keywords", [])
+                cmd_keywords = list(cmd.get("routing_keywords", []) or [])
+                # Inherit skill-level routing_keywords when command has none
+                if not cmd_keywords and skill.get("routing_keywords"):
+                    cmd_keywords = list(skill.get("routing_keywords", []))
                 cmd_intents = skill.get("intents", [])  # Commands inherit skill intents
 
-                # [SEO] Build a highly descriptive search block for both Vector and Keyword engines
-                # Combining name, description, intents, and routing_keywords into a single unit
+                # Optional: LLM enrichment to diversify routing_keywords (synonyms, related terms)
+                try:
+                    from omni.core.router.translate import enrich_routing_keywords
+
+                    extra = await enrich_routing_keywords(cmd_desc, cmd_keywords)
+                    if extra:
+                        cmd_keywords = list(dict.fromkeys(cmd_keywords + extra))
+                except Exception as e:
+                    logger.debug("Enrichment skipped for command", cmd=cmd_name, error=str(e))
+
+                # Field split for hybrid: vector = description (semantic), keyword = routing_keywords (BM25).
+                # Embedding uses only COMMAND + DESCRIPTION + INTENTS so vector branch matches semantics.
+                # Tantivy indexes description + routing_keywords (from metadata) with boost on keywords.
                 doc_content = f"COMMAND: {skill_name}.{cmd_name}\n"
                 doc_content += f"DESCRIPTION: {cmd_desc}\n"
                 if cmd_intents:
-                    doc_content += f"INTENTS: {', '.join(cmd_intents)}\n"
-                if cmd_keywords:
-                    doc_content += f"KEYWORDS: {', '.join(cmd_keywords)}"
+                    doc_content += f"INTENTS: {', '.join(cmd_intents)}"
 
                 cmd_id = f"{skill_name}.{cmd_name}" if cmd_name else entry_id
 
@@ -343,6 +355,31 @@ class SkillIndexer:
                 metadatas=[_json.dumps(d["metadata"]) for d in docs],
             )
             self._indexed_count = len(docs)
+
+            # Build and persist skill relationship graph (associative retrieval)
+            try:
+                from omni.core.router.skill_relationships import (
+                    build_graph_from_docs,
+                    get_relationship_graph_path,
+                    save_relationship_graph,
+                )
+
+                graph_path = get_relationship_graph_path(self._storage_path)
+                if graph_path is not None:
+                    graph = build_graph_from_docs(docs)
+                    if graph:
+                        save_relationship_graph(graph, graph_path)
+            except Exception as e:
+                logger.debug("Skill relationship graph build skipped: %s", e)
+
+            # Bridge 4: Register skill entities in KnowledgeGraph (Core 1 ← Core 2)
+            try:
+                from omni.rag.dual_core import register_skill_entities
+
+                register_skill_entities(docs)
+            except Exception as e:
+                logger.debug("KnowledgeGraph entity registration skipped: %s", e)
+
             logger.info(f"Cortex indexed {len(docs)} entries (single commit)")
 
             # Save metadata for next run
@@ -368,7 +405,11 @@ class SkillIndexer:
         return self._indexed_count
 
     async def search(
-        self, query: str, limit: int = 5, threshold: float = 0.0
+        self,
+        query: str,
+        limit: int = 5,
+        threshold: float = 0.0,
+        intent_override: str | None = None,
     ) -> list[SearchResult]:
         """Search the index for matching skills/commands.
 
@@ -376,6 +417,8 @@ class SkillIndexer:
             query: Search query
             limit: Maximum results
             threshold: Minimum score threshold
+            intent_override: Optional intent hint (e.g. from an LLM). When set, used
+                instead of rule-based classification ("exact", "semantic", "hybrid", "category").
 
         Returns:
             List of search results
@@ -395,13 +438,30 @@ class SkillIndexer:
                     else query_embedding
                 )
 
-                tool_results = await self._store.search_tools(
-                    table_name="skills",
-                    query_vector=query_vector,
-                    query_text=query,
-                    limit=limit,
-                    threshold=threshold,
+                from omni.core.router.query_intent import classify_tool_search_intent
+
+                intent = (
+                    intent_override
+                    if intent_override is not None
+                    else classify_tool_search_intent(query)
                 )
+                if hasattr(self._store, "agentic_search"):
+                    tool_results = await self._store.agentic_search(
+                        table_name="skills",
+                        query_vector=query_vector,
+                        query_text=query,
+                        limit=limit,
+                        threshold=threshold,
+                        intent=intent,
+                    )
+                else:
+                    tool_results = await self._store.search_tools(
+                        table_name="skills",
+                        query_vector=query_vector,
+                        query_text=query,
+                        limit=limit,
+                        threshold=threshold,
+                    )
 
                 results: list[SearchResult] = []
                 for data in tool_results:

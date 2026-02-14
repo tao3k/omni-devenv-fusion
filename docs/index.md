@@ -30,19 +30,30 @@ Problem-oriented. Recipes for solving specific tasks.
 
 Information-oriented. Technical details, API specs, and configuration options.
 
-| Document                                                          | Description                                                    |
-| ----------------------------------------------------------------- | -------------------------------------------------------------- |
-| [MCP Orchestrator](./reference/mcp-orchestrator.md)               | Omni MCP tool configuration and usage                          |
-| [MCP Best Practices](./reference/mcp-best-practices.md)           | MCP server design patterns and anti-patterns                   |
-| [Documentation Standards](./reference/documentation-standards.md) | Doc guidelines for this project                                |
-| [ODF-EP Protocol](./reference/odf-ep-protocol.md)                 | MANDATORY for LLMs - Engineering Protocol                      |
-| [CLI Reference](./reference/cli.md)                               | Omni run, omni run exec commands                               |
-| [Code Tools Skill](./reference/code-tools.md)                     | AST-based code navigation and refactoring                      |
-| [AST-Based Search](./reference/ast-grep.md)                       | ast-grep patterns and Cartographer/Hunter                      |
-| [Skill Generator](./reference/skill-generator.md)                 | Hybrid skill generator (Jinja2 + LLM)                          |
-| [Execution Tracing](./reference/tracer.md)                        | UltraRAG-style execution tracing system                        |
-| [LangGraph UltraRAG Demo](./reference/langgraph-ultrarag-demo.md) | XML contracts, quality gates, and fail-fast                    |
-| [Retrieval Namespace](./reference/retrieval-namespace.md)         | Unified retrieval API, backends, factory, and runtime defaults |
+| Document                                                                          | Description                                                                                         |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| [MCP Orchestrator](./reference/mcp-orchestrator.md)                               | Omni MCP tool configuration and usage                                                               |
+| [MCP Best Practices](./reference/mcp-best-practices.md)                           | MCP server design patterns and anti-patterns                                                        |
+| [Documentation Standards](./reference/documentation-standards.md)                 | Doc guidelines for this project                                                                     |
+| [ODF-EP Protocol](./reference/odf-ep-protocol.md)                                 | MANDATORY for LLMs - Engineering Protocol                                                           |
+| [CLI Reference](./reference/cli.md)                                               | Omni run, omni run exec commands                                                                    |
+| [Code Tools Skill](./reference/code-tools.md)                                     | AST-based code navigation and refactoring                                                           |
+| [AST-Based Search](./reference/ast-grep.md)                                       | ast-grep patterns and Cartographer/Hunter                                                           |
+| [Skill Generator](./reference/skill-generator.md)                                 | Hybrid skill generator (Jinja2 + LLM)                                                               |
+| [Execution Tracing](./reference/tracer.md)                                        | UltraRAG-style execution tracing system                                                             |
+| [LangGraph UltraRAG Demo](./reference/langgraph-ultrarag-demo.md)                 | XML contracts, quality gates, and fail-fast                                                         |
+| [Retrieval Namespace](./reference/retrieval-namespace.md)                         | Unified retrieval API, backends, factory, and runtime defaults                                      |
+| [Search Systems](./reference/search-systems.md)                                   | When to use vector vs hybrid vs agentic search; defaults and decision guide                         |
+| [MCP Tool Schema](./reference/mcp-tool-schema.md)                                 | tools/call result contract, `mcp_schema` API, shared schema                                         |
+| [Vector/Router Schema Contract](./reference/vector-router-schema-contract.md)     | Tool search / vector / hybrid field definitions, no legacy `keywords`                               |
+| [Route Test Result Shape](./reference/route-test-result-shape.md)                 | Algorithm contract: Rust → tool_search.v1 → route result; canonical snapshot                        |
+| [Skills and Router Databases](./reference/skills-and-router-databases.md)         | Two DBs: skills = full data; router = scores only, no redundancy                                    |
+| [LanceDB Version and Roadmap](./reference/lancedb-version-and-roadmap.md)         | Rust lance 2.x; Phases 1–5 done (scalar, maintenance, vector index, partitioning, observability)    |
+| [Omni-Vector Status](./reference/omni-vector-status.md)                           | Omni-vector feature matrix, Python API gaps, and next steps (index/partitioning exposure)           |
+| [Omni-Vector Audit & Next Steps](./reference/omni-vector-audit-and-next-steps.md) | Audit of status report, P0–P3 priorities, and LanceDB 2.x–aligned improvements                      |
+| [Vector Store API](./reference/vector-store-api.md)                               | RustVectorStore, payload schemas (VectorPayload, HybridPayload, ToolSearchPayload), Arrow IPC usage |
+| [Router & RAG Arrow Roadmap](./reference/router-rag-arrow-roadmap.md)             | Arrow status for router (hybrid_search, indexer) and RAG (librarian, dual_core); next steps         |
+| [JSON vs Arrow Performance](./reference/json-vs-arrow-performance.md)             | Benchmark vector search JSON path vs Arrow IPC; how to run and interpret results                    |
 
 ---
 
@@ -50,13 +61,14 @@ Information-oriented. Technical details, API specs, and configuration options.
 
 Internal documentation for Omni-Dev Fusion developers.
 
-| Document                                                      | Description                                  |
-| ------------------------------------------------------------- | -------------------------------------------- |
-| [Skill Discovery](./developer/discover.md)                    | Skill discovery (MIGRATION GUIDE)            |
-| [Testing Guide](./developer/testing.md)                       | Test system architecture and developer guide |
-| [CLI Guide](./developer/cli.md)                               | CLI developer documentation                  |
-| [MCP Core Architecture](./developer/mcp-core-architecture.md) | Shared library architecture guide            |
-| [Routing Guide](./developer/routing.md)                       | Routing architecture (MIGRATION GUIDE)       |
+| Document                                                      | Description                                                                   |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [Execution Roadmap](./plan/execution-roadmap.md)              | What to implement next (excluding New Skill tutorial); step-by-step checklist |
+| [Skill Discovery](./developer/discover.md)                    | Skill discovery (MIGRATION GUIDE)                                             |
+| [Testing Guide](./developer/testing.md)                       | Test system architecture and developer guide                                  |
+| [CLI Guide](./developer/cli.md)                               | CLI developer documentation                                                   |
+| [MCP Core Architecture](./developer/mcp-core-architecture.md) | Shared library architecture guide                                             |
+| [Routing Guide](./developer/routing.md)                       | Routing architecture (MIGRATION GUIDE)                                        |
 
 ---
 
@@ -112,6 +124,15 @@ Detailed codebase structure and architecture documentation.
 | [Router Architecture](./architecture/router.md)                 | Semantic routing system (OmniRouter, HiveRouter)   |
 | [MCP-Server Architecture](./architecture/mcp-server.md)         | MCP protocol implementation                        |
 | [UltraRAG Gap Analysis](./explanation/ultrarag-gap-analysis.md) | Comparison with UltraRAG implementation            |
+
+---
+
+## Milestones
+
+| Document                                                                                                                | Description                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| [Unified Search & Contracts (Feb 2026)](./milestones/2026-02-unified-search-and-contracts.md)                           | Router/retrieval contracts, route explain API, Tantivy vs Lance FTS decision loop — **completed**             |
+| [Omni-Vector Optimization & Arrow-Native (Feb 2026)](./milestones/2026-02-omni-vector-optimization-and-arrow-native.md) | Parallel hybrid_search, fusion optimizations, 10-column Arrow-native schema, no legacy compat — **completed** |
 
 ---
 

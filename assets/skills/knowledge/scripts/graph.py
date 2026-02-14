@@ -18,10 +18,33 @@ import structlog
 from pathlib import Path
 from typing import Any
 
-from omni.foundation.api.decorators import skill_command
+from omni.foundation.api.decorators import skill_command, skill_resource
 from omni.foundation.services.llm import get_llm_provider
 
 logger = structlog.get_logger(__name__)
+
+
+@skill_resource(
+    name="graph_stats",
+    description="Knowledge graph backend info: entity types, relation types, counts",
+    resource_uri="omni://skill/knowledge/graph_stats",
+)
+def graph_stats_resource() -> dict:
+    """Knowledge graph statistics as a resource."""
+    try:
+        from omni.rag.graph import get_graph_store
+
+        store = get_graph_store()
+        backend = store._backend
+        if backend is None:
+            return {"backend": "none"}
+
+        stats_json = backend.get_stats()
+        import json
+
+        return json.loads(stats_json) if isinstance(stats_json, str) else stats_json
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @skill_command(

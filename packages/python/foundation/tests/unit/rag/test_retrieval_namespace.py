@@ -77,7 +77,8 @@ async def test_lance_backend_search_normalizes_and_filters():
     assert results[0].id == "a"
     assert results[0].source == "vector"
     assert results[0].score > 0.60
-    assert fake.search_calls[0][3]["where_filter"] is None
+    # to_vector_search_kwargs() omits None; so where_filter may be absent
+    assert fake.search_calls[0][3].get("where_filter") is None
 
 
 @pytest.mark.asyncio

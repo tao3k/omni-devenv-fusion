@@ -4,9 +4,10 @@ version = "0.1.0"
 description = "Exclusive testing framework for Omni Dev Fusion"
 dependencies = [
     "pytest>=8.0.0",
+    "pyarrow>=23.0.0",
     "omni-agent",
     "omni-foundation",
-    "omni-core"
+    "omni-core",
 ]
 requires-python = ">=3.10"
 

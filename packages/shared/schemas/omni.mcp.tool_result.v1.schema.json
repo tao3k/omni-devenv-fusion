@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omni.mcp.tool_result.v1.schema.json",
+  "title": "MCP tools/call result (CallToolResult) v1",
+  "description": "Canonical shape for skill tool results so MCP clients (e.g. Cursor) never see result: null or invalid_union. Used by @skill_command normalization and agent handler.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["content", "isError"],
+  "properties": {
+    "content": {
+      "type": "array",
+      "description": "List of content items (MCP Content type). At least one item with type 'text' for display.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["type", "text"],
+        "properties": {
+          "type": { "const": "text" },
+          "text": { "type": "string" }
+        }
+      }
+    },
+    "isError": {
+      "type": "boolean",
+      "description": "True when the tool returned an error (e.g. ExecutionResult.success=false)."
+    }
+  }
+}

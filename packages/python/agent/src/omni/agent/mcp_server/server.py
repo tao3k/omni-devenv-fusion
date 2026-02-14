@@ -28,7 +28,15 @@ import time
 from typing import Any
 
 from mcp.server import Server
-from mcp.types import Resource, Tool, TextContent, GetPromptResult, PromptMessage
+from mcp.server.lowlevel.helper_types import ReadResourceContents
+from mcp.types import (
+    Prompt,
+    Resource,
+    Tool,
+    TextContent,
+    GetPromptResult,
+    PromptMessage,
+)
 from pydantic.networks import AnyUrl
 
 from omni.foundation.config.logging import configure_logging, get_logger
@@ -45,6 +53,16 @@ from omni.core.skills.registry.holographic import HolographicRegistry, ToolMetad
 from omni.foundation.utils.formatting import sanitize_tool_args, one_line_preview
 from omni.mcp.transport.sse import SSEServer
 from omni.mcp.transport.stdio import stdio_server
+
+# [NEW] Import resources module for decorator pattern
+from .resources import (
+    read_project_context,
+    read_agent_memory,
+    read_system_stats,
+    read_dynamic_resource,
+    list_dynamic_resources,
+)
+from .prompts import get_prompt_with_args, list_all_prompts
 
 # Configure logging
 configure_logging(level="INFO")
@@ -755,17 +773,21 @@ class AgentMCPServer:
                 logger.error(f"sys_exec failed: {e}")
                 return self._error_response(str(e))
 
+        # =====================================================================
+        # Resource Registration (Low-Level Server Handler Pattern)
+        # =====================================================================
+
         @self._app.list_resources()
         async def list_resources() -> list[Resource]:
-            return [
+            resources = [
                 Resource(
-                    uri=AnyUrl("omni://project/context"),
+                    uri=AnyUrl("omni://system/context"),
                     name="Project Context (Sniffer)",
                     description="Active frameworks and languages detected by Rust Sniffer",
                     mimeType="application/json",
                 ),
                 Resource(
-                    uri=AnyUrl("omni://memory/latest"),
+                    uri=AnyUrl("omni://system/memory"),
                     name="Agent Short-term Memory",
                     description="Latest snapshot of agent state from LanceDB",
                     mimeType="application/json",
@@ -778,51 +800,80 @@ class AgentMCPServer:
                 ),
             ]
 
-        @self._app.read_resource()
-        async def read_resource(uri: AnyUrl) -> str:
-            """Read resource data from Rust components."""
-            if not self._kernel or not self._kernel.is_ready:
-                return json.dumps({"error": "Kernel not ready"})
+            # Skill-declared resources from Rust DB (indexed with resource_uri)
+            skill_resources = await self._list_skill_resources_from_db()
+            for sr in skill_resources:
+                resources.append(sr)
 
+            return resources
+
+        @self._app.read_resource()
+        async def read_resource(uri: AnyUrl) -> list[ReadResourceContents]:
+            """Read resource data (MCP SDK v1.9+)."""
             uri_str = str(uri)
 
-            if uri_str == "omni://project/context":
-                return self._read_project_context()
+            def _wrap(text: str, mime: str = "application/json") -> list[ReadResourceContents]:
+                return [ReadResourceContents(content=text, mime_type=mime)]
 
-            elif uri_str == "omni://memory/latest":
-                return await self._read_agent_memory()
+            # System resources
+            if uri_str == "omni://system/context":
+                if not self._kernel or not self._kernel.is_ready:
+                    return _wrap(json.dumps({"error": "Kernel not ready"}))
+                return _wrap(self._read_project_context())
 
-            elif uri_str == "omni://system/stats":
-                return self._read_system_stats()
+            if uri_str == "omni://system/memory":
+                if not self._kernel or not self._kernel.is_ready:
+                    return _wrap(json.dumps({"error": "Kernel not ready"}))
+                return _wrap(await self._read_agent_memory())
+
+            if uri_str == "omni://system/stats":
+                return _wrap(self._read_system_stats())
+
+            # Skill resources (omni://skill/{skill_name}/{resource_name})
+            if uri_str.startswith("omni://skill/"):
+                return _wrap(await self._read_skill_resource(uri_str))
 
             raise ValueError(f"Resource not found: {uri}")
 
+        # =====================================================================
+        # Prompt Registration (Low-Level Server Handler Pattern)
+        # =====================================================================
+
         @self._app.list_prompts()
-        async def list_prompts() -> list[Any]:
+        async def list_prompts() -> list[Prompt]:
             """List available prompts."""
-            return [
-                {"name": "default", "description": "Standard Omni Agent system prompt"},
-                {"name": "researcher", "description": "Research-focused agent prompt"},
-                {"name": "developer", "description": "Code-focused agent prompt"},
-            ]
+            from .prompts import PROMPTS, _DYNAMIC_PROMPTS
+
+            prompts: list[Prompt] = []
+
+            for name, data in PROMPTS.items():
+                prompts.append(Prompt(name=name, description=data.get("description", "")))
+
+            for name in _DYNAMIC_PROMPTS:
+                try:
+                    data = _DYNAMIC_PROMPTS[name]({})
+                    prompts.append(Prompt(name=name, description=data.get("description", "")))
+                except Exception:
+                    prompts.append(Prompt(name=name, description=f"Dynamic prompt: {name}"))
+
+            return prompts
 
         @self._app.get_prompt()
         async def get_prompt(name: str, arguments: dict[str, str] | None = None) -> GetPromptResult:
             """Get prompt content."""
-            prompts = {
-                "default": self._get_default_prompt(),
-                "researcher": self._get_researcher_prompt(),
-                "developer": self._get_developer_prompt(),
-            }
+            from .prompts import get_prompt_with_args
 
-            if name not in prompts:
+            prompt_data = get_prompt_with_args(name, arguments)
+
+            if not prompt_data.get("content"):
                 raise ValueError(f"Prompt not found: {name}")
 
             return GetPromptResult(
-                description=prompts[name]["description"],
+                description=prompt_data.get("description", ""),
                 messages=[
                     PromptMessage(
-                        role="user", content=TextContent(type="text", text=prompts[name]["content"])
+                        role="user",
+                        content=TextContent(type="text", text=prompt_data["content"]),
                     )
                 ],
             )
@@ -833,145 +884,150 @@ class AgentMCPServer:
         register_embedding_tools(self._app)
 
     def _read_project_context(self) -> str:
-        """Read project context from Sniffer (Step 5 integration)."""
-        try:
-            sniffer = getattr(self._kernel, "router", None)
-            if sniffer and hasattr(sniffer, "sniffer"):
-                sniffer_instance = sniffer.sniffer
-                if hasattr(sniffer_instance, "_active_contexts"):
-                    contexts = list(sniffer_instance._active_contexts)
-                else:
-                    contexts = sniffer_instance.sniff(".") or []
-            else:
-                contexts = []
+        """Read project context from Sniffer — delegates to resources module."""
+        from .resources import read_project_context
 
-            return json.dumps(
-                {
-                    "contexts": contexts,
-                    "timestamp": time.time(),
-                },
-                indent=2,
-            )
-        except Exception as e:
-            return json.dumps({"error": str(e)}, indent=2)
+        return read_project_context(self._kernel)
 
     async def _read_agent_memory(self) -> str:
-        """Read latest agent state from Checkpoint Store (Step 6 integration)."""
-        try:
-            # Guard against None kernel
-            if not self._kernel or not self._kernel.is_ready:
-                return json.dumps({"error": "Kernel not ready"}, indent=2)
+        """Read agent memory from Checkpoint Store — delegates to resources module."""
+        from .resources import read_agent_memory
 
-            # Use configured path from settings.yaml
-            from omni.foundation.config.database import get_checkpoint_db_path
-            from omni.langgraph.checkpoint.lance import RustLanceCheckpointSaver
-
-            db_path = get_checkpoint_db_path()
-            checkpointer = RustLanceCheckpointSaver(
-                base_path=str(db_path),
-                table_name="agent_checkpoints",
-                notify_on_save=False,
-            )
-
-            config = {"configurable": {"thread_id": "mcp_session"}}
-            tuple_data = checkpointer.get_tuple(config)
-
-            if tuple_data:
-                return json.dumps(
-                    {
-                        "checkpoint": tuple_data.checkpoint,
-                        "metadata": tuple_data.metadata,
-                        "timestamp": time.time(),
-                    },
-                    indent=2,
-                    default=str,
-                )
-
-            return json.dumps({"status": "empty", "timestamp": time.time()}, indent=2)
-
-        except Exception as e:
-            return json.dumps({"error": str(e)}, indent=2)
+        return await read_agent_memory(self._kernel)
 
     def _read_system_stats(self) -> str:
-        """Read system statistics."""
+        """Read system statistics — delegates to resources module."""
+        from .resources import read_system_stats
+
+        return read_system_stats(self._kernel, self._start_time)
+
+    # =========================================================================
+    # Skill Resource Discovery & Reading
+    # =========================================================================
+
+    async def _list_skill_resources_from_db(self) -> list[Resource]:
+        """List skill-declared resources from Rust LanceDB (skills table).
+
+        Uses list_all_resources() when the table has a metadata column and rows
+        with resource_uri. Falls back to filesystem scan (@skill_resource) when
+        DB returns none (e.g. before reindex or legacy tables).
+        """
+        from omni.foundation.bridge.rust_vector import get_vector_store
+
+        resources: list[Resource] = []
         try:
-            uptime = time.time() - self._start_time
-
-            # Get tool count
-            tool_count = 0
-            if self._kernel and self._kernel.is_ready:
-                tool_count = len(self._kernel.skill_context.get_core_commands())
-
-            return json.dumps(
-                {
-                    "uptime_seconds": round(uptime, 2),
-                    "tool_count": tool_count,
-                    "kernel_ready": self._kernel.is_ready if self._kernel else False,
-                    "version": "2.0.0",
-                },
-                indent=2,
-            )
+            store = get_vector_store()
+            rows = store.list_all_resources("skills")
+            for r in rows:
+                uri = r.get("resource_uri") or ""
+                if not uri:
+                    continue
+                name = r.get("tool_name") or r.get("id") or uri.split("/")[-1]
+                desc = r.get("description") or ""
+                resources.append(
+                    Resource(
+                        uri=AnyUrl(uri),
+                        name=name,
+                        description=desc,
+                        mimeType="application/json",
+                    )
+                )
         except Exception as e:
-            return json.dumps({"error": str(e)}, indent=2)
+            logger.debug(f"Failed to list resources from DB: {e}")
+
+        if not resources:
+            logger.warning(
+                "No resources found in DB, using fallback (this should not happen after reindex)"
+            )
+            resources = await self._discover_skill_resources_fallback()
+        return resources
+
+    async def _discover_skill_resources_fallback(self) -> list[Resource]:
+        """Fallback: scan scripts for @skill_resource when DB has no resource rows."""
+        from omni.core.kernel.components.skill_loader import load_skill_resources
+        from omni.foundation.config.skills import SKILLS_DIR
+
+        out: list[Resource] = []
+        skills_dir = SKILLS_DIR()
+        if not skills_dir.exists():
+            return out
+        for skill_path in sorted(skills_dir.iterdir()):
+            scripts_dir = skill_path / "scripts"
+            if not scripts_dir.is_dir():
+                continue
+            try:
+                res_map = await load_skill_resources(skill_path.name, scripts_dir)
+                for res_name, func in res_map.items():
+                    config = getattr(func, "_resource_config", {})
+                    uri = config.get("resource_uri") or f"omni://skill/{skill_path.name}/{res_name}"
+                    out.append(
+                        Resource(
+                            uri=AnyUrl(uri),
+                            name=f"{skill_path.name}/{res_name}",
+                            description=config.get("description", ""),
+                            mimeType=config.get("mime_type", "application/json"),
+                        )
+                    )
+            except Exception as e:
+                logger.debug(f"Failed to scan resources for skill {skill_path.name}: {e}")
+        return out
+
+    async def _read_skill_resource(self, uri_str: str) -> str:
+        """Read a skill resource by URI ``omni://skill/{skill}/{name}``.
+
+        Loads the corresponding @skill_resource function and executes it.
+        """
+        # Parse URI: omni://skill/{skill_name}/{resource_name}
+        parts = uri_str.replace("omni://skill/", "").split("/", 1)
+        if len(parts) != 2:
+            return json.dumps({"error": f"Invalid skill resource URI: {uri_str}"})
+
+        skill_name, resource_name = parts
+
+        from omni.core.kernel.components.skill_loader import load_skill_resources
+        from omni.foundation.config.skills import SKILLS_DIR
+
+        scripts_dir = SKILLS_DIR() / skill_name / "scripts"
+        if not scripts_dir.exists():
+            return json.dumps({"error": f"Skill not found: {skill_name}"})
+
+        try:
+            res_map = await load_skill_resources(skill_name, scripts_dir)
+            func = res_map.get(resource_name)
+            if func is None:
+                return json.dumps({"error": f"Resource not found: {resource_name}"})
+
+            result = await func() if asyncio.iscoroutinefunction(func) else func()
+
+            # Return as JSON string
+            if isinstance(result, str):
+                return result
+            return json.dumps(result, indent=2, ensure_ascii=False, default=str)
+        except Exception as e:
+            logger.error(f"Failed to read skill resource {uri_str}: {e}")
+            return json.dumps({"error": str(e)})
+
+    # =========================================================================
+    # Prompt Readers
+    # =========================================================================
 
     def _get_default_prompt(self) -> dict:
         """Get default system prompt."""
-        return {
-            "description": "Standard Omni Agent system prompt",
-            "content": """You are Omni-Dev Fusion, an advanced AI programming assistant.
+        from .prompts import get_prompt
 
-Core Principles:
-1. Use high-level skills (researcher, code_tools, git_smart) first
-2. Use skill.discover when you need to find new capabilities
-3. Stop immediately if you are stuck in a loop
-4. Output 'EXIT_LOOP_NOW' only when the user's intent is fully satisfied
-
-You have access to:
-- File system operations (read, write, list, delete)
-- Git operations (status, commit, log, branch)
-- Research capabilities (web search, code analysis)
-- Code execution and refactoring
-
-Always explain your reasoning before taking action.""",
-        }
+        return get_prompt("default")
 
     def _get_researcher_prompt(self) -> dict:
         """Get researcher-focused prompt."""
-        return {
-            "description": "Research-focused agent prompt",
-            "content": """You are Omni-Researcher, an AI assistant specialized in code analysis and research.
+        from .prompts import get_prompt
 
-Your approach:
-1. First understand the codebase structure using researcher skills
-2. Use structural code analysis to find relevant code
-3. Document your findings clearly
-4. Provide actionable insights
-
-Focus on:
-- Code architecture understanding
-- Dependency analysis
-- Pattern discovery
-- Documentation generation""",
-        }
+        return get_prompt("researcher")
 
     def _get_developer_prompt(self) -> dict:
         """Get developer-focused prompt."""
-        return {
-            "description": "Code-focused agent prompt",
-            "content": """You are Omni-Developer, an AI assistant specialized in code modification and debugging.
+        from .prompts import get_prompt
 
-Your approach:
-1. Understand the task and existing code structure
-2. Make minimal, focused changes
-3. Write tests for your changes
-4. Verify changes don't break existing functionality
-
-Focus on:
-- Implementing features correctly
-- Writing clean, maintainable code
-- Adding appropriate error handling
-- Testing thoroughly""",
-        }
+        return get_prompt("developer")
 
     async def run_stdio(self, verbose: bool = False) -> None:
         """Run the MCP server over Stdio.

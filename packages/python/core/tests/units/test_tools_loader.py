@@ -50,7 +50,11 @@ class TestSkillCommand:
             return f"{name}: {value}"
 
         result = cmd_with_args(42, name="test")
-        assert result == "test: 42"
+        # @skill_command normalizes to MCP tools/call result shape
+        assert isinstance(result, dict)
+        assert "content" in result and "isError" in result
+        assert result["content"][0]["text"] == "test: 42"
+        assert result["isError"] is False
 
 
 class TestToolsLoader:

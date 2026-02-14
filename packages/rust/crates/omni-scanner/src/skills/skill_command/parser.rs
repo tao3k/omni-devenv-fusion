@@ -144,6 +144,10 @@ pub fn parse_decorator_args(decorator_text: &str) -> DecoratorArgs {
                     "read_only" => {
                         args.read_only = Some(value.trim().eq_ignore_ascii_case("True"));
                     }
+                    "resource_uri" => {
+                        let cleaned = extract_string_value(value);
+                        args.resource_uri = Some(cleaned.to_string());
+                    }
                     _ => {}
                 }
             }

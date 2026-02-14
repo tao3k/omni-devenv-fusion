@@ -600,7 +600,10 @@ class Kernel:
 
     async def reload_skill(self, skill_name: str) -> None:
         """Reload a single skill (for hot reload)."""
-        logger.info(f"♻️ Reloading skill: {skill_name}")
+        import time as _time
+
+        t0 = _time.monotonic()
+        logger.info(f"[hot-reload] Reloading skill: {skill_name}")
 
         try:
             # Load fresh skill instance
@@ -609,12 +612,17 @@ class Kernel:
 
             # Update in skill context
             self.skill_context.register_skill(skill)
-            logger.info(f"✅ Hot Reload Complete: {skill_name}")
+            cmd_count = len(skill.list_commands()) if hasattr(skill, "list_commands") else 0
+            duration_ms = int((_time.monotonic() - t0) * 1000)
+            logger.info(
+                f"[hot-reload] Complete: {skill_name} ({cmd_count} commands, {duration_ms}ms)"
+            )
 
             # Notify MCP clients to refresh their tool list (descriptions may have changed)
             await self._notify_clients_tool_list_changed()
         except Exception as e:
-            logger.error(f"❌ Hot Reload Failed for {skill_name}: {e}")
+            duration_ms = int((_time.monotonic() - t0) * 1000)
+            logger.error(f"[hot-reload] Failed: {skill_name} ({duration_ms}ms) - {e}")
 
     async def _safe_build_cortex(self) -> None:
         """Wrapper for build_cortex to handle background execution safety."""
@@ -723,13 +731,12 @@ class Kernel:
         t5 = _time.time()
 
         # Step 8: Start SkillManager's Reactive Watcher (Live-Wire)
-        # This enables automatic tool refresh when skill files change
-        logger.info("⚡ Starting Live-Wire Skill Watcher...")
+        logger.info("[hot-reload] Starting Live-Wire watcher...")
         try:
             await self.skill_manager.startup()
-            logger.info("🧠 Live-Wire Skill Watcher active")
+            logger.info("[hot-reload] Live-Wire watcher active")
         except Exception as e:
-            logger.warning(f"Failed to start SkillManager watcher: {e}")
+            logger.warning(f"[hot-reload] Failed to start watcher: {e}")
 
         t6 = _time.time()
 
@@ -750,8 +757,7 @@ class Kernel:
         logger.info("   • Cortex:    Semantic routing index ready (Reactive)")
         logger.info("   • Sniffer:   Context detection active")
         logger.info("   • Security:  Permission Gatekeeper active (Zero Trust)")
-        logger.info("   • Watcher:   File monitoring enabled (hot reload)")
-        logger.info("   • Live-Wire: Automatic tool refresh active")
+        logger.info("   • [hot-reload] Watcher: file monitoring and tool refresh active")
         logger.info("   • Reactor:   Event-driven architecture active")
         logger.info("━" * 60)
 

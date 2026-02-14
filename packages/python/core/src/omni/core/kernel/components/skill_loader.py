@@ -1,8 +1,8 @@
 """
 kernel/components/skill_loader.py - Skill Loader
 
-Loads skill scripts and extracts @skill_command functions.
-Supports Trinity Architecture: scripts/*.py + @skill_command decorator.
+Loads skill scripts and extracts @skill_command / @skill_resource functions.
+Supports Trinity Architecture: scripts/*.py + decorator-driven discovery.
 """
 
 from __future__ import annotations
@@ -18,42 +18,25 @@ from omni.foundation.config.logging import get_logger
 logger = get_logger(__name__)
 
 
-async def load_skill_scripts(skill_name: str, scripts_dir: Path) -> dict[str, Any]:
-    """Load Skill scripts and extract all @skill_command decorated functions.
+def _ensure_skill_package(skill_name: str, scripts_dir: Path) -> str:
+    """Set up Python package context for a skill's scripts directory.
 
-    Args:
-        skill_name: Skill name
-        scripts_dir: Path to scripts/ directory
-
-    Returns:
-        Mapping of command names to functions
+    Returns the fully-qualified scripts package name.
     """
-    commands: dict[str, Any] = {}
-
-    if not scripts_dir.exists():
-        return commands
-
-    # Set up package context for imports - use omni.skills for simplicity
     pkg_name = f"omni.skills.{skill_name}"
     scripts_pkg_name = f"{pkg_name}.scripts"
 
-    # Add skill's parent directory to sys.path for skill-internal imports
-    # This allows "from git.scripts.xxx import ..." to work
-    skills_parent = scripts_dir.parent.parent  # skills/parent/
+    skills_parent = scripts_dir.parent.parent
     if str(skills_parent) not in sys.path:
         sys.path.insert(0, str(skills_parent))
 
-    # Ensure parent packages exist in sys.modules
-    parent_pkgs = ["omni", "omni.skills"]
-    for parent in parent_pkgs:
+    for parent in ("omni", "omni.skills"):
         if parent not in sys.modules:
             try:
-                pkg = types.ModuleType(parent)
-                sys.modules[parent] = pkg
+                sys.modules[parent] = types.ModuleType(parent)
             except Exception:
                 pass
 
-    # Register scripts package
     if scripts_pkg_name not in sys.modules:
         scripts_init = scripts_dir / "__init__.py"
         if scripts_init.exists():
@@ -63,20 +46,21 @@ async def load_skill_scripts(skill_name: str, scripts_dir: Path) -> dict[str, An
                 pkg.__path__ = [str(scripts_dir)]
                 sys.modules[scripts_pkg_name] = pkg
 
-    # Load each script file
+    return scripts_pkg_name
+
+
+def _load_modules(scripts_dir: Path, scripts_pkg_name: str):
+    """Yield loaded modules from scripts directory."""
     for script_path in scripts_dir.glob("*.py"):
         if script_path.name == "__init__.py":
             continue
 
-        module_name = script_path.stem
-        module_full_name = f"{scripts_pkg_name}.{module_name}"
+        module_full_name = f"{scripts_pkg_name}.{script_path.stem}"
 
         try:
-            # Check if already loaded
             if module_full_name in sys.modules:
-                module = sys.modules[module_full_name]
+                yield sys.modules[module_full_name]
             else:
-                # Load the module
                 spec = importlib.util.spec_from_file_location(module_full_name, script_path)
                 if spec and spec.loader:
                     module = types.ModuleType(module_full_name)
@@ -86,27 +70,71 @@ async def load_skill_scripts(skill_name: str, scripts_dir: Path) -> dict[str, An
                     try:
                         spec.loader.exec_module(module)
                     except Exception as e:
-                        # Remove failed module from sys.modules
                         sys.modules.pop(module_full_name, None)
                         raise e
-
-            # Extract @skill_command functions
-            for attr_name in dir(module):
-                if attr_name.startswith("_"):
-                    continue
-
-                obj = getattr(module, attr_name)
-                if callable(obj) and hasattr(obj, "_is_skill_command"):
-                    # Auto-generate command name if not set
-                    config = getattr(obj, "_skill_config", {})
-                    cmd_name = config.get("name", attr_name) if config else attr_name
-                    commands[cmd_name] = obj
-
+                    yield module
         except Exception as e:
-            # Log but continue - individual script failures shouldn't break skill load
             logger.warning(f"Failed to load skill script {script_path}: {e}")
 
+
+async def load_skill_scripts(skill_name: str, scripts_dir: Path) -> dict[str, Any]:
+    """Load Skill scripts and extract all @skill_command decorated functions.
+
+    Args:
+        skill_name: Skill name.
+        scripts_dir: Path to scripts/ directory.
+
+    Returns:
+        Mapping of command names to functions.
+    """
+    commands: dict[str, Any] = {}
+
+    if not scripts_dir.exists():
+        return commands
+
+    scripts_pkg_name = _ensure_skill_package(skill_name, scripts_dir)
+
+    for module in _load_modules(scripts_dir, scripts_pkg_name):
+        for attr_name in dir(module):
+            if attr_name.startswith("_"):
+                continue
+            obj = getattr(module, attr_name)
+            if callable(obj) and hasattr(obj, "_is_skill_command"):
+                config = getattr(obj, "_skill_config", {})
+                cmd_name = config.get("name", attr_name) if config else attr_name
+                commands[cmd_name] = obj
+
     return commands
+
+
+async def load_skill_resources(skill_name: str, scripts_dir: Path) -> dict[str, Any]:
+    """Load Skill scripts and extract all @skill_resource decorated functions.
+
+    Args:
+        skill_name: Skill name.
+        scripts_dir: Path to scripts/ directory.
+
+    Returns:
+        Mapping of resource names to functions.
+    """
+    resources: dict[str, Any] = {}
+
+    if not scripts_dir.exists():
+        return resources
+
+    scripts_pkg_name = _ensure_skill_package(skill_name, scripts_dir)
+
+    for module in _load_modules(scripts_dir, scripts_pkg_name):
+        for attr_name in dir(module):
+            if attr_name.startswith("_"):
+                continue
+            obj = getattr(module, attr_name)
+            if callable(obj) and hasattr(obj, "_is_skill_resource"):
+                config = getattr(obj, "_resource_config", {})
+                res_name = config.get("name", attr_name) if config else attr_name
+                resources[res_name] = obj
+
+    return resources
 
 
 def extract_tool_schema(func: Any) -> dict[str, Any]:

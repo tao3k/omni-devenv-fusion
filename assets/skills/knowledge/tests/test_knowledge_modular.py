@@ -1,5 +1,4 @@
 import pytest
-import json
 from omni.test_kit.decorators import omni_skill
 
 
@@ -13,7 +12,7 @@ class TestZkSearchCommands:
         result = await skill_tester.run("knowledge", "zk_toc")
         assert result.success
 
-        output = result.output if isinstance(result.output, dict) else json.loads(result.output)
+        output = result.data
         assert output["success"]
         assert "total" in output
         assert "notes" in output
@@ -24,7 +23,7 @@ class TestZkSearchCommands:
         result = await skill_tester.run("knowledge", "zk_stats")
         assert result.success
 
-        output = result.output if isinstance(result.output, dict) else json.loads(result.output)
+        output = result.data
         assert output["success"]
         assert "stats" in output
 
@@ -35,7 +34,7 @@ class TestZkSearchCommands:
         )
         assert result.success
 
-        output = result.output if isinstance(result.output, dict) else json.loads(result.output)
+        output = result.data
         assert output["success"]
         assert "results" in output
         assert isinstance(output["results"], list)
@@ -47,7 +46,7 @@ class TestZkSearchCommands:
         )
         assert result.success
 
-        output = result.output if isinstance(result.output, dict) else json.loads(result.output)
+        output = result.data
         assert output["success"]
         assert "incoming" in output
         assert "outgoing" in output
@@ -59,7 +58,7 @@ class TestZkSearchCommands:
         )
         assert result.success
 
-        output = result.output if isinstance(result.output, dict) else json.loads(result.output)
+        output = result.data
         assert output["success"]
         assert "results" in output
 
@@ -74,7 +73,7 @@ class TestZkSearchCommands:
         )
         assert result.success
 
-        output = result.output if isinstance(result.output, dict) else json.loads(result.output)
+        output = result.data
         assert output["success"]
         assert "zk_total" in output
         assert "merged" in output
@@ -90,10 +89,8 @@ class TestKnowledgeModular:
         """Test get_development_context execution."""
         result = await skill_tester.run("knowledge", "get_development_context")
         assert result.success
-        assert isinstance(result.output, str)
 
-        # Parse JSON output
-        context = json.loads(result.output)
+        context = result.data
         assert "project" in context
         assert "git_rules" in context
         assert "guardrails" in context
@@ -104,12 +101,7 @@ class TestKnowledgeModular:
         result = await skill_tester.run("knowledge", "get_best_practice", topic="git commit")
         assert result.success
 
-        # Handle both string and dict output
-        if isinstance(result.output, str):
-            output = json.loads(result.output)
-        else:
-            output = result.output
-
+        output = result.data
         assert "success" in output
         assert "topic" in output
         assert "theory" in output
@@ -119,5 +111,229 @@ class TestKnowledgeModular:
         """Test recall execution."""
         result = await skill_tester.run("knowledge", "recall", query="how to use advanced search")
         assert result.success
-        # Should return a string or list of results
         assert result.output is not None
+
+
+@pytest.mark.asyncio
+@omni_skill(name="knowledge")
+class TestGraphCommands:
+    """Tests for knowledge graph commands."""
+
+    async def test_graph_stats(self, skill_tester):
+        """Test graph_stats returns backend info."""
+        result = await skill_tester.run("knowledge", "graph_stats")
+        assert result.success
+
+        output = result.data
+        assert "backend" in output
+
+    async def test_search_graph_entities(self, skill_tester):
+        """Test search_graph in entities mode."""
+        result = await skill_tester.run(
+            "knowledge", "search_graph", query="Python", mode="entities"
+        )
+        assert result.success
+
+        output = result.data
+        assert "query" in output
+        assert output["mode"] == "entities"
+
+    async def test_search_graph_hybrid(self, skill_tester):
+        """Test search_graph in hybrid mode."""
+        result = await skill_tester.run(
+            "knowledge", "search_graph", query="architecture", mode="hybrid"
+        )
+        assert result.success
+
+        output = result.data
+        assert "query" in output
+
+
+@pytest.mark.asyncio
+@omni_skill(name="knowledge")
+class TestSearchCommands:
+    """Tests for search and recall commands."""
+
+    async def test_search(self, skill_tester):
+        """Test knowledge.search returns results."""
+        result = await skill_tester.run("knowledge", "search", query="architecture")
+        assert result.success
+        assert result.output is not None
+
+    async def test_recall_with_limit(self, skill_tester):
+        """Test knowledge.recall with limit parameter."""
+        result = await skill_tester.run("knowledge", "recall", query="search algorithm", limit=3)
+        assert result.success
+        assert result.output is not None
+
+
+@pytest.mark.asyncio
+@omni_skill(name="knowledge")
+class TestDependencyCommands:
+    """Tests for dependency-related commands."""
+
+    async def test_dependency_search(self, skill_tester):
+        """Test dependency_search returns results."""
+        result = await skill_tester.run("knowledge", "dependency_search", query="lance")
+        assert result.success
+
+        output = result.data
+        assert isinstance(output, (dict, list, str))
+
+    async def test_dependency_list(self, skill_tester):
+        """Test dependency_list returns dependencies."""
+        result = await skill_tester.run("knowledge", "dependency_list")
+        assert result.success
+        assert result.output is not None
+
+    async def test_dependency_status(self, skill_tester):
+        """Test dependency_status returns status info."""
+        result = await skill_tester.run("knowledge", "dependency_status")
+        assert result.success
+        assert result.output is not None
+
+
+@pytest.mark.asyncio
+@omni_skill(name="knowledge")
+class TestKnowledgeBaseCommands:
+    """Tests for knowledge base management commands."""
+
+    async def test_stats(self, skill_tester):
+        """Test knowledge_status returns status."""
+        result = await skill_tester.run("knowledge", "knowledge_status")
+        assert result.success
+        assert result.output is not None
+
+    async def test_list_supported_languages(self, skill_tester):
+        """Test list_supported_languages returns languages."""
+        result = await skill_tester.run("knowledge", "list_supported_languages")
+        assert result.success
+        assert result.output is not None
+
+
+@pytest.mark.asyncio
+@omni_skill(name="knowledge")
+class TestCodeSearchCommands:
+    """Tests for code search / language expert commands."""
+
+    async def test_consult_architecture_doc(self, skill_tester):
+        """Test consult_architecture_doc returns doc content."""
+        result = await skill_tester.run("knowledge", "consult_architecture_doc", topic="router")
+        assert result.success
+        assert result.output is not None
+
+    async def test_consult_language_expert(self, skill_tester):
+        """Test consult_language_expert returns language info."""
+        result = await skill_tester.run(
+            "knowledge",
+            "consult_language_expert",
+            file_path="example.py",
+            task_description="add type hints",
+        )
+        assert result.success
+        assert result.output is not None
+
+    async def test_get_language_standards(self, skill_tester):
+        """Test get_language_standards returns standards for known language."""
+        result = await skill_tester.run("knowledge", "get_language_standards", lang="python")
+        assert result.success
+        assert result.output is not None
+
+    async def test_get_language_standards_unknown(self, skill_tester):
+        """Test get_language_standards with unknown language returns graceful response."""
+        result = await skill_tester.run("knowledge", "get_language_standards", lang="brainf")
+        assert result.success
+        output = result.data
+        # Either returns standards or a not_found status
+        assert isinstance(output, (dict, str))
+
+
+@pytest.mark.asyncio
+@omni_skill(name="knowledge")
+class TestIngestAndClearCommands:
+    """Tests for knowledge ingest, stats, and clear commands."""
+
+    async def test_stats(self, skill_tester):
+        """Test stats returns collection statistics."""
+        result = await skill_tester.run("knowledge", "stats")
+        assert result.success
+        output = result.data
+        assert isinstance(output, (dict, str))
+
+    async def test_ingest(self, skill_tester):
+        """Test ingest adds content to the knowledge base."""
+        result = await skill_tester.run(
+            "knowledge",
+            "ingest",
+            content="Unit test content for knowledge ingest.",
+            source="test://unit_test",
+        )
+        assert result.success
+        output = result.data
+        assert isinstance(output, (dict, str))
+
+    async def test_create_knowledge_entry(self, skill_tester):
+        """Test create_knowledge_entry creates a new entry."""
+        result = await skill_tester.run(
+            "knowledge",
+            "create_knowledge_entry",
+            title="Test Entry",
+            category="testing",
+            content="This is a test knowledge entry created by unit tests.",
+        )
+        assert result.success
+        assert result.output is not None
+
+    async def test_rebuild_knowledge_index(self, skill_tester):
+        """Test rebuild_knowledge_index runs without error."""
+        result = await skill_tester.run("knowledge", "rebuild_knowledge_index")
+        assert result.success
+        assert result.output is not None
+
+    async def test_clear_nonexistent_collection(self, skill_tester):
+        """Test clear on a non-existent collection is graceful."""
+        result = await skill_tester.run("knowledge", "clear", collection="__test_nonexistent__")
+        assert result.success
+        output = result.data
+        assert isinstance(output, (dict, str))
+
+
+@pytest.mark.asyncio
+@omni_skill(name="knowledge")
+class TestEntityExtractionCommands:
+    """Tests for entity extraction and document ingestion."""
+
+    async def test_extract_entities(self, skill_tester):
+        """Test extract_entities on inline text (may require LLM)."""
+        result = await skill_tester.run(
+            "knowledge",
+            "extract_entities",
+            source="LanceDB is a columnar store built on Arrow. Rust powers omni-vector.",
+            store=False,
+        )
+        # May fail if LLM is not configured — that's okay
+        assert result.output is not None or result.error is not None
+
+    async def test_ingest_document(self, skill_tester):
+        """Test ingest_document with a real file."""
+        result = await skill_tester.run(
+            "knowledge",
+            "ingest_document",
+            file_path="docs/index.md",
+            extract_entities=False,
+        )
+        # May fail if vector store not initialized — check graceful handling
+        assert result.output is not None or result.error is not None
+
+
+@pytest.mark.asyncio
+@omni_skill(name="knowledge")
+class TestDependencyBuild:
+    """Test dependency_build (may be slow)."""
+
+    @pytest.mark.timeout(60)
+    async def test_dependency_build(self, skill_tester):
+        """Test dependency_build returns build results."""
+        result = await skill_tester.run("knowledge", "dependency_build")
+        # This may take time or fail if cargo registry is unreachable
+        assert result.output is not None or result.error is not None

@@ -2,7 +2,10 @@
 //!
 //! Tests SKILL.md parsing and SkillScanner functionality.
 
-use omni_scanner::{SkillMetadata, SkillScanner, SnifferRule, ToolRecord, extract_frontmatter};
+use omni_scanner::{
+    CanonicalSkillPayload, SkillMetadata, SkillScanner, SnifferRule, ToolRecord,
+    extract_frontmatter,
+};
 use std::fs;
 use tempfile::TempDir;
 
@@ -327,6 +330,8 @@ fn test_build_index_entry_deduplicates_tools() {
             category: "test".to_string(),
             annotations: Default::default(),
             parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: "".to_string(),
         },
         // Duplicate from docstring example
         ToolRecord {
@@ -344,6 +349,8 @@ fn test_build_index_entry_deduplicates_tools() {
             category: "test".to_string(),
             annotations: Default::default(),
             parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: "".to_string(),
         },
     ];
 
@@ -392,6 +399,8 @@ fn test_build_index_entry_preserves_order() {
             category: "test".to_string(),
             annotations: Default::default(),
             parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: "".to_string(),
         },
         ToolRecord {
             tool_name: "test_skill.tool_a".to_string(),
@@ -408,6 +417,8 @@ fn test_build_index_entry_preserves_order() {
             category: "test".to_string(),
             annotations: Default::default(),
             parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: "".to_string(),
         },
         // Duplicate of tool_b from docstring
         ToolRecord {
@@ -425,6 +436,8 @@ fn test_build_index_entry_preserves_order() {
             category: "test".to_string(),
             annotations: Default::default(),
             parameters: vec![],
+            skill_tools_refers: vec![],
+            resource_uri: "".to_string(),
         },
     ];
 
@@ -438,4 +451,74 @@ fn test_build_index_entry_preserves_order() {
     assert_eq!(entry.tools[0].description, "Tool B");
     assert_eq!(entry.tools[1].name, "test_skill.tool_a");
     assert_eq!(entry.tools[1].description, "Tool A");
+}
+
+/// Test that build_canonical_payload wires references for_tools into skill_tool_references.
+#[test]
+fn test_build_canonical_payload_fills_skill_tool_references() {
+    let temp_dir = TempDir::new().unwrap();
+    let skill_path = temp_dir.path().join("researcher");
+    fs::create_dir_all(&skill_path).unwrap();
+
+    let refs_dir = skill_path.join("references");
+    fs::create_dir_all(&refs_dir).unwrap();
+    let ref_path = refs_dir.join("run_research_graph.md");
+    let ref_content = r#"---
+metadata:
+  for_tools: researcher.run_research_graph
+  title: Run Research Graph
+---
+# Doc body
+"#;
+    fs::write(&ref_path, ref_content).unwrap();
+
+    let metadata = SkillMetadata {
+        skill_name: "researcher".to_string(),
+        version: "1.0.0".to_string(),
+        description: "Research skill".to_string(),
+        routing_keywords: vec!["research".to_string()],
+        authors: vec![],
+        intents: vec![],
+        require_refs: vec![],
+        repository: String::new(),
+        permissions: vec![],
+    };
+
+    let tools = vec![ToolRecord {
+        tool_name: "researcher.run_research_graph".to_string(),
+        description: "Run the graph".to_string(),
+        skill_name: "researcher".to_string(),
+        file_path: "researcher/scripts/commands.py".to_string(),
+        function_name: "run_research_graph".to_string(),
+        execution_mode: "async".to_string(),
+        keywords: vec!["research".to_string()],
+        intents: vec![],
+        file_hash: "abc".to_string(),
+        input_schema: "{}".to_string(),
+        docstring: String::new(),
+        category: "research".to_string(),
+        annotations: Default::default(),
+        parameters: vec![],
+        skill_tools_refers: vec![],
+        resource_uri: "".to_string(),
+    }];
+
+    let scanner = SkillScanner::new();
+    let payload: CanonicalSkillPayload =
+        scanner.build_canonical_payload(metadata, &tools, &skill_path);
+
+    assert_eq!(payload.skill_name, "researcher");
+    assert_eq!(payload.skill_tools.len(), 1);
+    let entry = payload
+        .skill_tools
+        .get("researcher.run_research_graph")
+        .expect("tool entry");
+    assert_eq!(
+        entry
+            .skill_tool_references
+            .get("researcher.references.run_research_graph"),
+        Some(&ref_path.to_string_lossy().to_string())
+    );
+    assert_eq!(payload.references.len(), 1);
+    assert!(payload.references.contains_key("run_research_graph"));
 }

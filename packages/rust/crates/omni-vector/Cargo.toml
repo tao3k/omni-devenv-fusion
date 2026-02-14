@@ -8,11 +8,12 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-# LanceDB core
-lance = "1.0"
-lance-arrow = "1.0"
-lance-index = "1.0"
-lance-linalg = "1.0"
+# LanceDB core (2.0: v2 manifest, scalar/FTS improvements)
+lance = "2.0"
+lance-arrow = "2.0"
+lance-file = "2.0"
+lance-index = "2.0"
+lance-linalg = "2.0"
 
 # Tantivy - Rust Lucene for BM25/Sparse Retrieval
 tantivy = "0.25"
@@ -20,6 +21,10 @@ ordered-float = "4.2"
 
 # RecordBatch utilities (extracted to omni-lance)
 omni-lance = { path = "../omni-lance" }
+
+# Arrow IPC for search result batch (same version as lance's arrow for IPC compatibility)
+arrow = { workspace = true }
+arrow-ipc = { workspace = true }
 
 # Async runtime
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
@@ -40,6 +45,8 @@ anyhow = { workspace = true }
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
+# SIMD-accelerated JSON for hot-path metadata parsing (writer_impl)
+simd-json = "0.13"
 
 # Reuse our common types
 omni-types = { path = "../omni-types" }
@@ -51,10 +58,20 @@ omni-scanner = { path = "../omni-scanner" }
 # YAML parsing for skill manifests
 serde_yaml = "0.9"
 
+# Multi-pattern string matching (O(n+m) for name-token boost)
+aho-corasick = "1.1"
+
+# Parallel fusion (P5: boost phase)
+rayon = { workspace = true }
+
 # Logging
 log = { workspace = true }
 
+# Time for cleanup_old_versions (Lance API)
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
 [dev-dependencies]
+lance = "2.0"
 tempfile = { workspace = true }
 rand = "0.8"
 insta = { version = "1.43.2", features = ["json"] }

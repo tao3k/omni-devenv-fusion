@@ -55,7 +55,7 @@ fn generate_keyword_results(count: usize) -> Vec<ToolSearchResult> {
             skill_name: format!("skill_{}", i % 5),
             tool_name: format!("tool_{}", i % 50),
             file_path: format!("/tools/tool_{}.yaml", i % 50),
-            keywords: vec![],
+            routing_keywords: vec![],
             intents: vec![],
             category: "benchmark".to_string(),
         })

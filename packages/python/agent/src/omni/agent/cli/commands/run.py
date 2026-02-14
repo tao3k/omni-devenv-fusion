@@ -637,5 +637,19 @@ def register_run_command(parent_app: typer.Typer):
         else:
             _print_session_report(task, result, step_count, tool_counts, 500)
 
+        # Persist last-session metrics for `omni dashboard`
+        from omni.agent.cli.session_metrics import write_session_metrics
+
+        write_session_metrics(
+            {
+                "task": task,
+                "session_id": result.get("session_id", "N/A"),
+                "step_count": step_count,
+                "tool_calls": tool_calls,
+                "tool_counts": tool_counts,
+                "est_tokens": result.get("est_tokens", 500),
+            }
+        )
+
 
 __all__ = ["register_run_command"]

@@ -106,8 +106,7 @@ class TestOmniRouter:
         second_call = search.await_args_list[1].kwargs
         assert first_call["min_score"] == 0.0
         assert second_call["min_score"] == 0.0
-        assert first_call["rerank"] == router._rerank
-        assert second_call["rerank"] == router._rerank
+        # rerank is not passed by route_hybrid; hybrid.search uses rerank=True internally
 
     def test_properties(self):
         """Test all property accessors."""

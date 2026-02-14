@@ -50,6 +50,7 @@ class EmbeddingService:
     _instance: "EmbeddingService | None" = None
     _model: Any = None
     _dimension: int = 1024
+    _truncate_dim: int | None = None  # MRL dimension truncation
     _backend: str = "local"
     _initialized: bool = False
     _client_mode: bool = False
@@ -59,6 +60,8 @@ class EmbeddingService:
     _model_loaded: bool = False
     _port_conflict_logged: bool = False
     _load_lock: threading.Lock
+    _embed_cache_key: str | None = None
+    _embed_cache_value: list[list[float]] | None = None
 
     def __new__(cls) -> "EmbeddingService":
         if cls._instance is None:
@@ -80,8 +83,8 @@ class EmbeddingService:
             except Exception:
                 return False
 
-    def _check_http_server_healthy(self, url: str, timeout: float = 2.0) -> bool:
-        """Synchronously check if HTTP server is healthy and responsive."""
+    def _check_http_server_healthy(self, url: str, timeout: float = 1.0) -> bool:
+        """Synchronously check if HTTP server is healthy (single request, short timeout)."""
         import json
         import urllib.error
         import urllib.request
@@ -267,18 +270,73 @@ class EmbeddingService:
             os.environ["HF_DATASETS_CACHE"] = str(PRJ_DATA("datasets"))
             os.makedirs(self._cache_dir, exist_ok=True)
 
-            model_name = get_setting("embedding.model", "Qwen/Qwen3-Embedding-4B")
+            model_name = get_setting("embedding.model", "Qwen/Qwen3-Embedding-0.6B")
 
-            logger.info("Loading embedding model", model=model_name, cache_dir=self._cache_dir)
+            # [FIX] Memory optimization settings from config
+            device_setting = get_setting("embedding.device", "auto")
+            dtype_setting = get_setting("embedding.torch_dtype", "float16")
+            quantize = get_setting("embedding.quantize", None)
+
+            logger.info(
+                "Loading embedding model",
+                model=model_name,
+                cache_dir=self._cache_dir,
+                device_setting=device_setting,
+                dtype_setting=dtype_setting,
+                quantize=quantize or "none",
+            )
 
             try:
+                import torch
                 from sentence_transformers import SentenceTransformer
 
-                self._model = SentenceTransformer(model_name)
+                # Resolve device: "auto" detects MPS on Apple Silicon
+                if device_setting == "auto":
+                    device = "mps" if torch.backends.mps.is_available() else "cpu"
+                else:
+                    device = device_setting
+
+                # Resolve dtype: FP16 requires MPS, otherwise FP32
+                if dtype_setting == "float16" and device == "mps":
+                    dtype = torch.float16
+                else:
+                    dtype = torch.float32
+
+                # Build model kwargs with optional quantization
+                model_kwargs: dict[str, Any] = {"dtype": dtype}
+                if quantize == "int8":
+                    model_kwargs["load_in_8bit"] = True
+                elif quantize == "int4":
+                    model_kwargs["load_in_4bit"] = True
+
+                # MRL dimension truncation - Note: Qwen3-Embedding doesn't support
+                # truncate_dim in model init, so we apply it in encode() instead
+                truncate_dim = get_setting("embedding.truncate_dim", None)
+                if truncate_dim:
+                    self._truncate_dim = truncate_dim
+
+                self._model = SentenceTransformer(
+                    model_name,
+                    device=device,
+                    model_kwargs=model_kwargs,
+                )
                 self._backend = "local"
-                self._dimension = self._model.get_sentence_embedding_dimension() or 1024
+                # Use truncate_dim if set, otherwise use model's native dimension
+                if truncate_dim:
+                    self._dimension = truncate_dim
+                    self._truncate_dim = truncate_dim
+                else:
+                    self._dimension = self._model.get_sentence_embedding_dimension() or 1024
                 self._model_loaded = True
-                logger.info("Embedding model loaded", model=model_name, dimension=self._dimension)
+                logger.info(
+                    "Embedding model loaded",
+                    model=model_name,
+                    dimension=self._dimension,
+                    truncate_dim=truncate_dim,
+                    device=device,
+                    dtype=str(dtype),
+                    quantize=quantize or "none",
+                )
 
             except Exception as e:
                 logger.error(f"Failed to load embedding model {model_name}: {e}")
@@ -289,54 +347,49 @@ class EmbeddingService:
                 self._model_loading = False
 
     def _auto_detect_and_init(self) -> None:
-        """Auto-detect MCP server and initialize if not already done.
+        """Auto-detect HTTP embedding server with a single health check (fast path).
 
-        This is called on first embed() to check if MCP server is running.
-        Uses health check to verify server is responsive.
+        One GET /health with short timeout; no separate port check.
         """
         if self._initialized:
             return
 
         http_port = get_setting("embedding.http_port", 18501)
         http_url = f"http://127.0.0.1:{http_port}"
-        port_in_use = self._is_port_in_use(http_port)
 
-        if port_in_use:
-            # Port is in use - verify server is healthy
-            server_healthy = self._check_http_server_healthy(http_url)
-
-            if server_healthy:
-                # MCP server is healthy, use client mode
-                self._client_mode = True
-                self._client_url = http_url
-                self._backend = "http"
-                self._dimension = get_setting("embedding.dimension", 1024)
-                self._initialized = True
-                logger.info(
-                    "✓ Embedding: auto-detected healthy MCP server, using client mode",
-                    server_url=self._client_url,
-                )
-            else:
-                # Port in use but unhealthy, fall back to local
-                logger.warning("⚠ Embedding: port in use but server unhealthy, using local mode")
-                self.initialize()
+        if self._check_http_server_healthy(http_url, timeout=1.0):
+            self._client_mode = True
+            self._client_url = http_url
+            self._backend = "http"
+            self._dimension = get_setting("embedding.dimension", 1024)
+            self._initialized = True
+            logger.info(
+                "✓ Embedding: auto-detected healthy MCP server, using client mode",
+                server_url=self._client_url,
+            )
         else:
-            # No MCP server, initialize normally (will use local model or fallback)
             self.initialize()
 
     def embed(self, text: str) -> list[list[float]]:
         """Generate embedding for text."""
-        # Auto-detect MCP server if not already initialized
         if not self._initialized:
             self._auto_detect_and_init()
 
-        if self._client_mode:
-            return self._embed_http_with_fallback([text])
+        # Single-slot cache for repeated same query (e.g. route test retries)
+        if self._embed_cache_key is not None and self._embed_cache_key == text:
+            if self._embed_cache_value is not None:
+                return self._embed_cache_value
 
-        # Load model if needed (thread-safe with lock)
-        if not self._model_loaded:
-            self._load_local_model()
-        return self._embed_local([text])
+        if self._client_mode:
+            out = self._embed_http_with_fallback([text])
+        else:
+            if not self._model_loaded:
+                self._load_local_model()
+            out = self._embed_local([text])
+
+        self._embed_cache_key = text
+        self._embed_cache_value = out
+        return out
 
     def _embed_local(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings using local model."""
@@ -344,6 +397,11 @@ class EmbeddingService:
             return self._embed_fallback(texts)
 
         embeddings = self._model.encode(texts, normalize_embeddings=True)
+
+        # Apply MRL dimension truncation if configured
+        if self._truncate_dim is not None:
+            embeddings = embeddings[:, : self._truncate_dim]
+
         return embeddings.tolist()
 
     def _embed_fallback(self, texts: list[str]) -> list[list[float]]:
@@ -402,6 +460,30 @@ class EmbeddingService:
         if not self._model_loaded:
             self._load_local_model()
         return self._embed_local(texts)
+
+    def embed_force_local(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings using only the local model (no HTTP/MCP client).
+
+        Use this when dimension must match the vector index (e.g. route test with
+        --local after `omni sync`). Bypasses auto-detected MCP/HTTP to avoid
+        dimension mismatch (client may return a different dimension than the index).
+        """
+        if not texts:
+            return []
+        saved_client = self._client_mode
+        saved_initialized = self._initialized
+        try:
+            self._client_mode = False
+            if not self._initialized:
+                self._initialized = True
+                self._backend = "fallback"
+                self._dimension = get_setting("embedding.dimension", 1024)
+            if not self._model_loaded:
+                self._load_local_model()
+            return self._embed_local(texts)
+        finally:
+            self._client_mode = saved_client
+            self._initialized = saved_initialized
 
     @property
     def backend(self) -> str:

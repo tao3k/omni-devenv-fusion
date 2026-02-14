@@ -105,9 +105,11 @@ pub use tags::{
 pub use omni_knowledge::PyEntity;
 pub use omni_knowledge::PyEntityType;
 pub use omni_knowledge::PyKnowledgeGraph;
+pub use omni_knowledge::PyQueryIntent;
 pub use omni_knowledge::PyRelation;
 pub use omni_knowledge::PySyncEngine;
 pub use omni_knowledge::PySyncResult;
+pub use omni_knowledge::extract_query_intent;
 
 // Dependency Indexer (External crate symbol search)
 pub use omni_knowledge::PyDependencyConfig;
@@ -122,10 +124,18 @@ pub use omni_knowledge::PyZkEntityRef;
 pub use omni_knowledge::PyZkRefStats;
 pub use omni_knowledge::zk_count_refs;
 pub use omni_knowledge::zk_extract_entity_refs;
+
+// ZK Note Enhancement (Rust-accelerated)
+pub use omni_knowledge::PyEnhancedNote;
+pub use omni_knowledge::PyInferredRelation;
+pub use omni_knowledge::PyNoteFrontmatter;
+pub use omni_knowledge::zk_enhance_note;
+pub use omni_knowledge::zk_enhance_notes_batch;
 pub use omni_knowledge::zk_find_referencing_notes;
 pub use omni_knowledge::zk_get_ref_stats;
 pub use omni_knowledge::zk_is_valid_ref;
 pub use omni_knowledge::zk_parse_entity_ref;
+pub use omni_knowledge::zk_parse_frontmatter;
 
 // AST Extraction
 pub use ast::{
@@ -296,6 +306,8 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<omni_knowledge::PyEntity>()?;
     m.add_class::<omni_knowledge::PyRelation>()?;
     m.add_class::<omni_knowledge::PyEntityType>()?;
+    m.add_class::<omni_knowledge::PyQueryIntent>()?;
+    m.add_function(pyo3::wrap_pyfunction!(extract_query_intent, m)?)?;
 
     // ZK Entity Reference Extraction (Rust-accelerated)
     m.add_function(pyo3::wrap_pyfunction!(zk_extract_entity_refs, m)?)?;
@@ -306,6 +318,14 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(zk_find_referencing_notes, m)?)?;
     m.add_class::<omni_knowledge::PyZkEntityRef>()?;
     m.add_class::<omni_knowledge::PyZkRefStats>()?;
+
+    // ZK Note Enhancement (Rust-accelerated)
+    m.add_class::<omni_knowledge::PyEnhancedNote>()?;
+    m.add_class::<omni_knowledge::PyNoteFrontmatter>()?;
+    m.add_class::<omni_knowledge::PyInferredRelation>()?;
+    m.add_function(pyo3::wrap_pyfunction!(zk_enhance_note, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(zk_enhance_notes_batch, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(zk_parse_frontmatter, m)?)?;
 
     // Dependency Indexer (External crate symbol search)
     use omni_knowledge::dep_indexer_py::register_dependency_indexer_module;

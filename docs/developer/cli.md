@@ -97,6 +97,9 @@ omni route test "git commit"
 # Debug score breakdown
 omni route test "refactor rust module" --debug --number 8
 
+# JSON with per-result score breakdown (raw_rrf, vector_score, keyword_score, final_score)
+omni route test "git commit" --local --json --explain
+
 # Use named profile from settings
 omni route test "git commit" --confidence-profile precision
 
