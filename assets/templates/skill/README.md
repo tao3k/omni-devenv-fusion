@@ -49,9 +49,9 @@ output = template.render(
 
 ## Configuration
 
-Templates are configured in `assets/settings.yaml` under `skill_architecture.templates`.
+Templates are configured in `packages/conf/settings.yaml` under `skills.architecture.templates`.
 
 ## See Also
 
 - [Skills Documentation](../../docs/skills.md)
-- [ODF-EP v7.0 Standards](../../assets/settings.yaml)
+- [ODF-EP v7.0 Standards](../../../packages/conf/settings.yaml)

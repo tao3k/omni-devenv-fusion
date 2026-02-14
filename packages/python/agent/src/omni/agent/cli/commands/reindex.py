@@ -75,9 +75,9 @@ def _current_embedding_signature() -> dict[str, Any]:
     from omni.foundation.services.index_dimension import get_effective_embedding_dimension
 
     return {
-        "embedding_model": str(get_setting("embedding.model", "")),
+        "embedding_model": str(get_setting("embedding.model")),
         "embedding_dimension": get_effective_embedding_dimension(),
-        "embedding_provider": str(get_setting("embedding.provider", "")),
+        "embedding_provider": str(get_setting("embedding.provider")),
     }
 
 
@@ -271,7 +271,7 @@ def ensure_embedding_index_compatibility(auto_fix: bool = True) -> dict[str, Any
 
     When embedding model or dimension changes, skills index must be rebuilt.
     """
-    enabled = bool(get_setting("embedding.auto_reindex_on_change", True))
+    enabled = bool(get_setting("embedding.auto_reindex_on_change"))
     if not enabled:
         return {"status": "disabled"}
 

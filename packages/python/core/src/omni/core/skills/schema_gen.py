@@ -252,7 +252,12 @@ def save_schemas(output_path: str | Path | None = None) -> Path:
     schemas = generate_tool_schemas()
 
     if output_path is None:
-        output_path = Path.cwd() / "tool_schemas.json"
+        try:
+            from omni.foundation.runtime.gitops import get_project_root
+
+            output_path = get_project_root() / "tool_schemas.json"
+        except Exception:
+            output_path = Path.cwd() / "tool_schemas.json"
 
     def _json_default(value: Any) -> Any:
         # Decorator metadata may include Python types/classes; encode safely.

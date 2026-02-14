@@ -99,28 +99,8 @@ class AgentMCPHandler(MCPRequestHandler):
         # Hot reload is already enabled by default during kernel initialization
         # (Live-Wire Skill Watcher starts automatically)
 
-        # [NEW] Preload embedding service in BACKGROUND so MCP responds immediately
-        # The actual model loading happens in a thread, not blocking the event loop
-        # This allows MCP to receive messages while embedding model loads (~7s)
-        async def _warmup_embedding():
-            """Load embedding model in background thread."""
-            try:
-                from omni.foundation.services.embedding import get_embedding_service
-
-                embed_service = get_embedding_service()
-                # Run blocking embed() in thread to not block event loop
-                import asyncio
-
-                dummy_vec = await asyncio.to_thread(embed_service.embed, "[MODEL_WARMUP]")
-                logger.info(f"📦 Embedding service ready (dim={embed_service.dimension})")
-            except Exception as embed_err:
-                logger.warning(f"Embedding warmup failed: {embed_err}")
-
-        # Fire-and-forget: start warmup without blocking MCP response
-        import asyncio
-
-        asyncio.create_task(_warmup_embedding())
-        logger.info("📦 Embedding service warming up in background...")
+        # Note: Embedding warmup is now handled externally by MCP server (mcp.py)
+        # to ensure proper startup order: server first, then model loading
 
         self._initialized = True
         logger.info(

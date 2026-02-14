@@ -1,7 +1,4 @@
 { workspaceRoot, inputs, ... }:
-let
-  inherit (inputs.omnibus.flake.inputs) nix-filter;
-in
 {
   perSystem =
     {
@@ -46,7 +43,6 @@ in
       packages.omni-core-rs-python-bindings =
         pkgs.callPackage ../../packages/omni-core-rs.nix
           {
-            inherit nix-filter;
             inherit workspaceRoot;
             cargoDeps =
               config.nci.outputs."omni-core-rs".packages.release.config.rust-cargo-vendor.vendoredSources;

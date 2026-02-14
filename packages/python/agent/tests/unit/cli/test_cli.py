@@ -348,18 +348,23 @@ def test_print_result_json_mode():
 
 
 def test_print_metadata_box():
-    """Test print_metadata_box function."""
+    """Test print_metadata_box calls err_console.print when result has metadata fields.
+
+    Uses a mock so we don't depend on stderr capture (Rich may write elsewhere).
+    """
     print("\n[print_metadata_box]")
 
     from omni.agent.cli.console import print_metadata_box
 
-    captured = io.StringIO()
-    with redirect_stderr(captured):
-        print_metadata_box({"url": "https://example.com", "title": "Test"})
-        print_metadata_box({})
+    with patch("omni.agent.cli.console.err_console") as mock_console:
+        # Dict with a key in _METADATA_FIELDS -> should print
+        print_metadata_box({"command_name": "test", "isError": False})
+        assert mock_console.print.call_count >= 1, "Metadata panel should be printed"
 
-    output = captured.getvalue()
-    assert len(output) > 0, "Metadata panel not printed"
+        mock_console.reset_mock()
+        # Empty dict -> no metadata fields, should not print
+        print_metadata_box({})
+        mock_console.print.assert_not_called()
 
     print("  print_metadata_box works correctly")
 

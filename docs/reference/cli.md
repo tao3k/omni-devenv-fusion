@@ -41,8 +41,8 @@ Global options apply to all subcommands:
 
 Configuration is resolved as a merged view:
 
-1. `<git-root>/assets/settings.yaml` (repository base defaults)
-2. `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` (active override layer)
+1. `<git-root>/packages/conf/settings.yaml` (system defaults)
+2. `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` (user override layer)
 
 By default, `PRJ_CONFIG_HOME=.config`. You can switch it per run:
 

@@ -2,7 +2,7 @@
 Project Settings - Configuration Manager (Refactored)
 
 Architecture:
-- Layer 0 (Base): <git-root>/assets/settings.yaml (System Defaults)
+- Layer 0 (System): <git-root>/packages/conf/settings.yaml (System Defaults)
 - Layer 1 (User): $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml (User Overrides)
 - Control: CLI flag `--conf` sets $PRJ_CONFIG_HOME dynamically.
 
@@ -34,7 +34,7 @@ class Settings:
 
     Logic:
     1. Parse `--conf` flag -> updates PRJ_CONFIG_HOME.
-    2. Load `<git-root>/assets/settings.yaml` (Defaults).
+    2. Load system default: `<git-root>/packages/conf/settings.yaml`.
     3. Load `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` (User).
     4. Merge User > Defaults.
     """
@@ -98,14 +98,17 @@ class Settings:
             # Clear again after --conf mutation to ensure fresh path resolution.
             PRJ_DIRS.clear_cache()
 
-        # 2. Load Base Defaults (from <git-root>/assets/settings.yaml)
-        # This serves as the "Interface Definition" or "Factory Defaults"
+        # 2. Load system default from packages/conf/settings.yaml
         defaults = {}
-        project_root = PRJ_DIRS.config_home.parent
-        assets_settings = project_root / "assets" / "settings.yaml"
+        try:
+            from omni.foundation.runtime.gitops import get_project_root
 
-        if assets_settings.exists():
-            defaults = self._read_yaml(assets_settings)
+            project_root = get_project_root()
+        except Exception:
+            project_root = PRJ_DIRS.config_home.parent
+        system_settings = project_root / "packages" / "conf" / "settings.yaml"
+        if system_settings.exists():
+            defaults = self._read_yaml(system_settings)
 
         # 3. Load User Config (from $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml)
         # This is where the user's specific customizations live

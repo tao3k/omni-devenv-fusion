@@ -55,7 +55,7 @@ def load_prompt(
     """Load a prompt from a file and inject it.
 
     Args:
-        path: Path to the prompt file (relative to cwd or absolute)
+        path: Path to the prompt file (relative to project root or absolute)
         category: Category determines the wrapper tag
         tag: Custom tag format (overrides category)
         encoding: File encoding (default: utf-8)
@@ -65,7 +65,13 @@ def load_prompt(
     """
     prompt_path = Path(path)
     if not prompt_path.is_absolute():
-        prompt_path = Path.cwd() / prompt_path
+        try:
+            from omni.foundation.runtime.gitops import get_project_root
+
+            _root = get_project_root()
+        except Exception:
+            _root = Path.cwd()
+        prompt_path = _root / prompt_path
 
     if not prompt_path.exists():
         return ""

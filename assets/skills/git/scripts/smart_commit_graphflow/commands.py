@@ -290,8 +290,13 @@ async def smart_commit(
                 valid_scopes = _get_cog_scopes(Path(project_root))
                 if valid_scopes and commit_scope not in valid_scopes:
                     matches = get_close_matches(commit_scope, valid_scopes, n=1, cutoff=0.6)
-                    if matches:
-                        commit_scope = matches[0]
+                    return {
+                        "status": "error",
+                        "message": f"Invalid scope: '{commit_scope}'. Valid scopes: {valid_scopes}",
+                        "suggestion": f"Did you mean: {matches[0]}?"
+                        if matches
+                        else "Use a valid scope from the list",
+                    }
 
                 result = await _approve_smart_commit_async(
                     workflow_id=workflow_id,

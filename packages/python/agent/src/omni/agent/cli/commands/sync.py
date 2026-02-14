@@ -10,7 +10,9 @@ Five components (all use unified embedding dimension via get_effective_embedding
     4. Knowledge - Librarian docs (Librarian uses get_effective_embedding_dimension)
     5. Memory   - Hippocampus index (VectorStoreClient uses get_effective_embedding_dimension)
 
-Full sync starts by writing .embedding_signature.json so all components see the same dimension.
+Full sync runs dimension auto-monitor (warm-up embedding + check all stores) and repair
+(mismatched stores are recreated with correct dimension) before syncing the five components.
+Then it writes .embedding_signature.json so all components see the same dimension.
 
 Usage:
     omni sync                # Sync EVERYTHING (Default)
@@ -127,27 +129,10 @@ sync_app = typer.Typer(
 
 
 def _resolve_references_config_path() -> str:
-    """Resolve dependency references config path with canonical precedence.
+    """Resolve references config path via canonical API."""
+    from omni.foundation.services.reference import get_references_config_path
 
-    Order:
-    1. Explicit env override: OMNI_REFERENCES_YAML
-    2. Active config: $PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml
-    3. Repository default: <git-root>/assets/references.yaml
-    """
-    import os
-
-    env_path = os.environ.get("OMNI_REFERENCES_YAML")
-    if env_path:
-        return env_path
-
-    active_path = PRJ_CONFIG("omni-dev-fusion", "references.yaml")
-    if active_path.exists():
-        return str(active_path)
-
-    try:
-        return str(get_project_root() / "assets" / "references.yaml")
-    except Exception:
-        return "assets/references.yaml"
+    return str(get_references_config_path())
 
 
 def _print_sync_report(
@@ -535,6 +520,17 @@ async def _embed_skill_vectors(store, skills_db_path: str) -> int:
 
         embed_service = get_embedding_service()
 
+        # Skip embedding during sync - let it happen lazily when MCP server starts
+        # This avoids loading the embedding model during sync, making startup faster
+        # The skills table will have zero vectors, and embedding happens on-demand
+        # when the MCP server needs it (e.g., during search/routing)
+        if embed_service._client_mode:
+            sync_log.info(
+                "Skipping embedding during sync (client mode). "
+                "Embedding will happen lazily when MCP server starts."
+            )
+            return 0
+
         # Generate embeddings in a thread pool (blocking I/O)
         loop = asyncio.get_running_loop()
         with ThreadPoolExecutor(max_workers=4, thread_name_prefix="sync-embed") as executor:
@@ -619,21 +615,37 @@ def main(
     async def run_sync_all():
         stats = {}
 
-        # 0. Check and report vector store dimension consistency
+        # 0. Dimension auto-monitor and repair (all 5 components use unified embedding dimension)
         from omni.foundation.services.index_dimension import (
             check_all_vector_stores_dimension,
             ensure_embedding_signature_written,
+            repair_vector_store_dimension,
         )
 
-        # Check dimensions before sync
         dim_report = check_all_vector_stores_dimension()
         if not dim_report.is_consistent:
             sync_log.warn("Vector store dimension issues detected:")
             for issue in dim_report.issues:
                 sync_log.warn(f"  - {issue}")
-            sync_log.warn("Attempting to fix during sync...")
+            for store_name, store_info in dim_report.stores.items():
+                if store_info.get("status") != "mismatch":
+                    continue
+                expected = store_info.get("expected_dimension")
+                if not isinstance(expected, int):
+                    continue
+                sync_log.info(f"Repairing {store_name} (target dimension {expected})...")
+                result = await repair_vector_store_dimension(store_name, expected)
+                if result.get("status") == "success":
+                    sync_log.success(f"{store_name}: {result.get('details', 'repaired')}")
+                else:
+                    sync_log.warn(f"{store_name}: {result.get('details', 'repair skipped')}")
+            # Re-check after repair
+            dim_report = check_all_vector_stores_dimension()
+            if not dim_report.is_consistent:
+                sync_log.warn(
+                    "Some dimension issues may remain; sync will overwrite with current dimension."
+                )
 
-        # Write signature to ensure consistency
         ensure_embedding_signature_written()
 
         # 1. Symbols (Zero-Token Code Index; no embedding dimension)

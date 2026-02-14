@@ -123,23 +123,23 @@ class EmbeddingService:
         if self._initialized:
             return
 
-        provider = get_setting("embedding.provider", "").lower()
-        http_port = get_setting("embedding.http_port", 18501)
+        provider = (get_setting("embedding.provider") or "").lower()
+        http_port = int(get_setting("embedding.http_port"))
         http_url = f"http://127.0.0.1:{http_port}"
 
         # Handle explicit overrides
         if provider == "client":
             self._client_mode = True
-            self._client_url = get_setting("embedding.client_url", http_url)
+            self._client_url = get_setting("embedding.client_url") or http_url
             self._backend = "http"
-            self._dimension = get_setting("embedding.dimension", 1024)
+            self._dimension = int(get_setting("embedding.dimension"))
             self._initialized = True
             logger.info("Embedding: force client mode", client_url=self._client_url)
             return
 
         if provider == "fallback":
             self._backend = "fallback"
-            self._dimension = get_setting("embedding.dimension", 1024)
+            self._dimension = int(get_setting("embedding.dimension"))
             self._initialized = True
             logger.info("Embedding: force fallback mode")
             return
@@ -156,7 +156,7 @@ class EmbeddingService:
                 self._client_mode = True
                 self._client_url = http_url
                 self._backend = "http"
-                self._dimension = get_setting("embedding.dimension", 1024)
+                self._dimension = int(get_setting("embedding.dimension"))
                 self._initialized = True
                 logger.info(
                     "✓ Embedding: auto-detected healthy HTTP server, using client mode",
@@ -205,7 +205,7 @@ class EmbeddingService:
                     self._client_mode = True
                     self._client_url = f"http://127.0.0.1:{http_port}"
                     self._backend = "http"
-                    self._dimension = get_setting("embedding.dimension", 1024)
+                    self._dimension = int(get_setting("embedding.dimension"))
                     self._http_server_started = False
                 else:
                     logger.warning(f"Embedding HTTP server error: {e}")
@@ -270,12 +270,12 @@ class EmbeddingService:
             os.environ["HF_DATASETS_CACHE"] = str(PRJ_DATA("datasets"))
             os.makedirs(self._cache_dir, exist_ok=True)
 
-            model_name = get_setting("embedding.model", "Qwen/Qwen3-Embedding-0.6B")
+            model_name = get_setting("embedding.model")
 
             # [FIX] Memory optimization settings from config
-            device_setting = get_setting("embedding.device", "auto")
-            dtype_setting = get_setting("embedding.torch_dtype", "float16")
-            quantize = get_setting("embedding.quantize", None)
+            device_setting = get_setting("embedding.device")
+            dtype_setting = get_setting("embedding.torch_dtype")
+            quantize = get_setting("embedding.quantize")
 
             logger.info(
                 "Loading embedding model",
@@ -311,7 +311,7 @@ class EmbeddingService:
 
                 # MRL dimension truncation - Note: Qwen3-Embedding doesn't support
                 # truncate_dim in model init, so we apply it in encode() instead
-                truncate_dim = get_setting("embedding.truncate_dim", None)
+                truncate_dim = get_setting("embedding.truncate_dim")
                 if truncate_dim:
                     self._truncate_dim = truncate_dim
 
@@ -341,7 +341,7 @@ class EmbeddingService:
             except Exception as e:
                 logger.error(f"Failed to load embedding model {model_name}: {e}")
                 self._backend = "fallback"
-                self._dimension = get_setting("embedding.dimension", 1024)
+                self._dimension = int(get_setting("embedding.dimension"))
                 self._model_loaded = True
             finally:
                 self._model_loading = False
@@ -354,14 +354,14 @@ class EmbeddingService:
         if self._initialized:
             return
 
-        http_port = get_setting("embedding.http_port", 18501)
+        http_port = int(get_setting("embedding.http_port"))
         http_url = f"http://127.0.0.1:{http_port}"
 
         if self._check_http_server_healthy(http_url, timeout=1.0):
             self._client_mode = True
             self._client_url = http_url
             self._backend = "http"
-            self._dimension = get_setting("embedding.dimension", 1024)
+            self._dimension = int(get_setting("embedding.dimension"))
             self._initialized = True
             logger.info(
                 "✓ Embedding: auto-detected healthy MCP server, using client mode",
@@ -441,7 +441,14 @@ class EmbeddingService:
             )
             self._client_mode = False
             self._backend = "fallback"
-            self._dimension = get_setting("embedding.dimension", self._dimension or 1024)
+            try:
+                from omni.foundation.services.index_dimension import (
+                    get_effective_embedding_dimension,
+                )
+
+                self._dimension = get_effective_embedding_dimension()
+            except Exception:
+                self._dimension = int(get_setting("embedding.dimension"))
             return self._embed_fallback(texts)
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
@@ -477,7 +484,14 @@ class EmbeddingService:
             if not self._initialized:
                 self._initialized = True
                 self._backend = "fallback"
-                self._dimension = get_setting("embedding.dimension", 1024)
+                try:
+                    from omni.foundation.services.index_dimension import (
+                        get_effective_embedding_dimension,
+                    )
+
+                    self._dimension = get_effective_embedding_dimension()
+                except Exception:
+                    self._dimension = int(get_setting("embedding.dimension"))
             if not self._model_loaded:
                 self._load_local_model()
             return self._embed_local(texts)

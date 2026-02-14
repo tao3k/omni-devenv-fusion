@@ -203,6 +203,78 @@ class FileIngestor:
         except Exception:
             return self._text_chunk(content, file_path)
 
+    def _markdown_section_chunk(self, content: str, file_path: str) -> list[dict[str, Any]]:
+        """Section-aware chunking for markdown: split by ## / ### for precise retrieval.
+
+        Each section (with its header) becomes a chunk; long sections are sub-split
+        by max_section_lines so we avoid mega-chunks that match too many queries.
+        """
+        lines = content.split("\n")
+        chunks: list[dict[str, Any]] = []
+        max_section_lines = 60
+        current_header = ""
+        section_start = 0
+        section_lines: list[str] = []
+
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            is_header = stripped.startswith("## ") or stripped.startswith("### ")
+            if is_header and section_lines:
+                chunk_text = "\n".join(section_lines)
+                if chunk_text.strip():
+                    chunk_id = f"{Path(file_path).stem}_s{len(chunks)}"
+                    chunks.append(
+                        {
+                            "id": chunk_id,
+                            "content": chunk_text,
+                            "start_line": section_start + 1,
+                            "end_line": section_start + len(section_lines),
+                            "type": "section",
+                            "language": "",
+                        }
+                    )
+                section_start = i
+                section_lines = [line]
+                current_header = stripped
+            elif is_header:
+                section_start = i
+                section_lines = [line]
+                current_header = stripped
+            else:
+                section_lines.append(line)
+                if len(section_lines) >= max_section_lines:
+                    chunk_text = "\n".join(section_lines)
+                    if chunk_text.strip():
+                        chunk_id = f"{Path(file_path).stem}_s{len(chunks)}"
+                        chunks.append(
+                            {
+                                "id": chunk_id,
+                                "content": chunk_text,
+                                "start_line": section_start + 1,
+                                "end_line": section_start + len(section_lines),
+                                "type": "section",
+                                "language": "",
+                            }
+                        )
+                    section_start = i + 1
+                    section_lines = []
+
+        if section_lines:
+            chunk_text = "\n".join(section_lines)
+            if chunk_text.strip():
+                chunk_id = f"{Path(file_path).stem}_s{len(chunks)}"
+                chunks.append(
+                    {
+                        "id": chunk_id,
+                        "content": chunk_text,
+                        "start_line": section_start + 1,
+                        "end_line": section_start + len(section_lines),
+                        "type": "section",
+                        "language": "",
+                    }
+                )
+        return chunks if chunks else self._text_chunk(content, file_path)
+
     def _text_chunk(self, content: str, file_path: str) -> list[dict[str, Any]]:
         """Fallback text-based chunking."""
         lines = content.split("\n")
@@ -340,9 +412,12 @@ class FileIngestor:
         if mode == "text":
             # Full text chunking
             return self._text_chunk(content, str(file_path))
-        elif mode == "summary" or (mode == "auto" and is_markdown):
-            # Summary-only chunking for lightweight embedding (reduces tokens by ~95%)
+        elif mode == "summary":
+            # Summary-only chunking for lightweight embedding
             return self._summary_chunk(content, str(file_path))
+        elif mode == "auto" and is_markdown:
+            # Section-aware chunking for precise retrieval (one chunk per ## section)
+            return self._markdown_section_chunk(content, str(file_path))
         elif mode == "skeleton":
             # Skeleton mode for lightweight semantic indexing (default for code)
             language = self.config.ast_extensions.get(ext)
@@ -356,9 +431,9 @@ class FileIngestor:
                 return self._ast_chunk(content, str(file_path), language)
             return self._text_chunk(content, str(file_path))
         else:
-            # Auto mode: Summary for markdown (default), skeleton for code
+            # Auto mode: section chunking for markdown, skeleton for code
             if is_markdown:
-                return self._summary_chunk(content, str(file_path))
+                return self._markdown_section_chunk(content, str(file_path))
             language = self.config.ast_extensions.get(ext)
             if language:
                 return self._skeleton_chunk(content, str(file_path), language)

@@ -120,12 +120,12 @@ class LiteLLMProvider(LLMProvider):
         from omni.foundation.config.settings import get_setting
 
         return LLMConfig(
-            provider=get_setting("inference.provider", "anthropic"),
-            model=get_setting("inference.model", "sonnet"),
+            provider=get_setting("inference.provider"),
+            model=get_setting("inference.model"),
             base_url=get_setting("inference.base_url"),
-            api_key_env=get_setting("inference.api_key_env", "ANTHROPIC_API_KEY"),
-            timeout=get_setting("inference.timeout", 60),
-            max_tokens=get_setting("inference.max_tokens", 4096),
+            api_key_env=get_setting("inference.api_key_env"),
+            timeout=int(get_setting("inference.timeout")),
+            max_tokens=int(get_setting("inference.max_tokens")),
         )
 
     def _check_availability(self) -> bool:

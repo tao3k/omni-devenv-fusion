@@ -57,7 +57,7 @@ def _get_search_paths() -> list:
     skill_templates_dir = SKILLS_DIR("git", path="templates")
 
     # Path 2: User override templates (Fallback - from assets/templates/git/)
-    templates_config = get_setting("assets.templates_dir", "assets/templates")
+    templates_config = get_setting("assets.templates_dir")
     user_templates_root = project_root / templates_config
     user_git_templates = user_templates_root / "git"
 

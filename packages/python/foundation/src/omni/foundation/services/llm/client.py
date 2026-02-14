@@ -54,7 +54,7 @@ class InferenceClient:
         self.model = model or get_setting("inference.model")
         self.timeout = timeout or get_setting("inference.timeout")
         self.max_tokens = max_tokens or get_setting("inference.max_tokens")
-        self.provider = provider or get_setting("inference.provider", "anthropic")
+        self.provider = provider or get_setting("inference.provider")
 
         if not self.api_key:
             log.warning(

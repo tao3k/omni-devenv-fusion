@@ -80,6 +80,9 @@ class SearchCache:
             query: The search query
             results: List of search results to cache
         """
+        # Lazy eviction of expired entries so memory is freed (avoids long-lived process growth)
+        self.remove_expired()
+
         self._cache[query] = {
             "results": results,
             "timestamp": time.time(),

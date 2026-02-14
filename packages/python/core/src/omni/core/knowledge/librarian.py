@@ -304,7 +304,7 @@ class Librarian:
         try:
             from omni.foundation.config import get_setting
 
-            prompt_path = get_setting("prompts.system_core", "assets/prompts/system_core.md")
+            prompt_path = get_setting("prompts.system_core")
             logger.info(f"Prompt loaded: {prompt_path}")
         except Exception:
             logger.info("Prompt: using default")

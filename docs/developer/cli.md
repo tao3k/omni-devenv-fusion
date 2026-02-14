@@ -113,8 +113,8 @@ omni route test
 
 Configuration resolution follows the CLI `--conf` option:
 
-1. `<git-root>/assets/settings.yaml` (base defaults)
-2. `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` (override layer)
+1. `<git-root>/packages/conf/settings.yaml` (system defaults)
+2. `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` (user override layer)
 
 Route defaults and confidence profile settings live under `router.search.*`, including:
 

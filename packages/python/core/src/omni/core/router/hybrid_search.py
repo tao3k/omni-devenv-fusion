@@ -348,7 +348,7 @@ def _intent_terms_from_query(query: str) -> set[str]:
 
     q = query.strip().lower()
     tokens = set(re.findall(r"[a-z0-9]+", q))
-    custom = get_setting("router.search.intent_vocab", None)
+    custom = get_setting("router.search.intent_vocab")
     if isinstance(custom, (list, tuple)) and len(custom) > 0:
         intent_vocab = {str(t).strip().lower() for t in custom}
     else:
@@ -422,7 +422,7 @@ def _recalibrate_confidence(
     if profile is None:
         from omni.foundation.config.settings import get_setting
 
-        p = get_setting("router.search.profiles.balanced", None)
+        p = get_setting("router.search.profiles.balanced")
         profile = p if isinstance(p, dict) else {}
 
     high_threshold = float(profile.get("high_threshold", 0.75))
@@ -738,7 +738,7 @@ class HybridSearch:
 
         if intent_override is not None:
             resolved_intent, category_filter = intent_override, None
-        elif get_setting("router.intent.use_llm", False):
+        elif get_setting("router.intent.use_llm"):
             intent_result = await classify_tool_search_intent_with_llm(effective_query)
             if intent_result is not None:
                 resolved_intent, category_filter = (

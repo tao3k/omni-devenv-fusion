@@ -527,13 +527,13 @@ assets/skills/
 
 ### Core Configuration
 
-| File                   | Purpose                                                                                 |
-| ---------------------- | --------------------------------------------------------------------------------------- |
-| `assets/settings.yaml` | Repository base defaults (merged with `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml`) |
-| `pyproject.toml`       | Python project configuration (uv workspace, ruff, mypy)                                 |
-| `Cargo.toml`           | Rust workspace configuration (11 crates)                                                |
-| `justfile`             | Task automation (build, test, lint commands)                                            |
-| `.mcp.json`            | MCP server configuration                                                                |
+| File                          | Purpose                                                                        |
+| ----------------------------- | ------------------------------------------------------------------------------ |
+| `packages/conf/settings.yaml` | System defaults (merged with `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml`) |
+| `pyproject.toml`              | Python project configuration (uv workspace, ruff, mypy)                        |
+| `Cargo.toml`                  | Rust workspace configuration (11 crates)                                       |
+| `justfile`                    | Task automation (build, test, lint commands)                                   |
+| `.mcp.json`                   | MCP server configuration                                                       |
 
 ### Git Configuration
 

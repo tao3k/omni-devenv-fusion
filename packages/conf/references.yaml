@@ -1,17 +1,15 @@
 # =============================================================================
-# Omni-Dev-Fusion References Configuration
+# Omni-Dev-Fusion References Configuration (System Default)
 #
-# Centralized path references for knowledge base and documentation.
-# Used by Librarian for knowledge ingestion and by other modules for path resolution.
+# This file is the system-level default. User overrides live in:
+#   $PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml
+# (e.g. .config/omni-dev-fusion/references.yaml or --conf <dir>).
 #
-# IMPORTANT: Keep paths synchronized with actual directory structure.
+# Used by ReferenceLibrary for path resolution; user config is merged on top.
 # =============================================================================
 
 # =============================================================================
 # Zettelkasten (zk) Notebook Configuration
-#
-# zk CLI notebook for managing bidirectional links and note relationships.
-# Configuration keys used by omni.foundation.config.dirs module.
 # =============================================================================
 zk:
   notebook: "assets/knowledge"
@@ -19,54 +17,28 @@ zk:
 
 # =============================================================================
 # Harvested Knowledge (User-Created Knowledge Entries)
-#
-# Used by documentation.create_knowledge_entry and knowledge.update_knowledge_base
 # =============================================================================
 harvested_knowledge:
   dir: "assets/knowledge/harvested"
 
 # =============================================================================
 # Knowledge Directories (for Librarian Ingestion)
-#
-# Directories scanned for knowledge files (markdown, documentation).
-# Globs define file patterns to include in indexing.
-# Hidden directories/files are automatically skipped.
 # =============================================================================
 knowledge_dirs:
-  # Core documentation - human-readable guides
   - path: "assets/knowledge"
     domain: "knowledge"
     globs:
       - "**/*.md"
       - "**/*.markdown"
     description: "Project knowledge base (patterns, solutions, errors)"
-  # Project docs: milestones, plan, reference (enables recall/hybrid for "project progress" etc.)
   - path: "docs"
     domain: "docs"
     globs:
       - "**/*.md"
     description: "User docs, milestones, plan, reference"
-  # - path: "assets/how-to"
-  #   domain: "workflow"
-  #   globs: ["**/*.md"]
-  #   description: "How-to guides and workflows"
-  # - path: "docs/explanation"
-  #   domain: "architecture"
-  #   description: "Architecture documentation"
-  # - path: "docs/reference"
-  #   domain: "reference"
-  #   description: "Reference documentation"
-  # # Skill implementations - contains Python scripts
-  # - path: "assets/skills"
-  #   domain: "skills"
-  #   description: "Skill implementations (Python scripts)"
 
 # =============================================================================
 # Code Directories (for Symbol Indexing)
-#
-# Directories to scan for code symbols using Zero-Token Indexing.
-# Uses omni-tags (Rust AST extraction) - no LLM tokens required.
-# Globs can be a list to match multiple patterns in the same directory.
 # =============================================================================
 ast_symbols_dirs:
   - path: "packages"
@@ -81,72 +53,54 @@ ast_symbols_dirs:
 
 # =============================================================================
 # External Dependencies (for Dependency Indexing)
-#
-# External crates/packages to index for API lookup.
-# When a dependency is upgraded, run: omni sync symbols
-# Then use @dependency_search to query new APIs.
 # =============================================================================
 ast_symbols_external:
   - type: "rust"
     manifests:
-      # Index external crates from cargo registry (downloaded sources)
       - "~/.cargo/registry/src/**/Cargo.toml"
-      # Index git dependencies sources
       - "~/.cargo/git/checkouts/**/Cargo.toml"
     registry: "cargo"
-    # Only index if NOT a workspace member (external deps only)
     exclude_workspace: true
   - type: "python"
     manifests:
-      # Index external packages from pip
       - "**/pyproject.toml"
     registry: "pip"
-    # Only index if NOT in current project
     exclude_project: true
 
 # =============================================================================
 # Documentation References
 # =============================================================================
-
-# Trinity Architecture
 trinity:
   architecture: "docs/explanation/trinity-architecture.md"
   core: "docs/human/architecture/trinity-core.md"
   skills: "docs/human/architecture/skills-architecture.md"
 
-# Skill System
 skills:
   directory: "assets/skills"
   standard: "docs/human/architecture/skill-standard.md"
   lifecycle: "docs/human/architecture/skill-lifecycle.md"
 
-# How-to Guides
 howto:
   gitops: "assets/how-to/gitops.md"
   testing_workflows: "assets/how-to/testing-workflows.md"
   documentation_workflow: "assets/how-to/documentation-workflow.md"
 
-# Reference Docs
 reference:
   cli: "docs/developer/cli.md"
   extension_system: "docs/reference/extension-system.md"
 
-# Architecture Docs
 architecture_docs:
   dir: "docs/human/architecture"
   router: "docs/architecture/router.md"
 
-# Context & System
 context:
   system_context: "docs/llm/system_context.xml"
   architecture_docs_dir: "docs/human/architecture"
 
-# Prompts
 prompts:
   system_core: "assets/prompts/system_core.md"
   user_custom: ".cache/user_custom.md"
 
-# Test Infrastructure
 test:
   infrastructure: "packages/python/core/tests"
   utils: "packages/python/core/tests/utils"

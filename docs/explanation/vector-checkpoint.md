@@ -338,7 +338,7 @@ logger.info(f"Compiled app checkpointer: {_app.checkpointer}")
 
 **Configuration:**
 
-- `settings.yaml` - Runtime configuration (`assets/settings.yaml` base + `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` override)
+- `settings.yaml` - Runtime configuration (`packages/conf/settings.yaml` system default + `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` override)
 
 ---
 

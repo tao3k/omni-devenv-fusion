@@ -9,6 +9,8 @@ Unified dimension interface (used by omni sync and all store creation):
 - get_effective_embedding_dimension(): actual dimension after truncate_dim. All code that
   creates or opens a vector store (bridge get_vector_store, VectorStoreClient, skill_manager)
   MUST use this so skills/knowledge/memory stay aligned with the signature written by sync.
+- warm_up_embedding_for_dimension_check(): run embedding service once so runtime dimension
+  is known (e.g. HTTP fallback sets _dimension to effective); call before dimension checks.
 - get_vector_store_dimension(): actual dimension from vector store
 - ensure_embedding_signature_written(): called by sync after skills index; route-test uses it for mismatch detection
 - ensure_dimension_consistency(): auto-rebuilds if mismatch
@@ -51,6 +53,37 @@ def get_embedding_signature_path() -> Path:
     return get_vector_db_path() / SIGNATURE_FILENAME
 
 
+def warm_up_embedding_for_dimension_check() -> int:
+    """Run embedding service once so its runtime dimension is aligned with index expectations.
+
+    Ensures the embedding service is initialized and has "run" at least one embed (so that
+    e.g. HTTP client fallback has already set _dimension to get_effective_embedding_dimension()).
+    Call this before dimension checks (check_all_vector_stores_dimension, get_embedding_dimension_status,
+    ensure_dimension_consistency) so the "current effective dimension" reflects what the service
+    will actually produce for sync/recall/search.
+
+    Returns:
+        Effective embedding dimension after warm-up (same as get_effective_embedding_dimension()).
+    """
+    from omni.foundation.config.settings import get_setting
+
+    try:
+        from omni.foundation.services.embedding import get_embedding_service
+
+        svc = get_embedding_service()
+        if not svc._initialized:
+            svc.initialize()
+        # One dummy embed so client-mode fallback happens now and _dimension becomes effective
+        svc.embed_batch(["dimension-check"])
+        return get_effective_embedding_dimension()
+    except Exception:
+        # If warm-up fails (e.g. no torch), effective dim still from settings
+        truncate = get_setting("embedding.truncate_dim")
+        if truncate is not None:
+            return int(truncate)
+        return int(get_setting("embedding.dimension"))
+
+
 def get_effective_embedding_dimension() -> int:
     """Get the effective embedding dimension (considering truncate_dim).
 
@@ -75,7 +108,7 @@ def get_effective_embedding_dimension() -> int:
         pass
 
     # Fallback to settings
-    return int(get_setting("embedding.dimension", 1024))
+    return int(get_setting("embedding.dimension"))
 
 
 def get_vector_store_dimension(table_name: str = "skills") -> int | None:
@@ -112,17 +145,14 @@ def get_vector_store_dimension(table_name: str = "skills") -> int | None:
 def get_embedding_dimension_status() -> EmbeddingDimensionStatus:
     """Check if current embedding dimension matches the index signature.
 
-    Reads .embedding_signature.json from the vector DB directory (written by
-    reindex/sync when skills are indexed). If missing or dimension differs,
-    marks as needs_rebuild.
-
-    Also detects actual vector store dimension for auto-repair.
+    Warms up the embedding service first so current_dim reflects runtime (e.g. after
+    HTTP fallback). Then reads .embedding_signature.json and compares.
 
     Returns:
         EmbeddingDimensionStatus with index_dim, current_dim, store_dim, match, needs_rebuild.
     """
+    current_dim = warm_up_embedding_for_dimension_check()
     path = get_embedding_signature_path()
-    current_dim = get_effective_embedding_dimension()
     store_dim = get_vector_store_dimension()
     index_dim: int | None = None
 
@@ -157,9 +187,10 @@ async def ensure_dimension_consistency(
     """Ensure embedding dimension matches vector store, auto-rebuild if needed.
 
     This is the main entry point for dimension consistency. It:
-    1. Checks current effective dimension (considering truncate_dim)
-    2. Queries vector store for actual dimension
-    3. If mismatch, either auto-rebuilds or returns status for caller to handle
+    1. Warms up the embedding service so runtime dimension is known (e.g. fallback aligned)
+    2. Checks current effective dimension (considering truncate_dim)
+    3. Queries vector store for actual dimension
+    4. If mismatch, either auto-rebuilds or returns status for caller to handle
 
     Args:
         auto_rebuild: If True, automatically rebuilds index on mismatch.
@@ -218,15 +249,15 @@ def ensure_embedding_signature_written() -> None:
     effective_dim = get_effective_embedding_dimension()
 
     payload = {
-        "embedding_model": str(get_setting("embedding.model", "")),
+        "embedding_model": str(get_setting("embedding.model") or ""),
         "embedding_dimension": effective_dim,  # Write effective dimension (after truncate)
-        "embedding_provider": str(get_setting("embedding.provider", "")),
-        "truncate_dim": get_setting("embedding.truncate_dim", None),
+        "embedding_provider": str(get_setting("embedding.provider") or ""),
+        "truncate_dim": get_setting("embedding.truncate_dim"),
     }
     path.write_text(json.dumps(payload, indent=2, sort_keys=True))
 
 
-# Vector store names and their expected dimensions
+# Vector store names and their expected dimensions (5 components: symbols has no vectors)
 _VECTOR_STORE_CONFIGS = {
     "skills": {
         "path_suffix": "skills.lance",
@@ -239,6 +270,10 @@ _VECTOR_STORE_CONFIGS = {
     "knowledge": {
         "path_suffix": "knowledge.lance",
         "expected_dimension": "truncated",  # Uses truncate_dim (256)
+    },
+    "memory": {
+        "path_suffix": "memory.hippocampus.lance",
+        "expected_dimension": "truncated",  # Hippocampus uses effective (truncate_dim)
     },
 }
 
@@ -255,16 +290,19 @@ class VectorStoreDimensionReport:
 def check_all_vector_stores_dimension() -> VectorStoreDimensionReport:
     """Check dimension consistency across all vector stores.
 
+    Warms up the embedding service first so the effective dimension reflects runtime
+    (e.g. after HTTP fallback). Then compares each store's actual dimension to that.
+
     Returns:
         VectorStoreDimensionReport with dimension status for each store.
     """
     from omni.foundation.config.database import get_vector_db_path
 
+    current_effective_dim = warm_up_embedding_for_dimension_check()
+
     vector_path = get_vector_db_path()
     issues: list[str] = []
     stores: dict[str, dict] = {}
-
-    current_effective_dim = get_effective_embedding_dimension()
 
     for store_name, config in _VECTOR_STORE_CONFIGS.items():
         store_path = vector_path / config["path_suffix"]
@@ -354,7 +392,7 @@ async def repair_vector_store_dimension(
     """Repair a vector store by recreating it with correct dimension.
 
     Args:
-        store_name: One of 'skills', 'router', 'knowledge'
+        store_name: One of 'skills', 'router', 'knowledge', 'memory'
         target_dimension: Target vector dimension
 
     Returns:

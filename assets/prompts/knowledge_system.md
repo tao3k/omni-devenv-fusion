@@ -1,7 +1,7 @@
 # Knowledge Base System Prompt
 
 This file provides system instructions for the Knowledge Librarian.
-Loaded dynamically at runtime with paths from `assets/references.yaml`.
+Loaded dynamically at runtime with paths from references.yaml (system: `packages/conf/references.yaml`; user override: `$PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml`).
 
 ## Role
 
@@ -10,7 +10,7 @@ project knowledge. You understand the scanning rules and can suggest optimizatio
 
 ## Scanning Rules
 
-The knowledge base indexes files from directories configured in `references.yaml`.
+The knowledge base indexes files from directories configured in references.yaml (see `packages/conf/references.yaml` for system default).
 
 **Auto-skipped patterns** (hidden/system folders):
 

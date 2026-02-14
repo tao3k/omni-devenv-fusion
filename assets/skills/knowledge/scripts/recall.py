@@ -24,6 +24,49 @@ from omni.foundation.api.decorators import skill_command
 logger = structlog.get_logger(__name__)
 
 
+def _is_toc_or_index_chunk(content: str) -> bool:
+    """Heuristic: chunk looks like a doc index/TOC (table of links), not substantive content."""
+    if not content or len(content) < 80:
+        return False
+    lines = content.strip().split("\n")
+    table_rows = sum(
+        1 for line in lines if line.strip().startswith("|") and line.strip().endswith("|")
+    )
+    has_doc_header = "| Document |" in content or "| document |" in content.lower()
+    has_description_header = "| Description |" in content or "| description |" in content.lower()
+    if has_doc_header and has_description_header and table_rows >= 3:
+        return True
+    if table_rows >= 8 and ("| [" in content or "](./" in content):
+        return True
+    return False
+
+
+def _filter_and_rank_recall(
+    result_dicts: list[dict],
+    limit: int,
+    min_score: float = 0.0,
+) -> list[dict]:
+    """Drop low-score and TOC-like chunks, return top `limit` for precision."""
+    kept: list[dict] = []
+    toc_like: list[dict] = []
+    for r in result_dicts:
+        text = (r.get("content") or "").strip()
+        score = float(r.get("score") or 0.0)
+        if score < min_score:
+            continue
+        if _is_toc_or_index_chunk(text):
+            toc_like.append(r)
+            continue
+        kept.append(r)
+    if len(kept) >= limit:
+        return kept[:limit]
+    for r in toc_like:
+        if len(kept) >= limit:
+            break
+        kept.append(r)
+    return kept[:limit]
+
+
 # =============================================================================
 # Types
 # =============================================================================
@@ -73,6 +116,7 @@ class RecallResult:
         - query: str - Natural language query (e.g., ActionGuard infinite loop prevention) (required)
         - limit: int = 5 - Maximum results to return (max: 10)
         - keywords: Optional[list[str]] - List of keywords to boost precision
+        - min_score: float = 0.0 - Minimum relevance score (0–1); results below are dropped
         - collection: str = knowledge - Collection to search
 
     Returns:
@@ -83,6 +127,7 @@ async def recall(
     query: str,
     limit: int = 5,
     keywords: list[str] | None = None,
+    min_score: float = 0.0,
     collection: str = "knowledge_chunks",
 ) -> str:
     """
@@ -103,6 +148,8 @@ async def recall(
     except (ValueError, TypeError):
         limit = 5
     limit = min(max(1, limit), 10)
+    min_score = max(0.0, min(1.0, float(min_score)))
+    fetch_limit = min(limit * 2, 20)
 
     keywords = keywords or []
 
@@ -128,10 +175,12 @@ async def recall(
             embedding_service = get_embedding_service()
             vector = embedding_service.embed(query)[0]
             store = vector_store.get_store_for_collection(collection)
-            json_results = store.search_hybrid(collection, vector, keywords, limit) if store else []
+            json_results = (
+                store.search_hybrid(collection, vector, keywords, fetch_limit) if store else []
+            )
         else:
-            # Pure semantic search via VectorStoreClient
-            raw_results = await vector_store.search(query, limit, collection)
+            # Pure semantic search; request extra results so we can filter TOC/low-score
+            raw_results = await vector_store.search(query, fetch_limit, collection)
 
             # Convert SearchResult to our RecallResult format
             results = []
@@ -150,11 +199,11 @@ async def recall(
                 )
 
             # === Dual-Core Bridges: ZK Link + KG Entity Boost ===
-            # Bridge 1: Boost results whose source docs share ZK links.
-            # Bridge 1b: Boost results connected to query entities in KG.
-            # Both are non-blocking: if unavailable, results pass through.
             result_dicts = [r.to_dict() for r in results]
             result_dicts = await _apply_dual_core_recall_boost(result_dicts, query)
+
+            # Filter TOC-like and low-score chunks, keep top `limit` for precision
+            result_dicts = _filter_and_rank_recall(result_dicts, limit, min_score)
 
             # Format response
             response = {
@@ -193,6 +242,9 @@ async def recall(
         # === Dual-Core Bridges: ZK Link + KG Entity Boost ===
         result_dicts = [r.to_dict() for r in results]
         result_dicts = await _apply_dual_core_recall_boost(result_dicts, query)
+
+        # Filter TOC-like and low-score, keep top `limit`
+        result_dicts = _filter_and_rank_recall(result_dicts, limit, min_score)
 
         # Format response
         response = {

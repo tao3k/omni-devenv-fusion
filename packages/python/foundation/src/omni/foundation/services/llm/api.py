@@ -18,11 +18,11 @@ def get_inference_config() -> dict:
         dict with keys: api_key_env, base_url, model, timeout, max_tokens
     """
     return {
-        "api_key_env": get_setting("inference.api_key_env", "ANTHROPIC_API_KEY"),
-        "base_url": get_setting("inference.base_url", "https://api.anthropic.com"),
-        "model": get_setting("inference.model", "claude-sonnet-4-20250514"),
-        "timeout": get_setting("inference.timeout", 120),
-        "max_tokens": get_setting("inference.max_tokens", 4096),
+        "api_key_env": get_setting("inference.api_key_env"),
+        "base_url": get_setting("inference.base_url"),
+        "model": get_setting("inference.model"),
+        "timeout": int(get_setting("inference.timeout")),
+        "max_tokens": int(get_setting("inference.max_tokens")),
     }
 
 

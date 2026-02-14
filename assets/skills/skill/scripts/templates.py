@@ -27,9 +27,9 @@ def get_template_dirs(skill_name: str) -> dict[str, Path]:
 
     templates_config = get_setting("assets.templates_dir") or "assets/templates"
     user_templates_root = project_root / templates_config
-    user_skill_templates = user_skill_templates = user_templates_root / skill_name
+    user_skill_templates = user_templates_root / skill_name
 
-    skill_templates_dir = SKILLS_DIR(skill_name, path="templates")
+    skill_templates_dir = SKILLS_DIR(skill=skill_name, path="templates")
 
     return {
         "user": user_skill_templates,
@@ -37,20 +37,8 @@ def get_template_dirs(skill_name: str) -> dict[str, Path]:
     }
 
 
-@skill_command(
-    name="list_templates",
-    category="view",
-    description="""
-    List all available templates for a skill with their sources.
-
-    Args:
-        - skill_name: str - Name of the skill (e.g., git, docker) (required)
-
-    Returns:
-        Dictionary mapping template names to source (user or skill) and path.
-    """,
-)
-def list_templates(skill_name: str) -> dict[str, dict[str, str]]:
+def _list_templates_impl(skill_name: str) -> dict[str, dict[str, str]]:
+    """Core implementation: return dict of template name -> {source, path}. Used by CLI and skill_command."""
     dirs = get_template_dirs(skill_name)
     user_dir = dirs["user"]
     skill_dir = dirs["skill"]
@@ -69,6 +57,23 @@ def list_templates(skill_name: str) -> dict[str, dict[str, str]]:
 
 
 @skill_command(
+    name="list_templates",
+    category="view",
+    description="""
+    List all available templates for a skill with their sources.
+
+    Args:
+        - skill_name: str - Name of the skill (e.g., git, docker) (required)
+
+    Returns:
+        Dictionary mapping template names to source (user or skill) and path.
+    """,
+)
+def list_templates(skill_name: str) -> dict[str, dict[str, str]]:
+    return _list_templates_impl(skill_name)
+
+
+@skill_command(
     name="get_template_info",
     category="read",
     description="""
@@ -83,7 +88,7 @@ def list_templates(skill_name: str) -> dict[str, dict[str, str]]:
     """,
 )
 def get_template_info(skill_name: str, template_name: str) -> dict[str, str] | None:
-    templates = list_templates(skill_name)
+    templates = _list_templates_impl(skill_name)
     return templates.get(template_name)
 
 
@@ -170,7 +175,7 @@ def format_template_list(skill_name: str) -> str:
     Returns:
         Formatted markdown string
     """
-    templates = list_templates(skill_name)
+    templates = _list_templates_impl(skill_name)
     dirs = get_template_dirs(skill_name)
 
     if not templates:

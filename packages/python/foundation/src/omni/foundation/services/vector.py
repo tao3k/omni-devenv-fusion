@@ -35,35 +35,8 @@ ERROR_HYBRID_PAYLOAD_VALIDATION = "VECTOR_HYBRID_PAYLOAD_VALIDATION"
 ERROR_HYBRID_TABLE_NOT_FOUND = "VECTOR_HYBRID_TABLE_NOT_FOUND"
 ERROR_HYBRID_RUNTIME = "VECTOR_HYBRID_RUNTIME_ERROR"
 
-# Lazy loader for Rust extension
-_cached_omni_vector: Any | None = None
-
-
-def _get_omni_vector() -> Any | None:
-    """Lazy load the Rust vector store creator function.
-
-    Handles both real Rust modules and mock objects (e.g., in test environments).
-    """
-    global _cached_omni_vector
-    if _cached_omni_vector is None:
-        try:
-            import omni_core_rs
-
-            # Support both real module and Mock object
-            if hasattr(omni_core_rs, "create_vector_store"):
-                _cached_omni_vector = omni_core_rs.create_vector_store
-            else:
-                # Mock is setup differently - use a fallback
-                logger.warning(
-                    "omni_core_rs exists but has no create_vector_store, using degraded mode"
-                )
-                _cached_omni_vector = None
-        except ImportError:
-            _cached_omni_vector = None
-            logger.debug(
-                "Rust VectorStore not found, running in degraded mode (expected in test env)"
-            )
-    return _cached_omni_vector
+# All vector stores are obtained via bridge get_vector_store() so cache limits
+# are applied in one place (see docs/architecture/vector-store-memory-and-single-factory.md).
 
 
 class SearchResult(BaseModel):
@@ -89,10 +62,11 @@ class VectorStoreClient:
     """
 
     _instance: VectorStoreClient | None = None
-    _store: Any | None
-    _knowledge_store: Any | None = None
     _cache_path: Path
     _search_cache: SearchCache
+    # Optional overrides for tests; when None, store comes from bridge get_vector_store()
+    _store: Any | None = None
+    _knowledge_store: Any | None = None
 
     @staticmethod
     def _log_error(message: str, error_code: str, cause: str, error: str, **context: Any) -> None:
@@ -108,38 +82,36 @@ class VectorStoreClient:
             from omni.core.router.cache import SearchCache
 
             cls._instance = super().__new__(cls)
-            cls._instance._store = None
-            cls._instance._knowledge_store = None
             cls._instance._cache_path = PRJ_CACHE("omni-vector")
             cls._instance._cache_path.mkdir(parents=True, exist_ok=True)
-            cls._instance._search_cache = SearchCache(max_size=500, ttl=300)
+            cls._instance._search_cache = SearchCache(max_size=200, ttl=300)
+            cls._instance._store = None
+            cls._instance._knowledge_store = None
         return cls._instance
 
     def _get_store_for_collection(self, collection: str) -> Any | None:
-        """Return the store that backs this collection.
-
-        Sync writes knowledge_chunks to get_database_path("knowledge") (knowledge.lance).
-        The default store uses the base path. So for collection "knowledge_chunks"
-        we use a separate store opened on the knowledge DB path.
-        """
+        """Return the store that backs this collection (from bridge single factory)."""
         if collection == "knowledge_chunks":
-            if self._knowledge_store is None:
-                create_store = _get_omni_vector()
-                if create_store:
-                    try:
-                        from omni.foundation.config.database import get_database_path
-                        from omni.foundation.services.index_dimension import (
-                            get_effective_embedding_dimension,
-                        )
+            if self._knowledge_store is not None:
+                return self._knowledge_store
+            try:
+                from omni.foundation.bridge.rust_vector import get_vector_store
+                from omni.foundation.config.database import get_database_path
 
-                        path = get_database_path("knowledge")
-                        dim = get_effective_embedding_dimension()
-                        self._knowledge_store = create_store(str(path), dim, True)
-                        logger.info("Knowledge VectorStore initialized", path=path)
-                    except Exception as e:
-                        logger.debug("Knowledge store init skipped: %s", e)
-            return self._knowledge_store
-        return self.store
+                path = get_database_path("knowledge")
+                return get_vector_store(str(path))
+            except Exception as e:
+                logger.debug("VectorStore unavailable for knowledge: %s", e)
+                return None
+        if self._store is not None:
+            return self._store
+        try:
+            from omni.foundation.bridge.rust_vector import get_vector_store
+
+            return get_vector_store(str(self._cache_path))
+        except Exception as e:
+            logger.debug("VectorStore unavailable: %s", e)
+            return None
 
     def get_store_for_collection(self, collection: str) -> Any | None:
         """Return the underlying store for this collection (for direct store API use)."""
@@ -147,23 +119,16 @@ class VectorStoreClient:
 
     @property
     def store(self) -> Any | None:
-        """Get the underlying vector store, initializing if needed."""
-        if self._store is None:
-            create_store = _get_omni_vector()
-            if create_store:
-                try:
-                    # Use effective dimension (respects truncate_dim) so ingest/search match
-                    from omni.foundation.services.index_dimension import (
-                        get_effective_embedding_dimension,
-                    )
+        """Get the default vector store (from bridge single factory)."""
+        if self._store is not None:
+            return self._store
+        try:
+            from omni.foundation.bridge.rust_vector import get_vector_store
 
-                    dim = get_effective_embedding_dimension()
-                    # Pass True to enable auto-creation/read-write mode
-                    self._store = create_store(str(self._cache_path), dim, True)
-                    logger.info("VectorStore initialized", path=str(self._cache_path))
-                except Exception as e:
-                    logger.error("VectorStore init failed", error=str(e))
-        return self._store
+            return get_vector_store(str(self._cache_path))
+        except Exception as e:
+            logger.debug("VectorStore unavailable: %s", e)
+            return None
 
     @property
     def path(self) -> Path:
@@ -471,7 +436,7 @@ class VectorStoreClient:
             contents = [content]
             metadatas = [json.dumps(metadata or {})]
 
-            store.add_documents(collection, ids, vectors, contents, metadatas)
+            await store.add_documents(collection, ids, vectors, contents, metadatas)
 
             # Invalidate cache for this collection since results changed
             self.invalidate_cache(collection)
@@ -535,8 +500,8 @@ class VectorStoreClient:
                 contents = batch_chunks
                 metadatas = [json.dumps(m or {}) for m in batch_meta]
 
-                # Single Rust call for bulk insert
-                store.add_documents(collection, ids, vectors, contents, metadatas)
+                # Single Rust call for bulk insert (bridge store is async)
+                await store.add_documents(collection, ids, vectors, contents, metadatas)
                 chunks_stored += len(batch_chunks)
 
                 logger.info(
@@ -573,7 +538,7 @@ class VectorStoreClient:
             return False
 
         try:
-            store.delete(collection, id)
+            store.delete_by_ids(collection, [id])
 
             # Invalidate cache for this collection since results changed
             self.invalidate_cache(collection)
@@ -625,7 +590,7 @@ class VectorStoreClient:
             return False
 
         try:
-            store.create_index(collection)
+            await store.create_index_for_table(collection)
             return True
         except Exception as e:
             logger.error("Create index failed", error=str(e))
@@ -685,8 +650,7 @@ class VectorStoreClient:
             return False
 
         try:
-            payload = json.dumps({"columns": columns})
-            store.add_columns(collection, payload)
+            await store.add_columns(collection, columns)
             if invalidate_cache:
                 self.invalidate_cache(collection)
             return True
@@ -703,8 +667,7 @@ class VectorStoreClient:
             return False
 
         try:
-            payload = json.dumps({"alterations": alterations})
-            store.alter_columns(collection, payload)
+            await store.alter_columns(collection, alterations)
             if invalidate_cache:
                 self.invalidate_cache(collection)
             return True
@@ -721,7 +684,7 @@ class VectorStoreClient:
             return False
 
         try:
-            store.drop_columns(collection, columns)
+            await store.drop_columns(collection, columns)
             if invalidate_cache:
                 self.invalidate_cache(collection)
             return True

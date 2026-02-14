@@ -137,7 +137,7 @@ class SkillIndexer:
 
         # Use dimension from settings.yaml (default to 1024 for LLM provider)
         if dimension is None:
-            dimension = get_setting("embedding.dimension", 1024)
+            dimension = int(get_setting("embedding.dimension"))
 
         self._storage_path = storage_path
         self._dimension = dimension

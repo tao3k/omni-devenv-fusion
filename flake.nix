@@ -21,8 +21,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    omnibus.url = "github:tao3k/omnibus";
-
     nci.url = "github:90-008/nix-cargo-integration";
     nci.inputs.nixpkgs.follows = "nixpkgs";
     parts.url = "github:hercules-ci/flake-parts";

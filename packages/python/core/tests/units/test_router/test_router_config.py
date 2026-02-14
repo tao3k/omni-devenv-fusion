@@ -111,6 +111,14 @@ def test_load_router_search_config_explicit_overrides(monkeypatch):
 def test_load_router_search_config_rejects_missing_active_profile(monkeypatch):
     values = {
         "router.search.active_profile": "missing",
+        "router.search.auto_profile_select": True,
+        "router.search.default_limit": 10,
+        "router.search.default_threshold": 0.2,
+        "router.search.rerank": True,
+        "router.search.semantic_weight": 0.7,
+        "router.search.keyword_weight": 0.3,
+        "router.search.adaptive_threshold_step": 0.15,
+        "router.search.adaptive_max_attempts": 3,
         "router.search.profiles": {
             "balanced": {
                 "high_threshold": 0.75,
@@ -136,6 +144,14 @@ def test_load_router_search_config_rejects_missing_active_profile(monkeypatch):
 def test_load_router_search_config_rejects_invalid_profile_ranges(monkeypatch):
     values = {
         "router.search.active_profile": "bad",
+        "router.search.auto_profile_select": True,
+        "router.search.default_limit": 10,
+        "router.search.default_threshold": 0.2,
+        "router.search.rerank": True,
+        "router.search.semantic_weight": 0.7,
+        "router.search.keyword_weight": 0.3,
+        "router.search.adaptive_threshold_step": 0.15,
+        "router.search.adaptive_max_attempts": 3,
         "router.search.profiles": {
             "bad": {
                 "high_threshold": 0.4,
@@ -239,6 +255,14 @@ def test_router_search_config_rejects_unknown_fields():
 def test_load_router_search_config_rerank_defaults_true_when_missing(monkeypatch):
     values = {
         "router.search.active_profile": "balanced",
+        "router.search.auto_profile_select": True,
+        "router.search.default_limit": 10,
+        "router.search.default_threshold": 0.2,
+        "router.search.rerank": True,
+        "router.search.semantic_weight": 0.7,
+        "router.search.keyword_weight": 0.3,
+        "router.search.adaptive_threshold_step": 0.15,
+        "router.search.adaptive_max_attempts": 3,
         "router.search.profiles": {
             "balanced": {
                 "high_threshold": 0.75,

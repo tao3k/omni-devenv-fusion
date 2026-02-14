@@ -69,20 +69,27 @@ def dependency_index_resource() -> dict:
 
 
 def _get_project_root() -> str:
-    """Get the project root directory."""
-    return os.environ.get("OMNI_PROJECT_ROOT", str(Path.cwd()))
+    """Get the project root (git top level); OMNI_PROJECT_ROOT overrides."""
+    env = os.environ.get("OMNI_PROJECT_ROOT")
+    if env:
+        return env
+    try:
+        from omni.foundation.runtime.gitops import get_project_root
+
+        return str(get_project_root())
+    except Exception:
+        return str(Path.cwd())
 
 
 def _get_config_path() -> str | None:
-    """Get the references.yaml config path."""
-    candidates = [
-        "assets/references.yaml",
-        os.environ.get("OMNI_REFERENCES_YAML"),
-    ]
-    for path in candidates:
-        if path and Path(path).exists():
-            return path
-    return None
+    """Get the references.yaml config path via canonical API."""
+    try:
+        from omni.foundation.services.reference import get_references_config_path
+
+        path = get_references_config_path()
+        return str(path) if path.exists() else None
+    except Exception:
+        return None
 
 
 @skill_command(

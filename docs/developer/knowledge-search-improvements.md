@@ -16,7 +16,7 @@ The actual project progress content exists in `docs/index.md`, `docs/milestones/
 
 ### 1. Vector store (`knowledge_chunks`) has no docs content
 
-- **`omni sync knowledge`** only indexes paths listed in **`knowledge_dirs`** in `assets/references.yaml`.
+- **`omni sync knowledge`** only indexes paths listed in **`knowledge_dirs`** in references.yaml (system default: **`packages/conf/references.yaml`**; user override: `$PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml`).
 - Only **`assets/knowledge`** was active; **`docs/`** was commented out. So `docs/milestones`, `docs/plan`, `docs/reference` were never ingested.
 - Result: `knowledge.recall` and the vector leg of `zk_hybrid_search` return nothing for doc-based queries.
 
@@ -42,7 +42,7 @@ The actual project progress content exists in `docs/index.md`, `docs/milestones/
 
 ### 1. Include `docs/` in knowledge sync (references.yaml)
 
-- **Add** a `knowledge_dirs` entry for `docs/` (e.g. `path: "docs"`, `globs: ["**/*.md"]`) so `omni sync knowledge` indexes documentation.
+- **Add** a `knowledge_dirs` entry for `docs/` (e.g. `path: "docs"`, `globs: ["**/*.md"]`) in **`packages/conf/references.yaml`** (or in your user override) so `omni sync knowledge` indexes documentation.
 - After running **`omni sync knowledge`**, `knowledge_chunks` will contain chunks from `docs/milestones`, `docs/plan`, `docs/reference`, etc., so **knowledge.recall** and **zk_hybrid_search** vector fallback can return project progress–related content.
 
 ### 2. Multi-word / OR behavior for knowledge.search (search.py)
@@ -69,3 +69,30 @@ The actual project progress content exists in `docs/index.md`, `docs/milestones/
 | ZK/hybrid don’t surface docs            | ZK content ≠ docs/; vector fallback empty               | Same as recall: index docs and rely on vector + hybrid |
 
 These changes improve both **knowledge** and **ZK** search so that project progress and similar doc-based queries are findable and the system can be further tuned (e.g. more knowledge_dirs, or adding a text-search fallback in ZK hybrid) as needed.
+
+---
+
+## Precision Improvements (Recall)
+
+To improve relevance of **knowledge.recall** results:
+
+### 1. Section-aware chunking (ingestion)
+
+- **Location:** `packages/python/core/src/omni/core/knowledge/ingestion.py`
+- For markdown in auto mode, chunks are now built by **section** (split on `##` / `###`), one chunk per section (or sub-split if a section is very long). This avoids one giant “index” chunk per file and yields section-level chunks that match queries like “git commit format” or “embedding dimension” more precisely.
+- **Takes effect after:** Run **`omni sync knowledge`** again so the vector store is re-indexed with the new chunks. Until then, existing chunks remain the old style.
+
+### 2. TOC / index chunk filtering (recall)
+
+- **Location:** `assets/skills/knowledge/scripts/recall.py`
+- Chunks that look like a **table of contents or doc index** (e.g. “| Document |” / “| Description |” with many table rows, or ≥8 rows with markdown links) are **demoted**: they are only used to fill the result list after substantive chunks. So the top results are real sections, not index tables.
+- Unit tests: `assets/skills/knowledge/tests/test_recall_filter.py` (`_is_toc_or_index_chunk`, `_filter_and_rank_recall`).
+
+### 3. Minimum score threshold (recall)
+
+- **knowledge.recall** accepts **`min_score`** (float 0–1). Results with score below this value are dropped. Use e.g. `min_score=0.5` or `0.6` for stricter precision when you want fewer but more relevant hits.
+- MCP call example: `knowledge.recall` with `query`, `limit`, `min_score` (optional).
+
+### 4. Optional keywords for technical queries
+
+- Passing **`keywords`** (e.g. terms extracted from the query) to **knowledge.recall** enables hybrid search and can improve precision for technical queries (e.g. “embedding dimension truncate” with `keywords=["embedding","dimension","truncate"]`). Document this in skill descriptions or usage guides where helpful.

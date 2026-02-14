@@ -78,9 +78,9 @@ class OmniRouter:
         from omni.foundation.config.settings import get_setting
 
         if cache_size is None:
-            cache_size = int(get_setting("router.cache.max_size", 1000))
+            cache_size = int(get_setting("router.cache.max_size"))
         if cache_ttl is None:
-            cache_ttl = int(get_setting("router.cache.ttl", 300))
+            cache_ttl = int(get_setting("router.cache.ttl"))
         search_config = load_router_search_config(
             semantic_weight=semantic_weight,
             keyword_weight=keyword_weight,

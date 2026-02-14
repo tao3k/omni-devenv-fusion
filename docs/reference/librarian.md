@@ -119,7 +119,7 @@ The Librarian uses a manifest file to track file changes:
 
 ## Configuration
 
-Reads from `references.yaml`:
+Reads from `references.yaml` (system default: **`packages/conf/references.yaml`**; user override: `$PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml`):
 
 ```yaml
 knowledge_dirs:
@@ -165,7 +165,7 @@ Uses unified storage in `.cache/omni-vector/`:
 ```
 packages/python/core/src/omni/core/knowledge/
 ├── __init__.py              # Exports: Librarian, ChunkMode, FileIngestor
-├── config.py                # KnowledgeConfig from references.yaml
+├── config.py                # KnowledgeConfig from references.yaml (via ReferenceLibrary when path not set)
 ├── ingestion.py             # FileIngestor: discovery + chunking
 ├── storage.py               # KnowledgeStorage: LanceDB operations
 └── librarian.py             # Librarian main class (with incremental support)

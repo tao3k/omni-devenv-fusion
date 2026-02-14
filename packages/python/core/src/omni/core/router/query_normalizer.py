@@ -17,7 +17,7 @@ from omni.foundation.config.settings import get_setting
 
 def _get_typo_map() -> dict[str, str]:
     """Typo map from config only (router.normalize.typos). Empty if unset."""
-    custom = get_setting("router.normalize.typos", None) or {}
+    custom = get_setting("router.normalize.typos") or {}
     if isinstance(custom, dict):
         return {str(k).strip().lower(): str(v).strip() for k, v in custom.items() if k and v}
     return {}

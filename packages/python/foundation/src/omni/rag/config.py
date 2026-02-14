@@ -273,7 +273,7 @@ def get_rag_config() -> RAGConfig:
     try:
         from omni.foundation.config.settings import get_setting
 
-        rag_settings = get_setting("rag", {})
+        rag_settings = get_setting("rag") or {}
         if rag_settings:
             _rag_config = RAGConfig.from_dict(rag_settings)
             logger.info(

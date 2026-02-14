@@ -29,7 +29,7 @@ class EmbeddingClient:
         Args:
             base_url: Base URL of embedding HTTP server (default: from settings or localhost:18501)
         """
-        self.base_url = base_url or get_setting("embedding.client_url", "http://127.0.0.1:18501")
+        self.base_url = base_url or get_setting("embedding.client_url")
         self._session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:

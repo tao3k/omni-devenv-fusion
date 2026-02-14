@@ -15,6 +15,16 @@ from pathlib import Path
 _TRUSTED_ABSOLUTE_PATHS = {"/nix/store/"}
 
 
+def _default_project_root() -> Path:
+    """Project root from git top level; fallback to cwd when not in a repo."""
+    try:
+        from omni.foundation.runtime.gitops import get_project_root
+
+        return get_project_root()
+    except Exception:
+        return Path.cwd()
+
+
 def is_safe_path(
     path: str,
     project_root: Path | None = None,
@@ -37,7 +47,7 @@ def is_safe_path(
         Tuple of (is_safe, error_message)
     """
     if project_root is None:
-        project_root = Path.cwd()
+        project_root = _default_project_root()
 
     if blocked_dirs is None:
         blocked_dirs = {"/etc/", "/usr/", "/bin/", "/sbin/", "/boot/", "/lib/", "/lib64/"}
@@ -107,13 +117,13 @@ def resolve_project_path(path: str, project_root: Path | None = None) -> str:
 
     Args:
         path: Path to resolve (absolute or relative)
-        project_root: Project root directory (defaults to cwd)
+        project_root: Project root directory (defaults to git top level / cwd)
 
     Returns:
         Resolved path (relative to project root if possible)
     """
     if project_root is None:
-        project_root = Path.cwd()
+        project_root = _default_project_root()
 
     path_obj = Path(path)
 
@@ -218,7 +228,7 @@ def normalize_path(
         - normalized_path: The path after normalization (relative for project paths)
     """
     if project_root is None:
-        project_root = Path.cwd()
+        project_root = _default_project_root()
 
     if blocked_dirs is None:
         blocked_dirs = {"/etc/", "/usr/", "/bin/", "/sbin/", "/boot/", "/lib/", "/lib64/"}

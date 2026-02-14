@@ -139,7 +139,7 @@ def _load_scopes() -> list[str]:
     from omni.foundation.config.settings import get_setting
 
     try:
-        cog_toml_path = Path(get_setting("config.cog_toml", "cog.toml"))
+        cog_toml_path = Path(get_setting("config.cog_toml"))
 
         if cog_toml_path.exists():
             with open(cog_toml_path, "rb") as f:
@@ -156,7 +156,7 @@ def _analyze_lefthook() -> list[dict[str, str]]:
 
     hooks = []
 
-    lefthook_yaml = Path(get_setting("config.lefhook_yaml", "lefthook.yml"))
+    lefthook_yaml = Path(get_setting("config.lefhook_yaml"))
 
     if lefthook_yaml.exists():
         try:

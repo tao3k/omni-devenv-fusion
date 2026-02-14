@@ -30,6 +30,10 @@ except ImportError:
 
 logger = get_logger("omni.bridge.vector")
 
+# Bounded defaults when settings.yaml has null (avoids unbounded LanceDB cache growth in long-lived MCP)
+_DEFAULT_INDEX_CACHE_BYTES = 256 * 1024 * 1024  # 256 MiB
+_DEFAULT_MAX_CACHED_TABLES = 8
+
 
 def _list_of_dicts_to_table(rows: list[dict[str, Any]]) -> Any:
     """Convert list of dicts to pyarrow.Table; nested dict/list values are JSON-encoded."""
@@ -71,8 +75,8 @@ def _confidence_profile_json() -> str:
         "medium_cap": 0.89,
         "low_floor": 0.10,
     }
-    active_name = str(get_setting("router.search.active_profile", "balanced"))
-    profiles = get_setting("router.search.profiles", {})
+    active_name = str(get_setting("router.search.active_profile"))
+    profiles = get_setting("router.search.profiles")
     if isinstance(profiles, dict):
         selected = profiles.get(active_name)
         if isinstance(selected, dict):
@@ -86,7 +90,7 @@ def _rerank_enabled() -> bool:
     """Resolve rerank flag from unified search settings."""
     from omni.foundation.config.settings import get_setting
 
-    return bool(get_setting("router.search.rerank", True))
+    return bool(get_setting("router.search.rerank"))
 
 
 class RustVectorStore:
@@ -129,21 +133,25 @@ class RustVectorStore:
 
             index_path = str(get_vector_db_path())
 
-        # Index cache: explicit arg overrides settings.yaml
+        # Index cache: explicit arg overrides settings.yaml. Use bounded default when null to avoid MCP memory growth.
         if index_cache_size_bytes is None:
             from omni.foundation.config.settings import get_setting
 
-            index_cache_size_bytes = get_setting("vector.index_cache_size_bytes", None)
+            index_cache_size_bytes = get_setting("vector.index_cache_size_bytes")
         if index_cache_size_bytes is not None:
             index_cache_size_bytes = int(index_cache_size_bytes)
+        else:
+            index_cache_size_bytes = _DEFAULT_INDEX_CACHE_BYTES
 
-        # Phase 2: bounded dataset cache (LRU). Explicit arg overrides settings.
+        # Phase 2: bounded dataset cache (LRU). Use bounded default when null so tables are evicted.
         if max_cached_tables is None:
             from omni.foundation.config.settings import get_setting
 
-            max_cached_tables = get_setting("vector.max_cached_tables", None)
+            max_cached_tables = get_setting("vector.max_cached_tables")
         if max_cached_tables is not None:
             max_cached_tables = int(max_cached_tables)
+        else:
+            max_cached_tables = _DEFAULT_MAX_CACHED_TABLES
 
         self._inner = _rust.create_vector_store(
             index_path,
@@ -484,7 +492,7 @@ class RustVectorStore:
         resolved_partition = (
             partition_by
             if partition_by is not None
-            else get_setting("vector.default_partition_column", "skill_name")
+            else get_setting("vector.default_partition_column")
         )
         if not resolved_partition:
             raise ValueError(
@@ -544,13 +552,21 @@ class RustVectorStore:
             return IngestResult(success=False, error=str(e))
 
     async def delete(self, document_id: str) -> bool:
-        """Delete a document from the vector store."""
+        """Delete a document from the vector store (legacy; table fixed as 'skills')."""
         try:
             self._inner.delete("skills", [document_id])
             return True
         except Exception as e:
             logger.error(f"Document deletion failed: {e}")
             return False
+
+    def delete_by_ids(self, table_name: str, ids: list[str]) -> None:
+        """Delete documents by id in the given table (e.g. collection name)."""
+        self._inner.delete(table_name, ids)
+
+    def count(self, table_name: str) -> int:
+        """Return row count for the given table (e.g. collection name)."""
+        return int(self._inner.count(table_name))
 
     def delete_by_file_path(self, table_name: str, file_paths: list[str]) -> None:
         """Delete all documents matching the given file paths.
@@ -571,13 +587,17 @@ class RustVectorStore:
         dimension: int,
         path: str | None = None,
     ) -> bool:
-        """Create a new vector index."""
+        """Create a new vector index (dimension/path unused; kept for compatibility)."""
         try:
             self._inner.create_index(name)
             return True
         except Exception as e:
             logger.error(f"Index creation failed: {e}")
             return False
+
+    async def create_index_for_table(self, table_name: str) -> bool:
+        """Create vector index for the given table (e.g. collection name)."""
+        return await self.create_index(table_name, 0, None)
 
     async def health_check(self) -> bool:
         """Check if the vector store is healthy."""
@@ -1034,4 +1054,5 @@ __all__ = [
     "RUST_AVAILABLE",
     "RustVectorStore",
     "get_vector_store",
+    "_DEFAULT_MAX_CACHED_TABLES",  # Re-export for PyVectorStore users
 ]

@@ -6,7 +6,7 @@ inputs:
   nixpkgs-latest:
     url: github:NixOS/nixpkgs/nixpkgs-unstable
   omnibus:
-    url: github:tao3k/omnibus/main
+    url: github:tao3k/omnibus
   rust-overlay:
     url: github:oxalica/rust-overlay
     inputs:

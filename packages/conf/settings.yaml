@@ -1,16 +1,15 @@
-# assets/settings.yaml
-# Project Settings - Base Defaults
+# packages/conf/settings.yaml
+# Project Settings - System Defaults
 #
-# This file provides repository-level default settings.
-# Runtime settings are loaded as a merge:
-#   1) <git-root>/assets/settings.yaml (this file)
-#   2) <conf-dir>/settings.yaml (user/project override, set by --conf)
+# System default lives here. User overrides (merged on top):
+#   $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml
+# (e.g. .config/omni-dev-fusion/settings.yaml or --conf <dir>)
 #
 # Usage:
 #   omni ...                      # uses default conf dir (.config)
 #   omni --conf ./.config.dev ... # uses custom conf dir
 #
-#   from common.settings import get_setting
+#   from omni.foundation.config.settings import get_setting
 #   cog_path = get_setting("config.cog_toml")
 #
 # Note: Actual commit types/scopes are read from cog.toml/.conform.yaml,
@@ -280,15 +279,16 @@ rag:
 # Vector Store (LanceDB) Configuration
 # =============================================================================
 # Shared by router (skills), knowledge, and other vector-backed features
+# Bounded defaults below prevent MCP/long-lived process memory growth (e.g. 24GB+).
+# For ~1–2G total RSS (minimal embedding model): use 134217728 (128 MiB) and max_cached_tables: 2–4.
 vector:
-  # LanceDB index cache size in bytes. When set, dataset opens use an in-memory
-  # index cache for faster repeated scans. Leave null to use Lance default (no limit).
-  # Example: 268435456 for 256 MiB
-  index_cache_size_bytes: null
+  # LanceDB index cache size in bytes. Bounded default keeps MCP memory under control.
+  # Set to null to use runtime default (256 MiB). Use 134217728 (128 MiB) for ~1–2G target.
+  index_cache_size_bytes: 134217728 # 128 MiB (was 256; lower for minimal-model 1–2G RSS)
 
-  # Phase 2: max in-memory dataset (table) count; LRU eviction when exceeded.
-  # Use e.g. 2 or 4 for memory-constrained or many-table setups. Leave null for unbounded.
-  max_cached_tables: null
+  # Max in-memory dataset (table) count; LRU eviction when exceeded. Prevents unbounded growth.
+  # Set to null to use runtime default (8). Use 2 or 4 for ~1–2G total memory.
+  max_cached_tables: 4
 
   # Default partition column for add_documents_partitioned when partition_by is not passed.
   # Used for fragment-aligned writes (e.g. "skill_name" or "category"). Leave null to require explicit partition_by.

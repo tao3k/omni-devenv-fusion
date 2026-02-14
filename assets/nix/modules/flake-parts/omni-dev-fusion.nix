@@ -34,6 +34,10 @@ in
           hacks = pkgs.callPackage pyproject-nix.build.hacks { };
           python = pkgs.python3;
           hack-overlay = final: prev: {
+            torch = hacks.nixpkgsPrebuilt {
+              from = pkgs.python3Packages.torchWithoutCuda;
+              prev = prev.torch;
+            };
             omni-core-rs = hacks.nixpkgsPrebuilt {
               from = self.packages.${system}.omni-core-rs-python-bindings;
               prev = prev.omni-core-rs;
@@ -81,6 +85,14 @@ in
     in
     {
       packages.default = self.packages.${system}.omni-dev-fusion;
-      packages.omni-dev-fusion = pythonSets.mkVirtualEnv "omni-dev-fusion" workspace.deps.default;
+      packages.omni-dev-fusion =
+        (pythonSets.mkVirtualEnv "omni-dev-fusion" workspace.deps.default).overrideAttrs
+          (old: {
+            venvIgnoreCollisions = [ "*" ];
+            # venvIgnoreCollisions = [
+            #   "lib/python${pkgs.python3.pythonVersion}/site-packages/doclayout-yolo"
+            #   "lib/python${pkgs.python3.pythonVersion}/site-packages/ultralytics"
+            # ];
+          });
     };
 }

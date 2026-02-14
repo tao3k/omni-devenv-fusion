@@ -4,14 +4,13 @@ Unit tests for vector store module.
 """
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from omni.foundation.services.vector import (
     SearchResult,
     VectorStoreClient,
-    _get_omni_vector,
     get_vector_store,
 )
 
@@ -109,23 +108,28 @@ class TestVectorStoreClientAvailability:
         """Check 'vm.store' for availability."""
         vm = VectorStoreClient()
 
-        # Without omni-vector available, store should be None
-        with patch("omni.foundation.services.vector._get_omni_vector", return_value=None):
+        # When bridge get_vector_store raises, store should be None
+        with patch(
+            "omni.foundation.bridge.rust_vector.get_vector_store",
+            side_effect=ImportError("no rust"),
+        ):
             store = vm.store
-            assert store is None, "store should be None when omni-vector is not available"
+            assert store is None, "store should be None when bridge is unavailable"
 
 
-class TestLazyImports:
-    """Tests for lazy import functions."""
+class TestVectorStoreUsesBridge:
+    """Store is obtained from bridge get_vector_store (single factory)."""
 
-    def test_get_omni_vector_caches_result(self):
-        """_get_omni_vector should cache the result."""
-        with patch("omni.foundation.services.vector._cached_omni_vector", None):
-            # First call should initialize
-            result1 = _get_omni_vector()
-            # Second call should return cached
-            result2 = _get_omni_vector()
-            assert result1 is result2
+    def setup_method(self):
+        VectorStoreClient._instance = None
+        VectorStoreClient._store = None
+
+    def test_store_comes_from_bridge_when_available(self):
+        """vm.store returns the store from bridge get_vector_store when patch provides it."""
+        mock_store = MagicMock()
+        with patch("omni.foundation.bridge.rust_vector.get_vector_store", return_value=mock_store):
+            vm = VectorStoreClient()
+            assert vm.store is mock_store
 
 
 class TestVectorStoreGracefulDegradation:
@@ -396,7 +400,7 @@ class TestVectorStoreGracefulDegradation:
         vm = VectorStoreClient()
 
         mock_store = MagicMock()
-        mock_store.delete.side_effect = Exception("Table not found: delete_collection")
+        mock_store.delete_by_ids.side_effect = Exception("Table not found: delete_collection")
         vm._store = mock_store
 
         result = await vm.delete(id="some-id", collection="delete_collection")
@@ -450,39 +454,26 @@ class TestVectorStoreGracefulDegradation:
 
     @pytest.mark.asyncio
     async def test_schema_evolution_calls_use_payload_contract(self):
-        """Schema evolution methods should send expected payload JSON."""
+        """Schema evolution methods call store with collection and columns/alterations (bridge API)."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
+        mock_store.add_columns = AsyncMock(return_value=True)
+        mock_store.alter_columns = AsyncMock(return_value=True)
+        mock_store.drop_columns = AsyncMock(return_value=True)
         vm._store = mock_store
 
-        ok_add = await vm.add_columns(
-            collection="knowledge",
-            columns=[{"name": "custom_note", "data_type": "Utf8", "nullable": True}],
-        )
-        ok_alter = await vm.alter_columns(
-            collection="knowledge",
-            alterations=[{"Rename": {"path": "custom_note", "new_name": "custom_label"}}],
-        )
-        ok_drop = await vm.drop_columns(
-            collection="knowledge",
-            columns=["custom_label"],
-        )
+        columns = [{"name": "custom_note", "data_type": "Utf8", "nullable": True}]
+        alterations = [{"Rename": {"path": "custom_note", "new_name": "custom_label"}}]
+        ok_add = await vm.add_columns(collection="knowledge", columns=columns)
+        ok_alter = await vm.alter_columns(collection="knowledge", alterations=alterations)
+        ok_drop = await vm.drop_columns(collection="knowledge", columns=["custom_label"])
 
         assert ok_add is True
         assert ok_alter is True
         assert ok_drop is True
-        mock_store.add_columns.assert_called_once()
-        mock_store.alter_columns.assert_called_once()
-        mock_store.drop_columns.assert_called_once_with("knowledge", ["custom_label"])
-
-        add_payload = json.loads(mock_store.add_columns.call_args.args[1])
-        alter_payload = json.loads(mock_store.alter_columns.call_args.args[1])
-        assert add_payload == {
-            "columns": [{"name": "custom_note", "data_type": "Utf8", "nullable": True}]
-        }
-        assert alter_payload == {
-            "alterations": [{"Rename": {"path": "custom_note", "new_name": "custom_label"}}]
-        }
+        mock_store.add_columns.assert_awaited_once_with("knowledge", columns)
+        mock_store.alter_columns.assert_awaited_once_with("knowledge", alterations)
+        mock_store.drop_columns.assert_awaited_once_with("knowledge", ["custom_label"])
 
     @pytest.mark.asyncio
     async def test_hippocampus_count_graceful_handling(self):

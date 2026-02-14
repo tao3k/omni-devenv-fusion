@@ -332,7 +332,7 @@ When migrating a skill to Agent Native:
 - `assets/skills/knowledge/SKILL.md` - Knowledge router logic
 - `assets/skills/git/SKILL.md` - Git router logic example
 - `assets/skills/git/scripts/commands.py` - Git atomic execution example
-- `assets/settings.yaml` - Skill loading configuration
+- `packages/conf/settings.yaml` - Skill loading configuration
 - `packages/python/agent/src/agent/core/skill_registry.py` - Config-driven skill loading
 - `CLAUDE.md` - Quick reference for LLM
 - `assets/how-to/gitops.md` - Git workflow documentation

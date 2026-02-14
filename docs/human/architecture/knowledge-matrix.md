@@ -269,7 +269,7 @@ assets/skills/knowledge/scripts/
 ## 7. Configuration
 
 **File**: merged `settings.yaml` runtime view
-Base defaults come from `assets/settings.yaml`, and user/project overrides come from
+System defaults come from `packages/conf/settings.yaml`; user overrides from
 `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` (set via `--conf` or environment).
 
 ```yaml

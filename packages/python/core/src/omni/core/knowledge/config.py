@@ -1,10 +1,13 @@
-"""Knowledge Configuration - Load settings from references.yaml."""
+"""Knowledge Configuration - Load settings from references.yaml.
+
+System default: packages/conf/references.yaml
+User override:  $PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml (merged by ReferenceLibrary).
+"""
 
 from pathlib import Path
 from typing import Any
 
 import yaml
-from omni.foundation.config.dirs import get_prj_dir
 
 
 class KnowledgeConfig:
@@ -14,24 +17,32 @@ class KnowledgeConfig:
         """Initialize configuration.
 
         Args:
-            config_path: Path to references.yaml (auto-detected if None)
+            config_path: Path to references.yaml. If None, uses ReferenceLibrary
+                (system packages/conf + user override merged).
         """
         self._config: dict[str, Any] = {}
         self._config_path = config_path
         self._load_config()
 
     def _load_config(self) -> None:
-        """Load configuration from references.yaml."""
+        """Load configuration: from ReferenceLibrary (merged) or from explicit path."""
         if self._config_path is None:
-            # Auto-detect: look for references.yaml in common locations
-            search_paths = [
-                Path.cwd() / "assets" / "references.yaml",
-                get_prj_dir() / "assets" / "references.yaml",
-            ]
-            for path in search_paths:
+            try:
+                from omni.foundation.services.reference import ReferenceLibrary
+
+                self._config = ReferenceLibrary().get_config()
+                return
+            except Exception:
+                pass
+            # Fallback: canonical path from get_references_config_path()
+            try:
+                from omni.foundation.services.reference import get_references_config_path
+
+                path = get_references_config_path()
                 if path.exists():
                     self._config_path = path
-                    break
+            except Exception:
+                pass
 
         if self._config_path and self._config_path.exists():
             with open(self._config_path, "r") as f:

@@ -1079,6 +1079,16 @@ class AgentMCPServer:
         except Exception as e:
             logger.warning("Embedding service init failed", error=str(e))
 
+        # Log process memory for baseline monitoring (expect ~1–2G with minimal model + bounded vector cache)
+        try:
+            from .resources import get_process_memory_mb
+
+            mem_mb = get_process_memory_mb()
+            if mem_mb is not None:
+                logger.info("Process memory (RSS): %.0f MiB", mem_mb)
+        except Exception:
+            pass
+
         # Enable verbose mode
         if verbose:
             logger.info("👀 Verbose mode enabled")
@@ -1159,6 +1169,15 @@ async def run_sse_server(
 
     # [NEW] Validate overrides
     server._validate_overrides()
+
+    try:
+        from .resources import get_process_memory_mb
+
+        mem_mb = get_process_memory_mb()
+        if mem_mb is not None:
+            logger.info("Process memory (RSS): %.0f MiB", mem_mb)
+    except Exception:
+        pass
 
     # Create SSE server
     sse = SSEServer(server._app, host="0.0.0.0", port=port)

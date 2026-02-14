@@ -198,7 +198,7 @@ class UnifiedRegistry:
         """Load all preload skills from settings."""
         from omni.foundation.config.settings import get_setting
 
-        preload_list = get_setting("skills.preload", [])
+        preload_list = get_setting("skills.preload") or []
         loaded = []
         failed = []
 

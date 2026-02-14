@@ -8,6 +8,8 @@ from Rust-backed components.
 from __future__ import annotations
 
 import json
+import resource
+import sys
 import time
 from typing import Any, Callable
 
@@ -90,6 +92,23 @@ async def read_agent_memory(kernel: Any) -> str:
         return json.dumps({"error": str(e)}, indent=2)
 
 
+def get_process_memory_mb() -> float | None:
+    """Current process RSS in MiB (for monitoring). ru_maxrss: bytes on macOS, KB on Linux."""
+    try:
+        r = resource.getrusage(resource.RUSAGE_SELF)
+        rss = getattr(r, "ru_maxrss", 0) or 0
+        if sys.platform == "darwin":
+            return round(rss / (1024 * 1024), 2)
+        return round(rss / 1024, 2)  # Linux: already KB
+    except Exception:
+        return None
+
+
+def _get_process_rss_mb() -> float | None:
+    """Alias for get_process_memory_mb used by read_system_stats."""
+    return get_process_memory_mb()
+
+
 def read_system_stats(kernel: Any, start_time: float) -> str:
     """Read system statistics.
 
@@ -98,7 +117,7 @@ def read_system_stats(kernel: Any, start_time: float) -> str:
         start_time: Server start timestamp (``time.time()``).
 
     Returns:
-        JSON string with uptime, tool count, etc.
+        JSON string with uptime, tool count, memory_mb (RSS), etc.
     """
     try:
         uptime = time.time() - start_time
@@ -107,15 +126,20 @@ def read_system_stats(kernel: Any, start_time: float) -> str:
         if kernel and kernel.is_ready:
             tool_count = len(kernel.skill_context.get_core_commands())
 
-        return json.dumps(
-            {
-                "uptime_seconds": round(uptime, 2),
-                "tool_count": tool_count,
-                "kernel_ready": kernel.is_ready if kernel else False,
-                "version": "2.0.0",
-            },
-            indent=2,
-        )
+        payload: dict[str, Any] = {
+            "uptime_seconds": round(uptime, 2),
+            "tool_count": tool_count,
+            "kernel_ready": kernel.is_ready if kernel else False,
+            "version": "2.0.0",
+        }
+        rss_mb = _get_process_rss_mb()
+        if rss_mb is not None:
+            payload["memory_mb"] = rss_mb
+            payload["memory_note"] = (
+                "RSS; expect ~1–2G with minimal embedding + bounded vector cache"
+            )
+
+        return json.dumps(payload, indent=2)
     except Exception as e:
         return json.dumps({"error": str(e)}, indent=2)
 

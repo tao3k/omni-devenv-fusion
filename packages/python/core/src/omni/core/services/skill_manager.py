@@ -92,8 +92,16 @@ class SkillManager:
             watcher_patterns: File patterns for watcher (default: ["**/*.py"])
             watcher_debounce_seconds: Debounce delay for watcher events
         """
-        # Resolve project root
-        self.project_root = Path(project_root or Path.cwd()).resolve()
+        # Resolve project root (git top level, not cwd)
+        if project_root is not None:
+            self.project_root = Path(project_root).resolve()
+        else:
+            try:
+                from omni.foundation.runtime.gitops import get_project_root
+
+                self.project_root = get_project_root()
+            except Exception:
+                self.project_root = Path.cwd().resolve()
 
         # LanceDB path - use unified vector DB path from PRJ_CACHE
         from omni.foundation.config.database import get_database_path
@@ -108,7 +116,17 @@ class SkillManager:
         embedding_dimension = get_effective_embedding_dimension()
 
         # Initialize Rust Vector Store with effective dimension
-        self.vector_store = PyVectorStore(db_path, embedding_dimension, False)
+        # NOTE: max_cached_tables defaults to None (unbounded) - must set explicitly to prevent memory leak
+        # Using same default as RustVectorStore: 8 tables max in memory
+        from omni.foundation.bridge.rust_vector import _DEFAULT_MAX_CACHED_TABLES
+
+        self.vector_store = PyVectorStore(
+            db_path,
+            embedding_dimension,
+            False,  # enable_keyword_index
+            None,  # index_cache_size_bytes (use default)
+            _DEFAULT_MAX_CACHED_TABLES,  # max_cached_tables - bounded to prevent memory leak
+        )
 
         # Initialize Pipeline Components
         self.indexer = SkillIndexer(

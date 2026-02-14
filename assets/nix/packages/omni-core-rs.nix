@@ -10,7 +10,6 @@
   libiconv,
   python3,
   protobuf,
-  nix-filter,
   workspaceRoot,
   cargoDeps,
   version,
@@ -19,16 +18,14 @@
 
 let
   pname = "omni-core-rs";
-  filteredSrc = nix-filter.lib.filter {
+  # Use Nix native lib.fileset for filtering (no nix-filter dependency)
+  filteredSrc = lib.fileset.toSource {
     root = workspaceRoot;
-    include = [
-      # Rust workspace
-      "Cargo.toml"
-      "Cargo.lock"
-
-      # All Rust crates
-      "packages/rust/crates"
-      "packages/rust/bindings/python"
+    fileset = lib.fileset.unions [
+      (workspaceRoot + "/Cargo.toml")
+      (workspaceRoot + "/Cargo.lock")
+      (workspaceRoot + "/packages/rust/crates")
+      (workspaceRoot + "/packages/rust/bindings/python")
     ];
   };
 in

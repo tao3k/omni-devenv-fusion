@@ -124,29 +124,29 @@ def load_router_search_config(
     """
 
     return RouterSearchConfig(
-        active_profile=str(get_setting("router.search.active_profile", "balanced")),
-        auto_profile_select=bool(get_setting("router.search.auto_profile_select", True)),
-        profiles=get_setting("router.search.profiles", _default_profiles()),
-        default_limit=int(get_setting("router.search.default_limit", 10)),
-        default_threshold=float(get_setting("router.search.default_threshold", 0.2)),
-        rerank=bool(get_setting("router.search.rerank", True)),
+        active_profile=str(get_setting("router.search.active_profile")),
+        auto_profile_select=bool(get_setting("router.search.auto_profile_select")),
+        profiles=get_setting("router.search.profiles") or _default_profiles(),
+        default_limit=int(get_setting("router.search.default_limit")),
+        default_threshold=float(get_setting("router.search.default_threshold")),
+        rerank=bool(get_setting("router.search.rerank")),
         semantic_weight=(
-            float(get_setting("router.search.semantic_weight", 0.7))
+            float(get_setting("router.search.semantic_weight"))
             if semantic_weight is None
             else semantic_weight
         ),
         keyword_weight=(
-            float(get_setting("router.search.keyword_weight", 0.3))
+            float(get_setting("router.search.keyword_weight"))
             if keyword_weight is None
             else keyword_weight
         ),
         adaptive_threshold_step=(
-            float(get_setting("router.search.adaptive_threshold_step", 0.15))
+            float(get_setting("router.search.adaptive_threshold_step"))
             if adaptive_threshold_step is None
             else adaptive_threshold_step
         ),
         adaptive_max_attempts=(
-            int(get_setting("router.search.adaptive_max_attempts", 3))
+            int(get_setting("router.search.adaptive_max_attempts"))
             if adaptive_max_attempts is None
             else adaptive_max_attempts
         ),
@@ -178,10 +178,7 @@ def resolve_router_schema_path(schema_path: str | Path | None = None) -> Path:
     if schema_path is not None:
         return Path(schema_path)
 
-    configured = get_setting(
-        "router.search.schema_file",
-        _SHARED_ROUTER_SEARCH_CONFIG_SCHEMA,
-    )
+    configured = get_setting("router.search.schema_file") or _SHARED_ROUTER_SEARCH_CONFIG_SCHEMA
     configured_path = Path(str(configured))
     if configured_path.is_absolute():
         return configured_path

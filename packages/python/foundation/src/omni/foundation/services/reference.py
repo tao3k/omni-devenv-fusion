@@ -2,23 +2,15 @@
 """
 Reference Knowledge Library - Knowledge Document Path Resolution
 
-Provides unified API for resolving knowledge document paths from references.yaml.
-Uses YAML-based references for single source of truth.
+System default: <project_root>/packages/conf/references.yaml
+User override:  $PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml (e.g. .config/... or --conf <dir>)
 
-Features:
-- Reads from `$PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml` via dirs API
-- Dot-notation path access (e.g., "specs.dir")
-- Thread-safe singleton pattern
-- Hot reload support
-
-Usage:
-    from omni.foundation.services.reference import ReferenceLibrary, get_reference_path
-
-    specs_dir = get_reference_path("specs.dir")
+User config is merged on top of system default (deep merge).
 """
 
 from __future__ import annotations
 
+import os
 import threading
 from pathlib import Path
 from typing import Any
@@ -29,6 +21,33 @@ from omni.foundation.config.dirs import PRJ_CONFIG
 
 # Project root detection using GitOps
 from omni.foundation.runtime.gitops import get_project_root
+
+
+def get_references_config_path() -> Path:
+    """
+    Path to the references config file itself (references.yaml).
+
+    Precedence:
+      1. OMNI_REFERENCES_YAML env (if set)
+      2. User override: $PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml
+      3. System default: <project_root>/packages/conf/references.yaml
+
+    Returns:
+        Path to the active references config file (may not exist for 3 if repo has none).
+    """
+    env_path = os.environ.get("OMNI_REFERENCES_YAML")
+    if env_path:
+        return Path(env_path)
+
+    user_refs = PRJ_CONFIG("omni-dev-fusion", "references.yaml")
+    if user_refs.exists():
+        return user_refs
+
+    try:
+        return get_project_root() / "packages" / "conf" / "references.yaml"
+    except Exception:
+        return Path("packages/conf/references.yaml")
+
 
 # YAML support (try PyYAML first, fallback to simple parsing)
 try:
@@ -55,7 +74,8 @@ class ReferenceLibrary:
     """
     Reference Knowledge Library - Singleton for knowledge document references.
 
-    Reads from `$PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml` and provides path resolution.
+    Load order: 1) system default packages/conf/references.yaml, 2) user override
+    $PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml (user layer wins).
 
     Usage:
         ref = ReferenceLibrary()
@@ -88,23 +108,40 @@ class ReferenceLibrary:
                     self._loaded = True
 
     def _load(self) -> None:
-        """Load references from `$PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml`."""
-        refs_path = PRJ_CONFIG("omni-dev-fusion", "references.yaml")
+        """Load references: system default from packages/conf, then user override from config dir."""
+        root = get_project_root()
+        # System-level default (lives with code under packages/conf)
+        system_refs = root / "packages" / "conf" / "references.yaml"
+        # User override (--conf or $PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml)
+        user_refs = PRJ_CONFIG("omni-dev-fusion", "references.yaml")
 
-        if not refs_path.exists():
-            self._data = {}
-            return
+        self._data = {}
+        # 1. Load system default
+        if system_refs.exists():
+            try:
+                content = system_refs.read_text(encoding="utf-8")
+                if YAML_AVAILABLE:
+                    import yaml
 
-        try:
-            content = refs_path.read_text(encoding="utf-8")
-            if YAML_AVAILABLE:
-                import yaml
+                    self._data = yaml.safe_load(content) or {}
+                else:
+                    self._data = self._parse_simple_yaml(content)
+            except Exception:
+                pass
+        # 2. User override (merge on top)
+        if user_refs.exists():
+            try:
+                content = user_refs.read_text(encoding="utf-8")
+                if YAML_AVAILABLE:
+                    import yaml
 
-                self._data = yaml.safe_load(content) or {}
-            else:
-                self._data = self._parse_simple_yaml(content)
-        except Exception:
-            self._data = {}
+                    overrides = yaml.safe_load(content) or {}
+                    self._deep_merge(overrides, self._data)
+                else:
+                    overrides = self._parse_simple_yaml(content)
+                    self._deep_merge(overrides, self._data)
+            except Exception:
+                pass
 
     def _parse_simple_yaml(self, content: str) -> dict[str, Any]:
         """Simple YAML parser for basic key-value structure."""
@@ -132,6 +169,15 @@ class ReferenceLibrary:
                 current_section[key.strip()] = value
 
         return result
+
+    @staticmethod
+    def _deep_merge(source: dict[str, Any], target: dict[str, Any]) -> None:
+        """Merge source into target in place; source values override."""
+        for key, value in source.items():
+            if key in target and isinstance(target[key], dict) and isinstance(value, dict):
+                ReferenceLibrary._deep_merge(value, target[key])
+            else:
+                target[key] = value
 
     def get(self, key: str, default: Any = None) -> Any:
         """
@@ -194,6 +240,13 @@ class ReferenceLibrary:
         """
         return self.get(key) is not None
 
+    def get_config(self) -> dict[str, Any]:
+        """Return full merged config (system default + user override) as a copy."""
+        import copy
+
+        self._ensure_loaded()
+        return copy.deepcopy(self._data)
+
     def get_section(self, section: str) -> dict[str, Any]:
         """
         Get an entire reference section.
@@ -244,31 +297,25 @@ class _Ref:
         harvest_dir = ref("harvested_knowledge.dir")
         commands_path = ref("skills.directory") / "git" / "scripts" / "commands.py"
 
-        # With fallback
-        docs_dir = ref("docs.dir", fallback="docs")
-
         # Check existence
         if ref("specs.dir").exists():
             ...
     """
 
-    def __call__(self, key: str, fallback: str | None = None) -> Path:
-        """Get a path reference as Path object.
+    def __call__(self, key: str) -> Path:
+        """Get a path reference as Path object (from references.yaml).
 
         Args:
             key: Dot-separated path (e.g., "harvested_knowledge.dir")
-            fallback: Optional fallback path if key not found
 
         Returns:
-            Path object resolved from project root
+            Path object resolved from project root, or Path() if key not in config
         """
         lib = ReferenceLibrary()
         value = lib.get_path(key)
 
         if not value:
-            if fallback is None:
-                return Path()
-            value = fallback
+            return Path()
 
         # Return absolute path
         if Path(value).is_absolute():
@@ -290,31 +337,6 @@ class _Ref:
 # Global instance for convenience
 ref = _Ref()
 REF = ref  # Alias for cleaner imports
-
-
-def get_reference_path(key: str, fallback: str | None = None) -> str:
-    """
-    Get a document path reference as string.
-
-    Args:
-        key: Dot-separated path (e.g., "harvested_knowledge.dir")
-        fallback: Optional fallback path if key not found
-
-    Returns:
-        Absolute path string, or empty string if not found and no fallback
-    """
-    if fallback is not None:
-        return str(ref(key, fallback))
-
-    lib = ReferenceLibrary()
-    value = lib.get_path(key)
-    if not value:
-        return ""
-
-    path = Path(value)
-    if path.is_absolute():
-        return str(path)
-    return str(get_project_root() / path)
 
 
 def get_reference_cache(key: str) -> str:
@@ -352,13 +374,9 @@ def list_reference_sections() -> list[str]:
 
 
 # =============================================================================
-# Export
+# Export (public API: config path only; ReferenceLibrary / ref remain for internal use)
 # =============================================================================
 
 __all__ = [
-    "ReferenceLibrary",
-    "get_reference_cache",
-    "get_reference_path",
-    "has_reference",
-    "list_reference_sections",
+    "get_references_config_path",
 ]

@@ -34,7 +34,9 @@ def read_file_safely(
         return False, f"Error: {error_msg}"
 
     if project_root is None:
-        project_root = Path.cwd()
+        from .path_safety import _default_project_root
+
+        project_root = _default_project_root()
 
     full_path = project_root / path
 
@@ -79,7 +81,9 @@ def write_file_safely(
         return False, f"Error: {error_msg}"
 
     if project_root is None:
-        project_root = Path.cwd()
+        from .path_safety import _default_project_root
+
+        project_root = _default_project_root()
 
     full_path = project_root / path
 

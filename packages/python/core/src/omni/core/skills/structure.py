@@ -20,7 +20,7 @@ def get_skill_structure() -> dict[str, list[str] | dict[str, Any]]:
     """
     from omni.foundation.config import get_setting
 
-    structure = get_setting("skills.architecture.structure", {})
+    structure = get_setting("skills.architecture.structure") or {}
     return {
         "required": [item.get("path", "") for item in structure.get("required", [])],
         "default": [item.get("path", "") for item in structure.get("default", [])],
@@ -32,7 +32,7 @@ def validate_structure(skill_name: str | None = None):
     """
     [Macro] Auto-generate structure validation tests for a skill.
 
-    Reads from assets/settings.yaml (skills.architecture.structure) and
+    Reads from packages/conf/settings.yaml (skills.architecture.structure) and
     generates pytest tests that verify:
     - All required files/dirs exist
     - No disallowed files exist

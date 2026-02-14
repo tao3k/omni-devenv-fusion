@@ -203,11 +203,11 @@ async def classify_tool_search_intent_with_llm(
     if not query or not query.strip():
         return None
     if enabled is None:
-        enabled = bool(get_setting("router.intent.use_llm", False))
+        enabled = bool(get_setting("router.intent.use_llm"))
     if not enabled:
         return None
     if model is None:
-        model = get_setting("router.intent.model", None) or get_setting("inference.model", None)
+        model = get_setting("router.intent.model") or get_setting("inference.model")
 
     try:
         from omni.foundation.services.llm.provider import get_llm_provider

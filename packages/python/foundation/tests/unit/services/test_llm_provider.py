@@ -59,7 +59,14 @@ class TestLiteLLMProvider:
     def test_provider_without_api_key(self):
         """Test LiteLLMProvider handles missing API key gracefully."""
         with patch("omni.foundation.config.settings.get_setting") as mock_setting:
-            mock_setting.return_value = None
+            mock_setting.side_effect = lambda key, default=None: {
+                "inference.provider": "anthropic",
+                "inference.model": "sonnet",
+                "inference.base_url": None,
+                "inference.api_key_env": "ANTHROPIC_API_KEY",
+                "inference.timeout": 120,
+                "inference.max_tokens": 4096,
+            }.get(key, default)
 
             provider = LiteLLMProvider()
             assert not provider.is_available()
@@ -90,6 +97,8 @@ class TestLiteLLMProvider:
                 "inference.model": DEFAULT_MODEL,
                 "inference.base_url": "https://api.minimax.io/anthropic",
                 "inference.api_key_env": "MINIMAX_API_KEY",
+                "inference.timeout": 120,
+                "inference.max_tokens": 4096,
             }.get(key, default)
 
             with patch.dict("os.environ", {"MINIMAX_API_KEY": "test-key"}):
@@ -191,6 +200,8 @@ class TestProviderRegistry:
                 "inference.model": "sonnet",
                 "inference.base_url": None,
                 "inference.api_key_env": "ANTHROPIC_API_KEY",
+                "inference.timeout": 120,
+                "inference.max_tokens": 4096,
             }.get(key, default)
 
             with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-api-key"}):
@@ -203,7 +214,14 @@ class TestProviderRegistry:
         reset_provider()  # Clear cache
 
         with patch("omni.foundation.config.settings.get_setting") as mock_setting:
-            mock_setting.return_value = None
+            mock_setting.side_effect = lambda key, default=None: {
+                "inference.provider": "anthropic",
+                "inference.model": "sonnet",
+                "inference.base_url": None,
+                "inference.api_key_env": "ANTHROPIC_API_KEY",
+                "inference.timeout": 120,
+                "inference.max_tokens": 4096,
+            }.get(key, default)
 
             provider = get_llm_provider()
             assert isinstance(provider, NoOpProvider)

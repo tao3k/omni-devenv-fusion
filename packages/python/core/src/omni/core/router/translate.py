@@ -80,7 +80,7 @@ async def translate_query_to_english(
         return query
 
     if enabled is None:
-        enabled = bool(get_setting("router.translation.enabled", True))
+        enabled = bool(get_setting("router.translation.enabled"))
     if not enabled:
         return query
 
@@ -88,9 +88,7 @@ async def translate_query_to_english(
         return query
 
     if model is None:
-        model = get_setting("router.translation.model", None) or get_setting(
-            "inference.model", None
-        )
+        model = get_setting("router.translation.model") or get_setting("inference.model")
 
     try:
         from omni.foundation.services.llm.provider import get_llm_provider
@@ -171,14 +169,14 @@ async def enrich_routing_keywords(
         Additional keywords/phrases to merge with routing_keywords (may be empty).
     """
     if enabled is None:
-        enabled = bool(get_setting("router.enrichment.enabled", False))
+        enabled = bool(get_setting("router.enrichment.enabled"))
     if not enabled or not description:
         return []
 
     if model is None:
-        model = get_setting("router.enrichment.model", None) or get_setting("inference.model", None)
+        model = get_setting("router.enrichment.model") or get_setting("inference.model")
 
-    expand = bool(get_setting("router.enrichment.expand_keywords", True))
+    expand = bool(get_setting("router.enrichment.expand_keywords"))
     if not expand:
         return []
 

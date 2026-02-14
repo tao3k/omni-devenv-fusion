@@ -34,7 +34,7 @@ class EmbeddingHTTPServer:
         Args:
             port: HTTP server port (default: from settings.yaml or 18501)
         """
-        self.port = port or get_setting("embedding.http_port", 18501)
+        self.port = port or int(get_setting("embedding.http_port"))
         self._app: web.Application | None = None
         self._runner: web.AppRunner | None = None
         self._site: web.TCPSite | None = None

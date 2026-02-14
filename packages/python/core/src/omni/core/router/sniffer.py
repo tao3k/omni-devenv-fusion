@@ -54,7 +54,7 @@ SNIFTER_SCORE_THRESHOLD = 0.5
 def _load_score_threshold() -> float:
     """Load dynamic sniffer threshold from settings with clamping."""
     try:
-        raw = float(get_setting("router.sniffer.score_threshold", SNIFTER_SCORE_THRESHOLD))
+        raw = float(get_setting("router.sniffer.score_threshold"))
     except (TypeError, ValueError):
         logger.warning(
             "Invalid router.sniffer.score_threshold; using default %.2f",

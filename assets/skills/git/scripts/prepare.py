@@ -71,7 +71,7 @@ def _get_cog_scopes(project_root: Path | None = None) -> list[str]:
         root = project_root or get_project_root()
 
         # First try cog.toml (primary)
-        cog_path = root / get_setting("config.cog_toml", "cog.toml")
+        cog_path = root / get_setting("config.cog_toml")
         if cog_path.exists():
             content = cog_path.read_text()
             match = re.search(r"scopes\s*=\s*\[([^\]]+)\]", content, re.DOTALL)
@@ -82,7 +82,7 @@ def _get_cog_scopes(project_root: Path | None = None) -> list[str]:
                     return scopes
 
         # Fall back to .conform.yaml (legacy support)
-        conform_path = root / get_setting("config.conform_yaml", ".conform.yaml")
+        conform_path = root / get_setting("config.conform_yaml")
         if conform_path.exists():
             import yaml
 

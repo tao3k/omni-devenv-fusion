@@ -43,7 +43,7 @@ class SystemPersonaProvider(ContextProvider):
             try:
                 from omni.foundation.config import get_setting, get_config_paths
 
-                prompt_path = get_setting("prompts.system_core", "assets/prompts/system_core.md")
+                prompt_path = get_setting("prompts.system_core")
                 raw = Path(str(prompt_path))
                 prompt_file = raw if raw.is_absolute() else get_config_paths().project_root / raw
             except (ImportError, Exception):

@@ -18,9 +18,9 @@ from pathlib import Path
 def get_harvest_dir(category: str = "") -> Path:
     """Get the harvested knowledge directory path.
 
-    Reads from merged reference config
-    (`$PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml`)
-    via `ReferenceLibrary` -> `harvested_knowledge.dir`.
+    System default: packages/conf/references.yaml.
+    User override: $PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml.
+    Resolved via `ReferenceLibrary` -> `harvested_knowledge.dir`.
 
     Args:
         category: Optional category subdirectory (e.g., "patterns", "solutions")
@@ -35,12 +35,14 @@ def get_harvest_dir(category: str = "") -> Path:
         >>> get_harvest_dir("patterns")
         >>> # Returns: /project/assets/knowledge/harvested/patterns
     """
-    from omni.foundation.services.reference import get_reference_path
+    from omni.foundation.services.reference import ref
 
-    harvest_base = get_reference_path("harvested_knowledge.dir")
+    base = ref("harvested_knowledge.dir")
+    if not str(base):
+        return Path()
     if category:
-        return Path(harvest_base) / category
-    return Path(harvest_base)
+        return base / category
+    return base
 
 
 def get_harvest_file(category: str, filename: str) -> Path:

@@ -14,7 +14,7 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -23,7 +23,12 @@ from omni.agent.cli.app import app
 
 
 class TestSkillTemplates:
-    """Tests for 'omni skill templates' command."""
+    """Tests for 'omni skill templates' command.
+
+    These tests mock _load_templates_module so they do not depend on the real
+    filesystem, SKILLS_DIR, or assets/skills/skill/scripts/templates.py.
+    That avoids flakiness from import order, project root, or template implementation.
+    """
 
     @pytest.fixture
     def runner(self):
@@ -35,37 +40,46 @@ class TestSkillTemplates:
 
         assert result.exit_code != 0
 
-    def test_templates_with_list(self, runner, tmp_path: Path):
-        """Test templates with --list option."""
-        skills_dir = tmp_path / "assets" / "skills"
-        skills_dir.mkdir(parents=True)
+    def test_templates_with_list(self, runner):
+        """Test templates with --list option (mock templates module)."""
+        mock_templates = MagicMock()
+        mock_templates.format_template_list.return_value = "template1.py.j2\ntemplate2.py.j2"
 
-        skill_dir = skills_dir / "test_skill"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("""
----
-name: test_skill
-version: 1.0.0
----
-""")
-        templates_dir = skill_dir / "scripts" / "templates"
-        templates_dir.mkdir(parents=True)
-        (templates_dir / "template1.py.j2").write_text("# Template 1")
-
-        with patch("omni.foundation.config.skills.SKILLS_DIR", return_value=skills_dir):
+        with patch(
+            "omni.agent.cli.commands.skill.base._load_templates_module",
+            return_value=mock_templates,
+        ):
             result = runner.invoke(app, ["skill", "templates", "test_skill", "--list"])
 
         assert result.exit_code == 0
+        mock_templates.format_template_list.assert_called_once_with("test_skill")
 
-    def test_templates_with_nonexistent_skill(self, runner, tmp_path: Path):
-        """Test templates with non-existent skill."""
-        skills_dir = tmp_path / "assets" / "skills"
-        skills_dir.mkdir(parents=True)
+    def test_templates_with_nonexistent_skill(self, runner):
+        """Test templates with non-existent skill (mock returns string, no crash)."""
+        mock_templates = MagicMock()
+        mock_templates.format_template_list.return_value = (
+            "No templates found for skill 'nonexistent'"
+        )
 
-        with patch("omni.foundation.config.skills.SKILLS_DIR", return_value=skills_dir):
+        with patch(
+            "omni.agent.cli.commands.skill.base._load_templates_module",
+            return_value=mock_templates,
+        ):
             result = runner.invoke(app, ["skill", "templates", "nonexistent", "--list"])
 
-        assert result.exit_code == 0  # Shows error panel, doesn't crash
+        assert result.exit_code == 0
+        mock_templates.format_template_list.assert_called_once_with("nonexistent")
+
+    def test_templates_when_module_not_found(self, runner):
+        """Test templates when templates module is missing (graceful message)."""
+        with patch(
+            "omni.agent.cli.commands.skill.base._load_templates_module",
+            return_value=None,
+        ):
+            result = runner.invoke(app, ["skill", "templates", "any_skill", "--list"])
+
+        assert result.exit_code == 0
+        assert "Templates module not found" in result.output or "Error" in result.output
 
 
 class TestSkillCreate:

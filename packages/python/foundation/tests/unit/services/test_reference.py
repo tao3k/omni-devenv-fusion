@@ -65,8 +65,8 @@ def test_reference_set_conf_dir_routes_through_directory_api(tmp_path, monkeypat
         _reset_reference_singleton()
 
 
-def test_get_reference_path_missing_returns_empty_string(tmp_path, monkeypatch):
-    """Missing key without fallback should return empty string (not '.')."""
+def test_has_reference_missing_key(tmp_path, monkeypatch):
+    """Missing key is reported as not present."""
     conf_dir = tmp_path / "conf_missing"
     app_dir = conf_dir / "omni-dev-fusion"
     app_dir.mkdir(parents=True)
@@ -80,6 +80,7 @@ def test_get_reference_path_missing_returns_empty_string(tmp_path, monkeypatch):
     PRJ_DIRS.clear_cache()
     _reset_reference_singleton()
 
-    from omni.foundation.services.reference import get_reference_path
+    from omni.foundation.services.reference import has_reference
 
-    assert get_reference_path("does.not.exist") == ""
+    assert has_reference("does.not.exist") is False
+    assert has_reference("specs.dir") is True
