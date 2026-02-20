@@ -34,19 +34,20 @@ import json
 import operator
 import time
 from pathlib import Path
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, NotRequired, TypedDict
 
 from langgraph.graph import END, StateGraph
+from pydantic import BaseModel, Field
 
-from omni.foundation.checkpoint import (
-    load_workflow_state,
-    save_workflow_state,
-)
-from omni.foundation.config.logging import get_logger
-from omni.foundation.services.llm.client import InferenceClient
-from omni.langgraph.visualize import register_workflow, visualize_workflow
 from omni.core.context import create_planner_orchestrator
 from omni.foundation.api.handlers import graph_node
+from omni.foundation.api.tool_context import run_with_heartbeat
+from omni.foundation.config.logging import get_logger
+from omni.foundation.context_delivery import WorkflowStateStore
+from omni.foundation.runtime.skill_optimization import resolve_optional_int_from_setting
+from omni.foundation.services.llm.client import InferenceClient
+from omni.langgraph.parallel import build_execution_levels, run_parallel_levels
+from omni.langgraph.visualize import register_workflow, visualize_workflow
 
 logger = get_logger("researcher.graph")
 
@@ -60,16 +61,17 @@ async def _llm_complete(
     system_prompt: str,
     user_query: str,
     stage: str,
-    extra_params: dict = None,
-) -> dict:
+    extra_params: dict[str, Any] | None = None,
+    max_tokens: int | None = None,
+) -> dict[str, Any]:
     """Make LLM call with full logging of parameters."""
     global _llm_call_counter
     _llm_call_counter += 1
     call_id = _llm_call_counter
 
-    # Get client config
+    # Get client config (allow override for shard analysis to cap response time)
     model = client.model
-    max_tokens = client.max_tokens
+    actual_max_tokens = max_tokens if max_tokens is not None else client.max_tokens
     timeout = client.timeout
 
     logger.info(
@@ -77,7 +79,7 @@ async def _llm_complete(
         call_id=call_id,
         stage=stage,
         model=model,
-        max_tokens=max_tokens,
+        max_tokens=actual_max_tokens,
         timeout=timeout,
         system_prompt_len=len(system_prompt),
         user_query_len=len(user_query),
@@ -96,6 +98,7 @@ async def _llm_complete(
     response = await client.complete(
         system_prompt=system_prompt,
         user_query=user_query,
+        max_tokens=actual_max_tokens,
     )
     elapsed_ms = (time.perf_counter() - start_time) * 1000
 
@@ -131,6 +134,22 @@ _orchestrator = None
 
 # Workflow type identifier for checkpoint table
 _WORKFLOW_TYPE = "research"
+_RESEARCH_STATE_STORE = WorkflowStateStore(_WORKFLOW_TYPE)
+
+# Chunked workflow: one step per MCP call (like knowledge recall)
+RESEARCH_CHUNKED_WORKFLOW_TYPE = "research_chunked"
+
+# Shard analysis limits (keep each shard under MCP tool timeout ~180s)
+SHARD_MAX_INPUT_CHARS = 28_000  # Truncate repomix output before LLM
+SHARD_MAX_OUTPUT_TOKENS = 4096  # Cap response length for faster completion
+
+# Efficient sharding: enforce size so each shard finishes quickly and predictably
+MAX_FILES_PER_SHARD = 5  # Split any shard with more files into multiple shards
+MAX_TOTAL_FILES = 30  # Cap total files across all shards (avoid huge repos in one run)
+MIN_FILES_TO_MERGE = 2  # Shards with ≤ this many files can be merged into one
+
+# Parallel shard processing (Codex-style): run all shards concurrently.
+# Shard count is decided by architect (LLM); no artificial concurrency cap.
 
 
 def _get_orchestrator():
@@ -214,7 +233,6 @@ def _get_research_module():
     When running directly: uses relative import from scripts directory
     """
     import sys
-    from pathlib import Path
 
     # Use SKILLS_DIR API for consistent skill directory resolution
     from omni.foundation.config.skills import SKILLS_DIR
@@ -266,7 +284,7 @@ def _get_research_module():
 
 
 class ShardDef(TypedDict):
-    """Definition of an analysis shard."""
+    """Definition of an analysis shard. May include optional 'dependencies' (list of shard names)."""
 
     name: str
     targets: list[str]
@@ -302,6 +320,11 @@ class ResearchState(TypedDict):
 
     # Cached Context (built once in architect stage)
     system_prompt: str  # Cached system prompt (persona + skill context)
+
+    # Optimization: when True, ignore dependencies and run all shards in parallel
+    parallel_all: NotRequired[bool]
+    # Max concurrent shard processing (semaphore). None = unbounded.
+    max_concurrent: NotRequired[int | None]
 
     # Control
     messages: Annotated[list[dict], operator.add]
@@ -446,13 +469,9 @@ async def node_architect(state: ResearchState) -> dict:
         client = InferenceClient()
         file_tree = state.get("file_tree", "")
         request = state.get("request", "Analyze architecture")
-        repo_path = state.get("repo_path", "")
 
         if not file_tree:
             raise ValueError("No file tree available for planning")
-
-        # Build system prompt using Rust-Powered Cognitive Pipeline
-        system_prompt = await _build_system_prompt("researcher", state)
 
         prompt = f"""You are a Senior Software Architect. Analyze this repository structure and create a research plan.
 
@@ -464,30 +483,26 @@ REPOSITORY STRUCTURE (from exa tree):
 ```
 
 YOUR TASK:
-1. Identify 3-5 logical subsystems/components based on the directory structure
-2. For each subsystem, specify the EXACT file paths to analyze (be specific, not glob patterns)
-3. Each file path should be relative to the repository root
+1. Identify 4-6 logical subsystems (prefer more, smaller shards so each finishes quickly).
+2. For each subsystem, specify the EXACT file paths to analyze (be specific, not glob patterns).
+3. Each file path must be relative to the repository root.
+4. HARD LIMITS: At most 5 files per shard. Total files across all shards must not exceed 25.
+   (Larger plans will be auto-split/trimmed; stay under limits for best results.)
 
 Respond with a JSON array defining your shards:
 ```json
 [
     {{
         "name": "Core Kernel",
-        "files": [
-            "src/core/main.py",
-            "src/core/engine.py",
-            "src/core/types.rs"
-        ],
-        "description": "Main business logic and core engine components"
+        "files": ["src/core/main.py", "src/core/engine.py"],
+        "description": "Main business logic and core engine",
+        "dependencies": []
     }},
     {{
         "name": "API Layer",
-        "files": [
-            "src/api/routes.py",
-            "src/api/handlers/user.go",
-            "src/api/middleware/auth.go"
-        ],
-        "description": "HTTP API and request handling"
+        "files": ["src/api/routes.py", "src/api/handlers/user.go"],
+        "description": "HTTP API and request handling",
+        "dependencies": ["Core Kernel"]
     }}
 ]
 ```
@@ -495,21 +510,28 @@ Respond with a JSON array defining your shards:
 GUIDELINES:
 - BE SPECIFIC with file paths - use exact paths, not globs
 - Focus on files most relevant to the research goal
-- Each shard should have 3-7 key files for deep analysis
+- Maximum 5 files per shard; total files ≤ 25 across all shards
 - Order shards from core functionality to peripheral
-- Consider the tech stack implied by file extensions"""
+- OPTIONAL "dependencies": list of shard names that must be analyzed first.
+  E.g. API Layer depends on Core Kernel. Shards with no deps run first; dependent shards run after.
+  Omit or use [] for independent shards."""
 
-        response = await _llm_complete(
-            client=client,
-            system_prompt=system_prompt,
-            user_query=prompt,
-            stage="architect",
-            extra_params={"shard_planning": True},
-        )
+        async def _architect_slow() -> tuple[dict, str]:
+            system_prompt = await _build_system_prompt("researcher", state)
+            llm_response = await _llm_complete(
+                client=client,
+                system_prompt=system_prompt,
+                user_query=prompt,
+                stage="architect",
+                extra_params={"shard_planning": True},
+            )
+            return llm_response, system_prompt
+
+        response, system_prompt = await run_with_heartbeat(_architect_slow())
 
         content = response.get("content", "").strip()
         logger.debug(
-            f"[Graph] Architect response",
+            "[Graph] Architect response",
             content_length=len(content),
             content_preview=content[:500] if content else "(empty)",
         )
@@ -518,7 +540,7 @@ GUIDELINES:
 
         if not shards:
             logger.warning(
-                f"[Graph] Failed to parse shards from LLM response, using fallback",
+                "[Graph] Failed to parse shards from LLM response, using fallback",
                 content_preview=content[:200] if content else "(empty)",
             )
             # Fallback: single shard with repo root (let LLM analyze everything)
@@ -530,25 +552,24 @@ GUIDELINES:
                 }
             ]
 
-        # Convert to ShardDef objects
+        # Convert to ShardDef objects (include optional dependencies from LLM)
         shard_defs: list[ShardDef] = []
         for s in shards:
             if isinstance(s, dict):
-                shard_defs.append(
-                    {
-                        "name": s.get("name", "Unknown"),
-                        "targets": s.get("files", []),  # Use "files" instead of "targets"
-                        "description": s.get("description", ""),
-                    }
-                )
+                defn: ShardDef = {
+                    "name": s.get("name", "Unknown"),
+                    "targets": s.get("files", []),
+                    "description": s.get("description", ""),
+                }
+                deps = s.get("dependencies")
+                if isinstance(deps, list) and deps:
+                    defn["dependencies"] = [str(d) for d in deps]
+                shard_defs.append(defn)
             else:
-                shard_defs.append(
-                    {
-                        "name": str(s),
-                        "targets": [],
-                        "description": str(s),
-                    }
-                )
+                shard_defs.append({"name": str(s), "targets": [], "description": str(s)})
+
+        # Enforce efficient sharding: split oversized, cap total files, merge tiny
+        shard_defs = _normalize_shards(shard_defs)
 
         logger.info("[Graph] Architecting complete", shard_count=len(shard_defs))
 
@@ -605,36 +626,39 @@ async def node_process_shard(state: ResearchState) -> dict:
         description = shard["description"]
 
         repo_path = state.get("repo_path", "")
-        repo_name = state.get("repo_name", "")
 
         logger.info("[Graph] Processing shard", name=shard_name, file_count=len(files))
 
-        # Lazy import research functions
-        research = _get_research_module()
+        async def _process_shard_body() -> dict:
+            # Lazy import research functions
+            research = _get_research_module()
+            shard_id = state.get("shard_counter", 0) + 1
 
-        # Step 1: Compress shard with repomix (using specific file paths)
-        compress_result = research["repomix_compress_shard"](
-            path=repo_path,
-            targets=files,
-            shard_name=shard_name,
-        )
+            # Step 1: Compress shard with repomix (run in executor so heartbeat can run)
+            loop = asyncio.get_event_loop()
+            compress_result = await loop.run_in_executor(
+                None,
+                lambda: research["repomix_compress_shard"](
+                    path=repo_path,
+                    targets=files,
+                    shard_name=shard_name,
+                    shard_id=shard_id,
+                ),
+            )
 
-        xml_content = compress_result["xml_content"]
-        token_count = compress_result.get("token_count", len(xml_content) // 4)
+            xml_content = compress_result["xml_content"]
+            token_count = compress_result.get("token_count", len(xml_content) // 4)
 
-        # Step 2: Get cached system prompt (built once in architect phase)
-        system_prompt = _get_cached_system_prompt(state)
+            # Step 2: Get cached system prompt (built once in architect phase)
+            system_prompt = _get_cached_system_prompt(state)
 
-        # Step 3: Analyze with LLM
-        client = InferenceClient()
+            # Step 3: Analyze with LLM (tight input cap for MCP timeout)
+            client = InferenceClient()
+            truncated = xml_content[:SHARD_MAX_INPUT_CHARS]
+            if len(xml_content) > SHARD_MAX_INPUT_CHARS:
+                truncated += "\n\n[...truncated for analysis...]"
 
-        # Truncate to stay within limits (use first 60K chars for analysis)
-        max_input = 60000
-        truncated = xml_content[:max_input]
-        if len(xml_content) > max_input:
-            truncated += "\n\n[...code truncated for analysis...]"
-
-        prompt = f"""You are a Senior Tech Architect. Analyze this subsystem shard in detail.
+            prompt = f"""You are a Senior Tech Architect. Analyze this subsystem shard concisely.
 
 Shard: {shard_name}
 Focus: {description}
@@ -647,85 +671,234 @@ FILES IN THIS SHARD ({len(files)} files):
 REPOMIX OUTPUT:
 {truncated}
 
-Your task: Produce a detailed Markdown section covering:
+Produce a standalone Markdown section (concise; use bullets and short paragraphs):
 
 ## Architecture Overview
-- What this subsystem does and its role in the larger system
-- Key design patterns and architectural decisions
+- Subsystem role and main responsibility
+- Key design patterns
 
 ## Source Code Analysis
-For each significant file, explain:
-- Main purpose and responsibilities
-- Key functions/classes and their roles
-- How it interacts with other parts of the system
+- Per significant file: purpose, key functions/classes, interactions
 
 ## Interfaces & Contracts
-- Public APIs and data structures
-- How this subsystem communicates with others
+- Public APIs and how this subsystem communicates with others
 
 ## Key Insights
-- Notable patterns, idioms, or anti-patterns
-- Technology choices and rationale
-- Potential concerns or improvements
+- Notable patterns, tech choices, potential concerns
 
-Format as a standalone Markdown section that can be combined with other shard analyses into a comprehensive report."""
+Keep the section focused so it can be combined with other shard analyses."""
 
-        response = await _llm_complete(
-            client=client,
-            system_prompt=system_prompt,
-            user_query=prompt,
-            stage=f"process_shard:{shard_name}",
-            extra_params={
-                "shard_name": shard_name,
-                "file_count": len(files),
-                "files": files[:5] if files else [],  # Log first 5 files
-            },
-        )
+            response = await _llm_complete(
+                client=client,
+                system_prompt=system_prompt,
+                user_query=prompt,
+                stage=f"process_shard:{shard_name}",
+                extra_params={
+                    "shard_name": shard_name,
+                    "file_count": len(files),
+                    "files": files[:5] if files else [],
+                },
+                max_tokens=SHARD_MAX_OUTPUT_TOKENS,
+            )
 
-        analysis = response.get("content", "Error: No analysis generated")
+            analysis = response.get("content", "Error: No analysis generated")
 
-        # Step 3: Save shard result
-        counter = state.get("shard_counter", 0) + 1
+            # Step 3: Save shard result
+            counter = shard_id
 
-        # Initialize harvest structure if needed
-        harvest_dir = state.get("harvest_dir")
-        if not harvest_dir:
-            # Get owner and repo_name from state
-            repo_owner = state.get("repo_owner", "unknown")
-            repo_name = state.get("repo_name", "unknown")
-            harvest_path = research["init_harvest_structure"](repo_owner, repo_name)
-            harvest_dir = str(harvest_path)
-        else:
-            harvest_path = Path(harvest_dir)
+            # Initialize harvest structure if needed
+            harvest_dir = state.get("harvest_dir")
+            if not harvest_dir:
+                # Get owner and repo_name from state
+                repo_owner = state.get("repo_owner", "unknown")
+                repo_name = state.get("repo_name", "unknown")
+                harvest_path = research["init_harvest_structure"](repo_owner, repo_name)
+                harvest_dir = str(harvest_path)
+            else:
+                harvest_path = Path(harvest_dir)
 
-        research["save_shard_result"](
-            base_dir=harvest_path,
-            shard_id=counter,
-            title=shard_name,
-            content=analysis,
-        )
+            research["save_shard_result"](
+                base_dir=harvest_path,
+                shard_id=counter,
+                title=shard_name,
+                content=analysis,
+            )
 
-        # Step 4: Accumulate summary for index
-        summary = f"- **[{shard_name}](./shards/{counter:02d}_{shard_name.lower().replace(' ', '_')}.md)**: {description} (~{token_count} tokens)"
+            # Step 4: Accumulate summary for index
+            summary = f"- **[{shard_name}](./shards/{counter:02d}_{shard_name.lower().replace(' ', '_')}.md)**: {description} (~{token_count} tokens)"
 
-        # Remove processed shard from queue - accumulate shard_analyses
-        remaining_queue = shards_queue[1:]
-        previous_summaries = state.get("shard_analyses", [])
+            # Remove processed shard from queue - accumulate shard_analyses
+            remaining_queue = shards_queue[1:]
+            previous_summaries = state.get("shard_analyses", [])
 
-        logger.info("[Graph] Shard processed", name=shard_name, tokens=token_count)
+            logger.info("[Graph] Shard processed", name=shard_name, tokens=token_count)
 
-        return {
-            "shards_queue": remaining_queue,
-            "current_shard": shard,
-            "shard_counter": counter,
-            "shard_analyses": previous_summaries + [summary],
-            "harvest_dir": harvest_dir,
-            "steps": state["steps"] + 1,
-        }
+            return {
+                "shards_queue": remaining_queue,
+                "current_shard": shard,
+                "shard_counter": counter,
+                "shard_analyses": [*previous_summaries, summary],
+                "harvest_dir": harvest_dir,
+                "steps": state["steps"] + 1,
+            }
+
+        return await run_with_heartbeat(_process_shard_body())
 
     except Exception as e:
         logger.error("[Graph] Shard processing failed", error=str(e))
         raise
+
+
+async def _process_single_shard(
+    shard: ShardDef,
+    shard_id: int,
+    state: ResearchState,
+) -> tuple[str, int]:
+    """Process one shard: repomix compress + LLM analyze + save. Returns (summary, token_count)."""
+    research = _get_research_module()
+    shard_name = shard["name"]
+    files = shard.get("targets", [])
+    description = shard.get("description", "")
+    repo_path = state.get("repo_path", "")
+    harvest_dir = state.get("harvest_dir", "")
+    repo_owner = state.get("repo_owner", "unknown")
+    repo_name = state.get("repo_name", "")
+
+    # Step 1: Compress with repomix (run in executor so event loop stays responsive)
+    loop = asyncio.get_event_loop()
+    compress_result = await loop.run_in_executor(
+        None,
+        lambda: research["repomix_compress_shard"](
+            path=repo_path,
+            targets=files,
+            shard_name=shard_name,
+            shard_id=shard_id,
+        ),
+    )
+    xml_content = compress_result["xml_content"]
+    token_count = compress_result.get("token_count", len(xml_content) // 4)
+
+    # Step 2: LLM analyze
+    system_prompt = _get_cached_system_prompt(state)
+    client = InferenceClient()
+    truncated = xml_content[:SHARD_MAX_INPUT_CHARS]
+    if len(xml_content) > SHARD_MAX_INPUT_CHARS:
+        truncated += "\n\n[...truncated for analysis...]"
+    prompt = f"""You are a Senior Tech Architect. Analyze this subsystem shard concisely.
+
+Shard: {shard_name}
+Focus: {description}
+
+Research Goal: {state.get("request", "Analyze architecture")}
+
+FILES IN THIS SHARD ({len(files)} files):
+{", ".join(files) if files else "All files in repository"}
+
+REPOMIX OUTPUT:
+{truncated}
+
+Produce a standalone Markdown section (concise; use bullets and short paragraphs):
+
+## Architecture Overview
+- Subsystem role and main responsibility
+- Key design patterns
+
+## Source Code Analysis
+- Per significant file: purpose, key functions/classes, interactions
+
+## Interfaces & Contracts
+- Public APIs and how this subsystem communicates with others
+
+## Key Insights
+- Notable patterns, tech choices, potential concerns
+
+Keep the section focused so it can be combined with other shard analyses."""
+
+    response = await _llm_complete(
+        client=client,
+        system_prompt=system_prompt,
+        user_query=prompt,
+        stage=f"process_shard:{shard_name}",
+        extra_params={"shard_name": shard_name, "file_count": len(files), "files": files[:5]},
+        max_tokens=SHARD_MAX_OUTPUT_TOKENS,
+    )
+    analysis = response.get("content", "Error: No analysis generated")
+
+    # Step 3: Save shard result
+    if not harvest_dir:
+        harvest_path = research["init_harvest_structure"](repo_owner, repo_name)
+        harvest_dir = str(harvest_path)
+    else:
+        harvest_path = Path(harvest_dir)
+    research["save_shard_result"](
+        base_dir=harvest_path,
+        shard_id=shard_id,
+        title=shard_name,
+        content=analysis,
+    )
+
+    summary = f"- **[{shard_name}](./shards/{shard_id:02d}_{shard_name.lower().replace(' ', '_')}.md)**: {description} (~{token_count} tokens)"
+    logger.info("[Graph] Shard processed (parallel)", name=shard_name, tokens=token_count)
+    return summary, token_count
+
+
+@graph_node(name="process_shards_parallel")
+async def node_process_shards_parallel(state: ResearchState) -> dict:
+    """
+    Process shards with LLM-driven scheduling.
+
+    Uses dependencies from architect: shards with no deps run first (parallel);
+    dependent shards run in later levels. Within each level, shards run in parallel.
+    """
+    shards_queue = state.get("shards_queue", [])
+    if not shards_queue:
+        raise ValueError("No shards in queue")
+
+    harvest_dir = state.get("harvest_dir", "")
+    if not harvest_dir:
+        research = _get_research_module()
+        harvest_path = research["init_harvest_structure"](
+            state.get("repo_owner", "unknown"),
+            state.get("repo_name", "unknown"),
+        )
+        harvest_dir = str(harvest_path)
+
+    parallel_all = state.get("parallel_all", True)
+    levels = build_execution_levels(
+        shards_queue,
+        parallel_all=parallel_all,
+        dep_key="dependencies",
+        name_key="name",
+    )
+    if parallel_all:
+        logger.info("[Graph] Processing shards (parallel_all)", shard_count=len(shards_queue))
+    else:
+        logger.info(
+            "[Graph] Processing shards (LLM-scheduled)",
+            levels=len(levels),
+            level_sizes=[len(lev) for lev in levels],
+        )
+
+    max_concurrent = state.get("max_concurrent")
+
+    async def _run_levels() -> list[str]:
+        results = await run_parallel_levels(
+            levels,
+            _process_single_shard,
+            state,
+            return_exceptions=False,
+            max_concurrent=max_concurrent,
+        )
+        return [r[0] for r in results]
+
+    summaries = await run_with_heartbeat(_run_levels())
+
+    return {
+        "shards_queue": [],
+        "shard_analyses": summaries,
+        "harvest_dir": harvest_dir,
+        "steps": state["steps"] + 1,
+    }
 
 
 def router_error(state: ResearchState) -> str:
@@ -786,7 +959,6 @@ async def node_synthesize(state: ResearchState) -> dict:
         )
 
         # Generate final summary message
-        index_path = Path(harvest_dir) / "index.md"
         summary_msg = f"""Research Complete!
 
 **Output:** {harvest_dir}
@@ -846,12 +1018,151 @@ def _extract_json_list(text: str) -> list[Any]:
 
     # Log debug info for troubleshooting
     logger.debug(
-        f"[Graph] Failed to extract JSON list from response",
+        "[Graph] Failed to extract JSON list from response",
         content_preview=text[:500] if text else "(empty)",
         has_brackets=("[" in text and "]" in text),
     )
 
     return []
+
+
+def _normalize_shards(shard_defs: list[ShardDef]) -> list[ShardDef]:
+    """Enforce efficient sharding: split oversized shards, cap total files, merge tiny shards.
+
+    Ensures each shard stays under MAX_FILES_PER_SHARD so repomix+LLM finish within
+    MCP timeout, and total work is bounded by MAX_TOTAL_FILES.
+    """
+    if not shard_defs:
+        return shard_defs
+
+    split_map: dict[str, list[str]] = {}  # original_name -> [new names] when split
+
+    def _with_deps(d: dict, deps: list[str] | None) -> dict:
+        out = dict(d)
+        if deps:
+            out["dependencies"] = deps
+        return out
+
+    # Step 1: Split any shard with > MAX_FILES_PER_SHARD into multiple shards
+    expanded: list[ShardDef] = []
+    for shard in shard_defs:
+        name = shard.get("name", "Unknown")
+        targets = list(shard.get("targets", []))
+        desc = shard.get("description", "")
+        deps = shard.get("dependencies")
+        if not targets:
+            expanded.append(_with_deps({"name": name, "targets": [], "description": desc}, deps))
+            continue
+        new_names: list[str] = []
+        for i in range(0, len(targets), MAX_FILES_PER_SHARD):
+            chunk = targets[i : i + MAX_FILES_PER_SHARD]
+            part_name = (
+                f"{name} ({i // MAX_FILES_PER_SHARD + 1})"
+                if len(targets) > MAX_FILES_PER_SHARD
+                else name
+            )
+            new_names.append(part_name)
+            expanded.append(
+                _with_deps({"name": part_name, "targets": chunk, "description": desc}, deps)
+            )
+        if len(new_names) > 1:
+            split_map[name] = new_names
+
+    # Step 2: Cap total files (trim from end)
+    total = 0
+    capped: list[ShardDef] = []
+    for s in expanded:
+        if total >= MAX_TOTAL_FILES:
+            break
+        t = s.get("targets", [])
+        budget = MAX_TOTAL_FILES - total
+        take = t[:budget] if len(t) > budget else t
+        if take or not capped:
+            capped.append(
+                _with_deps(
+                    {
+                        "name": s.get("name", "Unknown"),
+                        "targets": take,
+                        "description": s.get("description", ""),
+                    },
+                    s.get("dependencies"),
+                )
+            )
+            total += len(take)
+
+    # Step 3: Merge consecutive tiny shards (≤ MIN_FILES_TO_MERGE each) into one up to MAX_FILES_PER_SHARD
+    merged: list[ShardDef] = []
+    acc: list[str] = []
+    acc_names: list[str] = []
+    acc_desc = ""
+
+    acc_deps: list[str] = []
+    for s in capped:
+        t = s.get("targets", [])
+        n_files = len(t)
+        if n_files <= MIN_FILES_TO_MERGE and len(acc) + n_files <= MAX_FILES_PER_SHARD:
+            acc.extend(t)
+            acc_names.append(s.get("name", ""))
+            acc_desc = acc_desc or s.get("description", "")
+            acc_deps = list(set(acc_deps) | set(s.get("dependencies", [])))
+        else:
+            if acc:
+                merged.append(
+                    _with_deps(
+                        {
+                            "name": " + ".join(acc_names)
+                            if len(acc_names) > 1
+                            else (acc_names[0] or "Merged"),
+                            "targets": acc,
+                            "description": acc_desc or "Combined small subsystems",
+                        },
+                        acc_deps if acc_deps else None,
+                    )
+                )
+                acc = []
+                acc_names = []
+                acc_desc = ""
+                acc_deps = []
+            if n_files <= MIN_FILES_TO_MERGE:
+                acc = list(t)
+                acc_names = [s.get("name", "")]
+                acc_desc = s.get("description", "")
+                acc_deps = list(s.get("dependencies", []))
+            else:
+                merged.append(s)
+    if acc:
+        merged.append(
+            _with_deps(
+                {
+                    "name": " + ".join(acc_names)
+                    if len(acc_names) > 1
+                    else (acc_names[0] or "Merged"),
+                    "targets": acc,
+                    "description": acc_desc or "Combined small subsystems",
+                },
+                acc_deps if acc_deps else None,
+            )
+        )
+
+    # Step 4: Expand dependencies using split_map (dep "Core" -> ["Core (1)", "Core (2)"])
+    final: list[ShardDef] = []
+    for s in merged:
+        deps = list(s.get("dependencies", []))
+        expanded_deps: list[str] = []
+        for d in deps:
+            if d in split_map:
+                expanded_deps.extend(split_map[d])
+            else:
+                expanded_deps.append(d)
+        final.append(_with_deps(dict(s), expanded_deps if expanded_deps else None))
+
+    logger.info(
+        "[Graph] Shards normalized",
+        original_count=len(shard_defs),
+        normalized_count=len(final),
+        total_files=sum(len(s.get("targets", [])) for s in final),
+    )
+    return final
 
 
 # =============================================================================
@@ -866,7 +1177,7 @@ def create_sharded_research_graph() -> StateGraph:
     # Add nodes
     workflow.add_node("setup", node_setup)
     workflow.add_node("architect", node_architect)
-    workflow.add_node("process_shard", node_process_shard)
+    workflow.add_node("process_shards_parallel", node_process_shards_parallel)
     workflow.add_node("synthesize", node_synthesize)
     workflow.add_node("abort", lambda state: state)  # No-op abort node
 
@@ -880,22 +1191,18 @@ def create_sharded_research_graph() -> StateGraph:
         {"continue": "architect", "abort": "abort"},
     )
 
-    # architect -> process_shard (with error check)
+    # architect -> process_shards_parallel (with error check)
     workflow.add_conditional_edges(
         "architect",
         router_error,
-        {"continue": "process_shard", "abort": "abort"},
+        {"continue": "process_shards_parallel", "abort": "abort"},
     )
 
-    # Conditional: loop -> (process_shard | synthesize | abort)
+    # process_shards_parallel -> synthesize (with error check)
     workflow.add_conditional_edges(
-        "process_shard",
-        router_loop,
-        {
-            "process_shard": "process_shard",
-            "synthesize": "synthesize",
-            "abort": "abort",
-        },
+        "process_shards_parallel",
+        router_error,
+        {"continue": "synthesize", "abort": "abort"},
     )
 
     # synthesize -> END (with error check)
@@ -916,9 +1223,6 @@ logger.info(f"Final checkpointer: {_memory}")
 _app = create_sharded_research_graph().compile(checkpointer=_memory)
 logger.info(f"Compiled app checkpointer: {_app.checkpointer}")
 
-
-from pydantic import BaseModel, Field
-
 # =============================================================================
 # Input Validation & Guardrails
 # =============================================================================
@@ -931,6 +1235,12 @@ class ResearchInput(BaseModel):
     request: str = Field(..., description="The specific research question or goal")
     thread_id: str | None = Field(None, description="Optional thread ID for checkpointing")
     visualize: bool = Field(False, description="Generate diagram only")
+    parallel_all: bool = Field(
+        True, description="Run all shards in parallel (ignore deps); faster wall clock"
+    )
+    max_concurrent: int | None = Field(
+        None, description="Max concurrent shard LLM calls; None = unbounded or from settings"
+    )
 
 
 async def run_research_workflow(
@@ -938,6 +1248,8 @@ async def run_research_workflow(
     request: str = "Analyze the architecture",
     thread_id: str | None = None,
     visualize: bool = False,
+    parallel_all: bool = True,
+    max_concurrent: int | None = None,
 ) -> dict[str, Any]:
     """
     Run the sharded research workflow with safety guardrails.
@@ -950,11 +1262,22 @@ async def run_research_workflow(
         # If called from Kernel, arguments might be a dict or kwargs
         # This wrapper handles the canonical implementation
         validated = ResearchInput(
-            repo_url=repo_url, request=request, thread_id=thread_id, visualize=visualize
+            repo_url=repo_url,
+            request=request,
+            thread_id=thread_id,
+            visualize=visualize,
+            parallel_all=parallel_all,
+            max_concurrent=max_concurrent,
         )
     except Exception as e:
         logger.error(f"Input Validation Error: {e}")
         return {"error": f"Invalid arguments: {e}. Required: repo_url, request", "steps": 0}
+
+    # Resolve max_concurrent from explicit arg first, then settings.
+    max_concurrent = resolve_optional_int_from_setting(
+        validated.max_concurrent,
+        setting_key="researcher.max_concurrent",
+    )
 
     # Handle visualize mode
     if validated.visualize:
@@ -970,14 +1293,12 @@ async def run_research_workflow(
     )
 
     # Try to load existing state from checkpoint store
-    saved_state = load_workflow_state(_WORKFLOW_TYPE, workflow_id)
+    saved_state = _RESEARCH_STATE_STORE.load(workflow_id)
 
     # Delete any existing failed checkpoint to start fresh
-    from omni.foundation.checkpoint import delete_workflow_state
-
     if saved_state and saved_state.get("error"):
         logger.info(f"Deleting previous failed checkpoint: {workflow_id}")
-        delete_workflow_state(_WORKFLOW_TYPE, workflow_id)
+        _RESEARCH_STATE_STORE.delete(workflow_id)
         saved_state = None
 
     if saved_state and saved_state.get("shards_queue"):
@@ -1004,6 +1325,8 @@ async def run_research_workflow(
             steps=saved_state.get("steps", 0),
             messages=saved_state.get("messages", []),
             error=saved_state.get("error"),
+            parallel_all=saved_state.get("parallel_all", validated.parallel_all),
+            max_concurrent=saved_state.get("max_concurrent", max_concurrent),
         )
     else:
         # Start fresh if no valid checkpoint
@@ -1026,6 +1349,8 @@ async def run_research_workflow(
             steps=0,
             messages=[],
             error=None,
+            parallel_all=validated.parallel_all,
+            max_concurrent=max_concurrent,
         )
 
     logger.info(f"[Graph] Initial state prepared, steps={initial_state['steps']}")
@@ -1037,8 +1362,7 @@ async def run_research_workflow(
         logger.info(f"[Graph] LangGraph returned, result keys={list(result.keys())}")
 
         # Save final state to checkpoint store
-        save_workflow_state(
-            _WORKFLOW_TYPE,
+        _RESEARCH_STATE_STORE.save(
             workflow_id,
             dict(result),
             metadata={"repo_url": validated.repo_url, "request": validated.request},
@@ -1051,6 +1375,70 @@ async def run_research_workflow(
 
 
 # =============================================================================
+# Chunked workflow (one step per MCP call, like knowledge recall)
+# =============================================================================
+
+
+def _chunked_initial_state(repo_url: str, request: str) -> ResearchState:
+    """Build initial state for chunked workflow (setup + architect)."""
+    return ResearchState(
+        request=request,
+        repo_url=repo_url,
+        repo_path="",
+        repo_revision="",
+        repo_revision_date="",
+        repo_owner="",
+        repo_name="",
+        file_tree="",
+        shards_queue=[],
+        current_shard=None,
+        shard_counter=0,
+        shard_analyses=[],
+        harvest_dir="",
+        final_report="",
+        steps=0,
+        messages=[],
+        error=None,
+    )
+
+
+async def run_setup_and_architect(repo_url: str, request: str) -> dict[str, Any]:
+    """
+    Run setup then architect only. Used for chunked action=start.
+
+    Returns state with shards_queue, harvest_dir, system_prompt populated.
+    Caller must persist state and return session_id + shard_count to the LLM.
+    """
+    initial = _chunked_initial_state(repo_url, request)
+    after_setup = {**initial, **await node_setup(initial)}
+    if after_setup.get("error"):
+        return after_setup
+    after_architect = {**after_setup, **await node_architect(after_setup)}
+    return after_architect
+
+
+async def run_one_shard(state: ResearchState) -> dict[str, Any]:
+    """
+    Process the next shard in queue. Used for chunked action=shard.
+
+    State must have shards_queue with at least one item.
+    Returns updated state (shards_queue popped, shard_analyses appended).
+    """
+    if not state.get("shards_queue"):
+        return {**state, "error": "No shards in queue"}
+    return {**state, **await node_process_shard(state)}
+
+
+async def run_synthesize_only(state: ResearchState) -> dict[str, Any]:
+    """
+    Run synthesize node only. Used for chunked action=synthesize.
+
+    State should have shard_analyses and harvest_dir; shards_queue may be empty.
+    """
+    return {**state, **await node_synthesize(state)}
+
+
+# =============================================================================
 # Visualization
 # =============================================================================
 
@@ -1060,16 +1448,9 @@ def _research_diagram() -> str:
     return r"""graph TD
     A[Start: researcher.run_research repo_url=...] --> B[node_setup: Clone & Map]
     B --> C[node_architect: Plan Shards]
-    C --> D[node_process_shard: Process First Shard]
-    D --> E{Router: More Shards?}
-    E -->|Yes| D
-    E -->|No| F[node_synthesize: Generate index.md]
+    C --> D[node_process_shards_parallel: Process All Shards]
+    D --> F[node_synthesize: Generate index.md]
     F --> G[Done]
-
-    subgraph Loop [Shard Processing Loop]
-        D
-        E
-    end
 
     style A fill:#e1f5fe
     style B fill:#f3e5f5
@@ -1090,12 +1471,17 @@ register_workflow("research", _RESEARCH_DIAGRAM)
 
 
 __all__ = [
+    "RESEARCH_CHUNKED_WORKFLOW_TYPE",
     "ResearchState",
     "ShardDef",
     "create_sharded_research_graph",
     "node_architect",
     "node_process_shard",
+    "node_process_shards_parallel",
     "node_setup",
     "node_synthesize",
+    "run_one_shard",
     "run_research_workflow",
+    "run_setup_and_architect",
+    "run_synthesize_only",
 ]

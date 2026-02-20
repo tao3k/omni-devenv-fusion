@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.omni.dev/omni.link_graph.record.v1.schema.json",
+  "title": "Omni Link Graph Record v1",
+  "description": "Canonical record contract for link-graph backends (Python/Rust boundary).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "kind", "stem"],
+  "properties": {
+    "schema": {
+      "const": "omni.link_graph.record.v1"
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["hit", "neighbor", "metadata"]
+    },
+    "stem": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "score": {
+      "type": ["number", "null"]
+    },
+    "best_section": {
+      "type": ["string", "null"]
+    },
+    "match_reason": {
+      "type": ["string", "null"]
+    },
+    "direction": {
+      "type": ["string", "null"],
+      "enum": ["incoming", "outgoing", "both", null]
+    },
+    "distance": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "hit" }
+        }
+      },
+      "then": {
+        "required": ["score"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "neighbor" }
+        }
+      },
+      "then": {
+        "required": ["direction"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": { "const": "metadata" }
+        }
+      },
+      "then": {
+        "required": ["tags"]
+      }
+    }
+  ]
+}

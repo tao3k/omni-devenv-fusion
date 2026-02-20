@@ -96,7 +96,7 @@ def _load_skill_manifest(skill_name: str) -> tuple[dict[str, Any] | None, str | 
     Use this when you've learned something reusable:
     - "Use scope 'nix' for flake changes"
     - "The project uses Conventional Commits"
-    - "Always run 'just validate' before committing"
+    - "Use 'just test' for normal development; 'just validate' only for release pre-release"
 
     Args:
         - content: str - The insight to store (what you learned) (required)
@@ -118,7 +118,7 @@ async def save_memory(
     Use this when you've learned something reusable:
     - "Use scope 'nix' for flake changes"
     - "The project uses Conventional Commits"
-    - "Always run 'just validate' before committing"
+    - "Use 'just test' for normal development; 'just validate' only for release pre-release"
 
     Args:
         content: The insight to store (what you learned)

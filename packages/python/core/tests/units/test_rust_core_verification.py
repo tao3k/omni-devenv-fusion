@@ -76,15 +76,15 @@ class TestReindexWorkflow:
 
     def test_reindex_skills(self, project_root):
         """Test that skills can be reindexed."""
-        from omni.agent.cli.commands.reindex import _reindex_skills
+        from omni.agent.services.reindex import reindex_skills_only
 
-        result = _reindex_skills(clear=True)
+        result = reindex_skills_only(clear=True)
         assert result["status"] == "success"
         assert result.get("tools_indexed", 0) > 0
 
     def test_reindex_knowledge(self, project_root):
         """Test that knowledge base reindex function API works."""
-        from omni.agent.cli.commands.reindex import _reindex_knowledge
+        from omni.agent.services.reindex import reindex_knowledge
         from omni.core.knowledge.librarian import Librarian
 
         # Test 1: Verify Librarian can be initialized with table_name
@@ -92,12 +92,12 @@ class TestReindexWorkflow:
         assert librarian is not None
         assert librarian.table_name == "knowledge"
 
-        # Test 2: Verify _reindex_knowledge returns proper dict structure
+        # Test 2: Verify reindex_knowledge returns proper dict structure
         # Note: We don't run full ingest as it takes too long
         # Just verify the function exists and returns expected format
         import inspect
 
-        sig = inspect.signature(_reindex_knowledge)
+        sig = inspect.signature(reindex_knowledge)
         assert "clear" in sig.parameters
 
 

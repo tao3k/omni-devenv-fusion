@@ -110,7 +110,7 @@ class SkillManager:
 
         # Embedding service (singleton pattern)
         self.embedding_service = embedding_service or get_embedding_service()
-        # Get effective dimension (considers truncate_dim from settings.yaml)
+        # Get effective dimension (considers truncate_dim from settings)
         from omni.foundation.services.index_dimension import get_effective_embedding_dimension
 
         embedding_dimension = get_effective_embedding_dimension()

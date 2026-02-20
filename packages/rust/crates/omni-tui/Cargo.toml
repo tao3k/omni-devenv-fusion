@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 description = "Rust-driven TUI engine for Omni Dev Fusion"
 
+[lints]
+workspace = true
+
 [dependencies]
 # TUI framework - latest 0.30 version
 ratatui = "0.30"

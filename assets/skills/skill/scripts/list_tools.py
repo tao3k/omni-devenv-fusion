@@ -3,7 +3,7 @@ skill/scripts/list_tools.py - List All Registered MCP Tools (Alias-Aware)
 
 Exposed as an MCP Resource (read-only). Lists all registered MCP tools from
 loaded skills with descriptions. Applies command aliases and documentation
-overrides from settings.yaml. Uses common omni tool definition from omni.core.omni_tool.
+overrides from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml). Uses common omni tool definition from omni.core.omni_tool.
 """
 
 from omni.foundation.api.decorators import skill_resource

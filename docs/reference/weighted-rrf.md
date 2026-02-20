@@ -76,7 +76,7 @@ Raw RRF scores are calibrated in Rust payload emission:
 | `score >= medium_threshold` | `medium`   | `min(medium_cap, medium_base + score*scale)` |
 | otherwise                   | `low`      | `max(low_floor, score)`                      |
 
-The profile is configured from `settings.yaml` (`router.search.*`) and passed to Rust.
+The profile is configured from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml; `router.search.*`) and passed to Rust.
 
 ## Configuration
 

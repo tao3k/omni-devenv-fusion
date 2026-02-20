@@ -31,6 +31,7 @@ def make_tool_search_payload(
         "routing_keywords": ["git", "commit"],
         "intents": [],
         "category": "git",
+        "parameters": [],
     }
     payload.update(overrides)
     return payload

@@ -1,11 +1,10 @@
 {#
 # git/prepare_result.j2 - Commit Preparation Result Template
 #
-# Enhanced with:
-# - Submodule information display
-# - Truncated diff (50000 chars for detailed commit message generation)
-# - File category breakdown for LLM analysis
-# - Rich emoji UI for better audit experience
+# Summary-only scenario (context_delivery.prepare_for_summary):
+# Extract basic info from diff → reflect commit situation → write accurate message.
+# - diff_stat: compact summary (file + line counts)
+# - diff_content: change preview (prepare_for_summary, ~4k chars)
 #}
 
 ## 📊 🔍 Raw Data (LLM Read This)
@@ -66,13 +65,19 @@
 | 📦 packages/ | {{ packages|length }} | {{ packages[:3]|join(', ') }}{% if packages|length > 3 %}...{% endif %} |
 | 🔧 other | {{ other|length }} | {{ other[:3]|join(', ') }}{% if other|length > 3 %}...{% endif %} |
 
+{% if diff_stat %}
+### 📊 Diff Summary (file + line counts)
+
+```
+{{ diff_stat }}
+```
+{% endif %}
 {% if diff_content %}
-### 📝 Diff Preview (8000 chars - limited for MCP stability)
+### 📝 Change Preview (summary for commit message)
 
 ```diff
-{{ diff_content[:8000] }}
+{{ diff_content }}
 ```
-_(Full diff: `git diff --cached`)_
 {% endif %}
 
 ---

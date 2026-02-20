@@ -19,7 +19,9 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Any
+import hashlib
+import json
+from typing import Any, ClassVar
 
 from omni.foundation.config.logging import get_logger
 
@@ -32,6 +34,45 @@ from .router import RouteResult, SemanticRouter
 from .sniffer import IntentSniffer
 
 logger = get_logger("omni.core.router.main")
+
+
+def _build_input_schema_digest(input_schema: Any) -> str | None:
+    """Return sha256 digest for an input schema dict, if present."""
+    if not isinstance(input_schema, dict) or not input_schema:
+        return "sha256:empty"
+    canonical = json.dumps(input_schema, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return f"sha256:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
+
+
+def _build_ranking_reason(match: dict[str, Any], raw_score: float, final_score: float) -> str:
+    """Build a compact ranking reason for discover/trace consumers."""
+    parts: list[str] = []
+
+    vector_score = match.get("vector_score")
+    if isinstance(vector_score, (int, float)):
+        parts.append(f"vector={float(vector_score):.3f}")
+
+    keyword_score = match.get("keyword_score")
+    if isinstance(keyword_score, (int, float)):
+        parts.append(f"keyword={float(keyword_score):.3f}")
+
+    category = match.get("category")
+    if isinstance(category, str) and category:
+        parts.append(f"category={category}")
+
+    intents = match.get("intents")
+    if isinstance(intents, list) and intents:
+        normalized = [item for item in intents if isinstance(item, str) and item]
+        if normalized:
+            parts.append(f"intents={','.join(normalized[:3])}")
+
+    confidence = str(match.get("confidence") or "").lower()
+    if confidence in {"high", "medium", "low"}:
+        parts.append(f"confidence={confidence}")
+
+    parts.append(f"raw={raw_score:.3f}")
+    parts.append(f"final={final_score:.3f}")
+    return " | ".join(parts)
 
 
 class OmniRouter:
@@ -226,8 +267,8 @@ class OmniRouter:
                 if "final_score" not in match or "confidence" not in match:
                     logger.debug("Skipping match missing required ranking fields")
                     continue
-                score = float(match["final_score"])
-                if score < current_threshold:
+                final_score = float(match["final_score"])
+                if final_score < current_threshold:
                     continue
 
                 # Parse skill_name and command_name
@@ -261,7 +302,16 @@ class OmniRouter:
                 if confidence_raw not in {"high", "medium", "low"}:
                     logger.debug("Skipping match with invalid confidence level")
                     continue
-                clamped_score = max(0.0, min(1.0, score))
+                raw_score = float(match.get("score", final_score))
+                clamped_score = max(0.0, min(1.0, raw_score))
+                clamped_final_score = max(0.0, min(1.0, final_score))
+                ranking_reason = str(
+                    match.get("ranking_reason")
+                    or _build_ranking_reason(match, raw_score=raw_score, final_score=final_score)
+                )
+                input_schema_digest = match.get("input_schema_digest")
+                if not isinstance(input_schema_digest, str) or not input_schema_digest:
+                    input_schema_digest = _build_input_schema_digest(match.get("input_schema"))
 
                 results.append(
                     RouteResult(
@@ -269,6 +319,9 @@ class OmniRouter:
                         command_name=command_name,
                         score=clamped_score,
                         confidence=confidence_raw,  # type: ignore
+                        final_score=clamped_final_score,
+                        ranking_reason=ranking_reason,
+                        input_schema_digest=input_schema_digest,
                     )
                 )
 
@@ -316,8 +369,8 @@ class RouterRegistry:
     Manages multiple router instances for different domains or sessions.
     """
 
-    _instances: dict[str, OmniRouter] = {}
-    _default: str = "default"
+    _instances: ClassVar[dict[str, OmniRouter]] = {}
+    _default: ClassVar[str] = "default"
 
     @classmethod
     def get(cls, name: str | None = None) -> OmniRouter:

@@ -1,4 +1,4 @@
-//! Tests for ContextAssembler - Parallel I/O + Templating + Token Counting.
+//! Tests for `ContextAssembler` - Parallel I/O + Templating + Token Counting.
 //!
 //! Tests cover:
 //! - Basic assembly with template variables

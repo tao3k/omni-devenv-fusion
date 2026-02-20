@@ -6,7 +6,7 @@ Guards:
 - Bounded cache: All stores created via bridge must have non-None cache limits.
 - Defaults cap: Runtime defaults for index cache and max tables stay within safe bounds.
 
-See: docs/architecture/vector-store-memory-and-single-factory.md
+See: docs/reference/lancedb-query-release-lifecycle.md and docs/reference/vector-store-api.md
 """
 
 from __future__ import annotations
@@ -144,6 +144,23 @@ class TestGetVectorStoreUsesBoundedParams:
                 if old is not None:
                     bridge_mod._vector_stores[path] = old
 
+    @pytest.mark.skipif(not RUST_AVAILABLE, reason="Rust bindings not installed")
+    def test_get_vector_store_same_path_returns_same_instance_no_repeated_init(self) -> None:
+        """Same path must return cached instance; RustVectorStore.__init__ runs only once per path."""
+        from omni.foundation.bridge import rust_vector as bridge_mod
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "single_init.lance")
+            old = bridge_mod._vector_stores.pop(path, None)
+            try:
+                store1 = get_vector_store(index_path=path, dimension=8, enable_keyword_index=False)
+                store2 = get_vector_store(index_path=path, dimension=8, enable_keyword_index=False)
+                assert store1 is store2, "Same path must return same instance (no repeated init)"
+            finally:
+                bridge_mod._vector_stores.pop(path, None)
+                if old is not None:
+                    bridge_mod._vector_stores[path] = old
+
 
 class TestSearchCacheBounded:
     """Ensure in-process search caches stay bounded (no unbounded growth)."""
@@ -161,3 +178,51 @@ class TestSearchCacheBounded:
             f"exceeds safe max ({MAX_ACCEPTABLE_SEARCH_CACHE_ENTRIES}); "
             "prevents unbounded memory growth in long-lived MCP."
         )
+
+
+class TestVectorStoreCacheEviction:
+    """Ensure Python-side and Rust-side cache eviction stay aligned."""
+
+    def test_evict_vector_store_cache_normalizes_path_objects(self) -> None:
+        """Path-like input should evict Python cache keyed by string path."""
+        from omni.foundation.bridge import rust_vector as bridge_mod
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path_obj = Path(tmp) / "skills.lance"
+            path_key = str(path_obj)
+
+            old_entry = bridge_mod._vector_stores.get(path_key)
+            old_rust = bridge_mod._rust
+            try:
+                bridge_mod._vector_stores[path_key] = object()  # type: ignore[assignment]
+                bridge_mod._rust = None
+                evicted = bridge_mod.evict_vector_store_cache(path_obj)  # type: ignore[arg-type]
+                assert evicted == 1
+                assert path_key not in bridge_mod._vector_stores
+            finally:
+                bridge_mod._vector_stores.pop(path_key, None)
+                if old_entry is not None:
+                    bridge_mod._vector_stores[path_key] = old_entry
+                bridge_mod._rust = old_rust
+
+    def test_evict_vector_store_cache_calls_rust_side_when_available(self) -> None:
+        """evict_vector_store_cache should forward to Rust-side cache eviction when exposed."""
+        from omni.foundation.bridge import rust_vector as bridge_mod
+
+        class _FakeRust:
+            def __init__(self) -> None:
+                self.called_with = None
+
+            def evict_vector_store_cache(self, path):
+                self.called_with = path
+                return 3
+
+        old_rust = bridge_mod._rust
+        try:
+            fake = _FakeRust()
+            bridge_mod._rust = fake
+            evicted = bridge_mod.evict_vector_store_cache("dummy-path")
+            assert fake.called_with == "dummy-path"
+            assert evicted == 3
+        finally:
+            bridge_mod._rust = old_rust

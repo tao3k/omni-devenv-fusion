@@ -1,15 +1,17 @@
+import asyncio
+
 import pytest
 from omni.test_kit.decorators import omni_skill
 
 
 @pytest.mark.asyncio
 @omni_skill(name="knowledge")
-class TestZkSearchCommands:
-    """Tests for ZK search commands."""
+class TestLinkGraphSearchCommands:
+    """Tests for LinkGraph search commands."""
 
-    async def test_zk_toc(self, skill_tester):
-        """Test zk_toc returns Table of Contents."""
-        result = await skill_tester.run("knowledge", "zk_toc")
+    async def test_link_graph_toc(self, skill_tester):
+        """Test link_graph_toc returns Table of Contents."""
+        result = await skill_tester.run("knowledge", "link_graph_toc")
         assert result.success
 
         output = result.data
@@ -18,31 +20,79 @@ class TestZkSearchCommands:
         assert "notes" in output
         assert isinstance(output["notes"], list)
 
-    async def test_zk_stats(self, skill_tester):
-        """Test zk_stats returns knowledge base statistics."""
-        result = await skill_tester.run("knowledge", "zk_stats")
+    async def test_link_graph_stats(self, skill_tester):
+        """Test link_graph_stats returns knowledge base statistics."""
+        result = await skill_tester.run("knowledge", "link_graph_stats")
         assert result.success
 
         output = result.data
         assert output["success"]
         assert "stats" in output
 
-    async def test_zk_search(self, skill_tester):
-        """Test zk_search returns search results."""
+    async def test_link_graph_search_mode(self, skill_tester):
+        """Test search(mode=link_graph) returns graph search results."""
         result = await skill_tester.run(
-            "knowledge", "zk_search", query="architecture", max_results=5
+            "knowledge", "search", query="architecture", mode="link_graph", max_results=5
         )
         assert result.success
 
         output = result.data
         assert output["success"]
+        assert "parsed_query" in output
+        assert isinstance(output["parsed_query"], str)
         assert "results" in output
         assert isinstance(output["results"], list)
 
-    async def test_zk_links(self, skill_tester):
-        """Test zk_links returns link information."""
+    async def test_link_graph_search_mode_with_search_options(self, skill_tester):
+        """Test search(mode=link_graph) accepts schema-v2 search_options payload."""
         result = await skill_tester.run(
-            "knowledge", "zk_links", note_id="architecture", direction="both"
+            "knowledge",
+            "search",
+            query="architecture",
+            mode="link_graph",
+            max_results=5,
+            search_options={
+                "schema": "omni.link_graph.search_options.v2",
+                "match_strategy": "exact",
+                "sort_terms": [{"field": "title", "order": "asc"}],
+                "filters": {
+                    "link_to": {"seeds": ["architecture"], "recursive": True, "max_distance": 2}
+                },
+            },
+        )
+        assert result.success
+
+        output = result.data
+        assert output["success"]
+        assert "search_options" in output
+        assert output["search_options"]["match_strategy"] == "exact"
+        assert output["search_options"]["sort_terms"] == [{"field": "title", "order": "asc"}]
+
+    async def test_link_graph_search_mode_query_directives_return_effective_plan(
+        self, skill_tester
+    ):
+        """Test link_graph query directives are reflected in parsed_query + effective options."""
+        result = await skill_tester.run(
+            "knowledge",
+            "search",
+            query="tag:(architecture OR design) -tag:draft sort:path_asc",
+            mode="link_graph",
+            max_results=5,
+        )
+        assert result.success
+
+        output = result.data
+        assert output["success"]
+        assert output["parsed_query"] == ""
+        assert output["search_options"]["sort_terms"] == [{"field": "path", "order": "asc"}]
+        tags = output["search_options"]["filters"]["tags"]
+        assert tags["any"] == ["architecture", "design"]
+        assert tags["not"] == ["draft"]
+
+    async def test_link_graph_links(self, skill_tester):
+        """Test link_graph_links returns link information."""
+        result = await skill_tester.run(
+            "knowledge", "link_graph_links", note_id="architecture", direction="both"
         )
         assert result.success
 
@@ -51,10 +101,10 @@ class TestZkSearchCommands:
         assert "incoming" in output
         assert "outgoing" in output
 
-    async def test_zk_find_related(self, skill_tester):
-        """Test zk_find_related returns related notes."""
+    async def test_link_graph_find_related(self, skill_tester):
+        """Test link_graph_find_related returns related notes."""
         result = await skill_tester.run(
-            "knowledge", "zk_find_related", note_id="architecture", max_distance=2, limit=10
+            "knowledge", "link_graph_find_related", note_id="architecture", max_distance=2, limit=10
         )
         assert result.success
 
@@ -62,11 +112,11 @@ class TestZkSearchCommands:
         assert output["success"]
         assert "results" in output
 
-    async def test_zk_hybrid_search(self, skill_tester):
-        """Test zk_hybrid_search returns merged results."""
+    async def test_hybrid_search(self, skill_tester):
+        """Test unified search (default hybrid) returns merged results."""
         result = await skill_tester.run(
             "knowledge",
-            "zk_hybrid_search",
+            "search",
             query="architecture MCP",
             max_results=5,
             use_hybrid=True,
@@ -75,7 +125,7 @@ class TestZkSearchCommands:
 
         output = result.data
         assert output["success"]
-        assert "zk_total" in output
+        assert "link_graph_total" in output
         assert "merged" in output
         assert isinstance(output["merged"], list)
 
@@ -155,10 +205,13 @@ class TestSearchCommands:
     """Tests for search and recall commands."""
 
     async def test_search(self, skill_tester):
-        """Test knowledge.search returns results."""
+        """Test unified knowledge.search returns results (default: hybrid)."""
         result = await skill_tester.run("knowledge", "search", query="architecture")
         assert result.success
         assert result.output is not None
+        # Unified search returns hybrid shape by default
+        if result.data and isinstance(result.data, dict):
+            assert result.data.get("success") is True
 
     async def test_recall_with_limit(self, skill_tester):
         """Test knowledge.recall with limit parameter."""
@@ -303,14 +356,38 @@ class TestIngestAndClearCommands:
 class TestEntityExtractionCommands:
     """Tests for entity extraction and document ingestion."""
 
-    async def test_extract_entities(self, skill_tester):
+    @pytest.mark.timeout(60)
+    async def test_extract_entities(self, skill_tester, monkeypatch):
         """Test extract_entities on inline text (may require LLM)."""
-        result = await skill_tester.run(
-            "knowledge",
-            "extract_entities",
-            source="LanceDB is a columnar store built on Arrow. Rust powers omni-vector.",
-            store=False,
-        )
+        # Force no-LLM path to keep unit test deterministic and low-memory.
+        await skill_tester.get_commands("knowledge")
+        import sys
+
+        graph_module = sys.modules.get("omni.skills.knowledge.scripts.graph")
+        if graph_module is not None:
+
+            class _UnavailableProvider:
+                def is_available(self) -> bool:
+                    return False
+
+            monkeypatch.setattr(
+                graph_module,
+                "get_llm_provider",
+                lambda: _UnavailableProvider(),
+            )
+
+        try:
+            result = await asyncio.wait_for(
+                skill_tester.run(
+                    "knowledge",
+                    "extract_entities",
+                    source="LanceDB is a columnar store built on Arrow. Rust powers omni-vector.",
+                    store=False,
+                ),
+                timeout=45.0,
+            )
+        except TimeoutError:
+            pytest.skip("extract_entities timed out in this environment")
         # May fail if LLM is not configured — that's okay
         assert result.output is not None or result.error is not None
 

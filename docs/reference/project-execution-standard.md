@@ -39,6 +39,9 @@ This document defines the **strict workflow** for developing features that span 
 # Run all Rust tests
 cargo test -p omni-vector
 
+# Run omni-agent tests (gateway, config, MCP, session)
+cargo test -p omni-agent
+
 # Run specific test (fastest feedback)
 cargo test -p omni-vector test_delete_by_file_path
 
@@ -47,6 +50,10 @@ just build-rust-dev
 
 # Build release bindings (~60s, use only for final release)
 just build
+
+# Run Rust agent (after cargo build -p omni-agent)
+omni agent --rust
+omni gateway --rust --webhook-port 8080
 ```
 
 ### Python Development
@@ -75,11 +82,37 @@ cargo test -p omni-vector && just build-rust-dev
 just validate
 ```
 
+### Data Interface Contracts and Scale Benchmarks
+
+**Skills are the core.** After the CLI thin layer, we rely on:
+
+- **Contract tests** – Guarantee return shapes of `run_skill`, reindex, sync, and run_entry so CLI/MCP and implementations stay in sync. Prevent silent breakage of the data interface.
+- **Scale benchmarks** – Guard latency of the skill run path, reindex_status, and sync entry so we avoid performance regression.
+
+| Command                | Purpose                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `just test-contracts`  | Run data interface contract tests (no xdist).                                                    |
+| `just test-benchmarks` | Run scale benchmarks in **omni-test-kit** (skill run, reindex_status, sync; latency thresholds). |
+
+**Locations:**
+
+- Contract tests: `packages/python/agent/tests/contracts/` (e.g. `test_data_interface_services.py`).
+- **Skills↔Rust DB bridge contract**: `packages/python/foundation/tests/unit/services/test_skills_rust_bridge_contract.py` – Protects the data flow: Rust `list_all_tools` → Python `_flatten_list_all_entry` → Discovery `_build_skills_from_tools`. Run after changing the bridge or Rust output format to catch regressions (e.g. `omni skill list` showing 1 skill instead of 17+).
+
+**Tool record contract (Rust ↔ Python):**
+
+- **Rust is source of truth**: `list_all_tools` guarantees `skill_name`, `tool_name` non-null via `infer_skill_tool_from_id` when columns/metadata are null.
+- **Python thin layer**: `_flatten_list_all_entry` only promotes metadata to top-level; no inference.
+- **Python strict validation**: `validate_tool_records()` in `tool_record_validation.py` - fails fast with `ToolRecordValidationError` if data is invalid.
+- Scale benchmarks: **omni-test-kit** – `packages/python/test-kit/tests/benchmarks/` (e.g. `test_scale_skills.py`). Helpers: `omni.test_kit.benchmark.assert_async_latency_under_ms`, `assert_sync_latency_under_ms`.
+
+Both run with `--override-ini addopts="-v --tb=short"` so they execute without pytest-xdist (single process). Run after changing service return types or the skill runner to catch interface or performance regressions.
+
 ---
 
 ## Coding Standards
 
-### No Hardcoded Values - Use settings.yaml
+### No Hardcoded Values - Use settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml)
 
 **Rule**: Never hardcode configuration values. Always use `get_setting()` from `omni.foundation.config.settings`.
 
@@ -101,7 +134,7 @@ dimension = get_setting("embedding.dimension", 1024)
 **Incorrect**:
 
 ```python
-dimension = 1024  # Hardcoded - will break when settings.yaml changes
+dimension = 1024  # Hardcoded - will break when system/user settings change
 ```
 
 **In Tests**:
@@ -430,7 +463,7 @@ from common.gitops import get_project_root
 skills_dir = SKILLS_DIR("git")              # assets/skills/git
 data_dir = PRJ_DATA("knowledge")            # .data/knowledge
 cache_file = PRJ_CACHE("vector_store.db")   # .cache/vector_store.db
-timeout = get_setting("mcp.timeout", 30)    # From settings.yaml
+timeout = get_setting("mcp.timeout", 30)    # From settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml)
 ```
 
 ---

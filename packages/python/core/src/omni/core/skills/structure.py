@@ -13,7 +13,7 @@ from typing import Any
 
 def get_skill_structure() -> dict[str, list[str] | dict[str, Any]]:
     """
-    Load ODF-EP v7.0 skill structure from settings.yaml.
+    Load ODF-EP v7.0 skill structure from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml).
 
     Returns:
         dict with 'required', 'default', 'disallowed' keys

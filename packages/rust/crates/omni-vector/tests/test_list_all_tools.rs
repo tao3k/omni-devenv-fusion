@@ -83,16 +83,23 @@ async fn test_list_all_tools_with_dictionary_columns() {
     assert_eq!(count, 3, "Should have 3 tools");
 
     // CRITICAL TEST: list_all_tools should correctly read dictionary-encoded columns
-    let result = store.list_all_tools("test_tools").await.unwrap();
+    let result = store.list_all_tools("test_tools", None).await.unwrap();
 
     // Parse the JSON result
     let tools_list: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
     assert_eq!(tools_list.len(), 3, "Should return 3 tools");
 
     // Verify each tool has correct skill_name (this is where the bug manifested!)
+    // Shape is { id, content, metadata }; skill_name is in metadata for tool tables.
     let mut skill_names: Vec<String> = tools_list
         .iter()
-        .map(|t| t["skill_name"].as_str().unwrap_or("").to_string())
+        .map(|t| {
+            t.get("metadata")
+                .and_then(|m| m.get("skill_name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()
+        })
         .collect();
     skill_names.sort();
 
@@ -101,7 +108,13 @@ async fn test_list_all_tools_with_dictionary_columns() {
     // Verify tool names are correctly extracted
     let tool_names: Vec<String> = tools_list
         .iter()
-        .map(|t| t["tool_name"].as_str().unwrap_or("").to_string())
+        .map(|t| {
+            t.get("metadata")
+                .and_then(|m| m.get("tool_name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()
+        })
         .collect();
     assert!(tool_names.contains(&"commit".to_string()));
     assert!(tool_names.contains(&"push".to_string()));
@@ -119,7 +132,7 @@ async fn test_list_all_tools_empty_table() {
         .unwrap();
 
     // Query non-existent table - should return empty array
-    let result = store.list_all_tools("non_existent").await.unwrap();
+    let result = store.list_all_tools("non_existent", None).await.unwrap();
     let tools_list: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
     assert!(tools_list.is_empty());
 }
@@ -155,10 +168,10 @@ async fn test_list_all_tools_content_field() {
 
     store.add("content_test", tools).await.unwrap();
 
-    let result = store.list_all_tools("content_test").await.unwrap();
+    let result = store.list_all_tools("content_test", None).await.unwrap();
     let tools_list: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
-    // Content comes from description field
+    // Content is at top level; shape is { id, content, metadata }
     assert_eq!(
         tools_list[0]["content"],
         "This is the description for embedding"
@@ -217,15 +230,21 @@ async fn test_list_all_tools_multiple_skills_same_tool_name() {
 
     store.add("multi_skill", tools).await.unwrap();
 
-    let result = store.list_all_tools("multi_skill").await.unwrap();
+    let result = store.list_all_tools("multi_skill", None).await.unwrap();
     let tools_list: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
 
     assert_eq!(tools_list.len(), 2);
 
-    // Verify both skills are correctly identified
+    // Verify both skills are correctly identified (shape: { id, content, metadata })
     let skill_names: Vec<String> = tools_list
         .iter()
-        .map(|t| t["skill_name"].as_str().unwrap_or("").to_string())
+        .map(|t| {
+            t.get("metadata")
+                .and_then(|m| m.get("skill_name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()
+        })
         .collect();
     assert!(skill_names.contains(&"git".to_string()));
     assert!(skill_names.contains(&"database".to_string()));

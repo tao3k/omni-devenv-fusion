@@ -23,6 +23,7 @@ use std::fs;
 /// let frontmatter = extract_frontmatter(content).unwrap();
 /// assert!(frontmatter.contains("name:"));
 /// ```
+#[must_use]
 pub fn extract_frontmatter(content: &str) -> Option<String> {
     let start_marker = "---";
     let end_marker = "---";
@@ -68,20 +69,23 @@ pub struct GenericFrontmatter {
 
 /// Read and parse frontmatter from a markdown file.
 ///
-/// Returns the parsed frontmatter as a GenericFrontmatter, or None if the file doesn't exist
+/// Returns the parsed frontmatter as a `GenericFrontmatter`, or None if the file doesn't exist
 /// or has no valid frontmatter.
+#[must_use]
 pub fn read_frontmatter_from_file(path: &std::path::Path) -> Option<GenericFrontmatter> {
     let content = fs::read_to_string(path).ok()?;
     parse_frontmatter_from_content(&content)
 }
 
 /// Read file and extract frontmatter content as string.
+#[must_use]
 pub fn extract_frontmatter_from_file(path: &std::path::Path) -> Option<String> {
     let content = fs::read_to_string(path).ok()?;
     extract_frontmatter(&content)
 }
 
 /// Parse frontmatter from markdown content string.
+#[must_use]
 pub fn parse_frontmatter_from_content(content: &str) -> Option<GenericFrontmatter> {
     let yaml_content = extract_frontmatter(content)?;
     serde_yaml::from_str(&yaml_content).ok()

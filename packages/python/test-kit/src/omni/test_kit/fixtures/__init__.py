@@ -1,5 +1,12 @@
 """Pytest fixtures exported by omni.test_kit."""
 
+from omni.test_kit.fixtures.arrow import (
+    TABLE_HEALTH_IPC_COLUMNS,
+    assert_table_health_ipc_table,
+    decode_table_health_ipc_bytes,
+    make_table_health_ipc_bytes,
+    table_health_ipc_schema,
+)
 from omni.test_kit.fixtures.core import (
     cache_dir,
     clean_settings,
@@ -17,15 +24,29 @@ from omni.test_kit.fixtures.git import (
     gitops_verifier,
     temp_git_repo,
 )
-from omni.test_kit.fixtures.arrow import (
-    TABLE_HEALTH_IPC_COLUMNS,
-    assert_table_health_ipc_table,
-    decode_table_health_ipc_bytes,
-    make_table_health_ipc_bytes,
-    table_health_ipc_schema,
+from omni.test_kit.fixtures.link_graph import (
+    LinkGraphContentBuilder,
+    LinkGraphTestHelper,
+    link_graph_content_builder,
+    link_graph_content_combined,
+    link_graph_content_complex,
+    link_graph_content_duplicates,
+    link_graph_content_empty,
+    link_graph_content_no_markup,
+    link_graph_content_with_tags,
+    link_graph_content_with_wikilinks,
+    link_graph_entity_extractor,
+    link_graph_extraction_simple,
+    link_graph_extraction_typed,
+    link_graph_extractor,
+    link_graph_stats_extractor,
+    link_graph_tag_extractor,
+    link_graph_test_helper,
+    link_graph_wikilink_extractor,
 )
 from omni.test_kit.fixtures.rag import (
     RagTestHelper,
+    mock_knowledge_graph_store,
     mock_llm_empty_response,
     mock_llm_for_extraction,
     mock_llm_invalid_json,
@@ -80,26 +101,6 @@ from omni.test_kit.fixtures.watcher import (
     temp_skill_dir,
     watcher_test_helper,
 )
-from omni.test_kit.fixtures.zk import (
-    ZkContentBuilder,
-    ZkTestHelper,
-    zk_content_builder,
-    zk_content_combined,
-    zk_content_complex,
-    zk_content_duplicates,
-    zk_content_empty,
-    zk_content_no_markup,
-    zk_content_with_tags,
-    zk_content_with_wikilinks,
-    zk_entity_extractor,
-    zk_extraction_simple,
-    zk_extraction_typed,
-    zk_extractor,
-    zk_stats_extractor,
-    zk_tag_extractor,
-    zk_test_helper,
-    zk_wikilink_extractor,
-)
 
 __all__ = [  # noqa: RUF022
     # Core
@@ -140,6 +141,7 @@ __all__ = [  # noqa: RUF022
     "make_table_health_ipc_bytes",
     "table_health_ipc_schema",
     # RAG
+    "mock_knowledge_graph_store",
     "rag_config_fixture",
     "rag_knowledge_graph_disabled",
     "rag_knowledge_graph_enabled",
@@ -155,25 +157,25 @@ __all__ = [  # noqa: RUF022
     "sample_text_for_entity_extraction",
     "rag_test_helper",
     "RagTestHelper",
-    # ZK
-    "zk_content_with_tags",
-    "zk_content_with_wikilinks",
-    "zk_content_combined",
-    "zk_content_empty",
-    "zk_content_no_markup",
-    "zk_content_duplicates",
-    "zk_content_complex",
-    "zk_extraction_simple",
-    "zk_extraction_typed",
-    "zk_extractor",
-    "zk_tag_extractor",
-    "zk_entity_extractor",
-    "zk_wikilink_extractor",
-    "zk_stats_extractor",
-    "zk_test_helper",
-    "ZkTestHelper",
-    "zk_content_builder",
-    "ZkContentBuilder",
+    # Link Graph
+    "link_graph_content_with_tags",
+    "link_graph_content_with_wikilinks",
+    "link_graph_content_combined",
+    "link_graph_content_empty",
+    "link_graph_content_no_markup",
+    "link_graph_content_duplicates",
+    "link_graph_content_complex",
+    "link_graph_extraction_simple",
+    "link_graph_extraction_typed",
+    "link_graph_extractor",
+    "link_graph_tag_extractor",
+    "link_graph_entity_extractor",
+    "link_graph_wikilink_extractor",
+    "link_graph_stats_extractor",
+    "link_graph_test_helper",
+    "LinkGraphTestHelper",
+    "link_graph_content_builder",
+    "LinkGraphContentBuilder",
     # Files
     "temp_yaml_file",
     # Live-Wire core

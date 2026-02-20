@@ -38,10 +38,10 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1769353768,
+        "lastModified": 1771437256,
         "owner": "numtide",
         "repo": "blueprint",
-        "rev": "c7da5c70ad1c9b60b6f5d4f674fbe205d48d8f6c",
+        "rev": "06ee7190dc2620ea98af9eb225aa9627b68b0e33",
         "type": "github"
       },
       "original": {
@@ -248,10 +248,10 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1771010908,
+        "lastModified": 1771598023,
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "f6067fcd6fae6d73a932e49f319fcaa1459fa960",
+        "rev": "4844fc996b7853d2556bad744489f3ae88741f03",
         "type": "github"
       },
       "original": {
@@ -276,10 +276,10 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1770843696,
+        "lastModified": 1771207753,
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "2343bbb58f99267223bc2aac4fc9ea301a155a16",
+        "rev": "d1c15b7d5806069da59e819999d70e1cec0760bf",
         "type": "github"
       },
       "original": {

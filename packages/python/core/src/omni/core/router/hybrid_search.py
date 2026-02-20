@@ -57,6 +57,7 @@ Usage:
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Awaitable
 
@@ -236,6 +237,15 @@ def _detect_param_types(query: str) -> list[str]:
 
 # Boost applied per matching parameter type in a tool's input_schema
 _PARAM_SCHEMA_BOOST = 0.10
+# Research+URL boost: when query has research/analyze intent and URL, favor repo-analyzing tools (researcher) over page-fetch tools (crawl4ai)
+_RESEARCH_URL_BOOST = 0.35
+# When query has concrete URL (https://...), fetch more Rust candidates so URL tools (crawl4ai) can enter top-N.
+_CONCRETE_URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+
+
+def _query_has_concrete_url(query: str) -> bool:
+    """True if query contains a concrete URL. Use original query; effective_query replaces URL with 'github url'."""
+    return bool(query and _CONCRETE_URL_RE.search(query))
 
 
 def _match_param_type_to_schema(param_type: str, schema: Any) -> bool:
@@ -280,6 +290,38 @@ def _apply_param_schema_boost(
                 r["score"] = s + _PARAM_SCHEMA_BOOST
                 r["final_score"] = f + _PARAM_SCHEMA_BOOST
                 break  # one boost per result
+    results.sort(key=lambda x: float(x.get("score") or 0), reverse=True)
+    return results
+
+
+def _is_researcher_like_tool(r: dict[str, Any]) -> bool:
+    """True if tool has research/analyze AND repo/repository in routing_keywords (data-driven, no skill names)."""
+    kw = r.get("routing_keywords") or []
+    kw_joined = " ".join(str(k).lower() for k in kw)
+    has_research = "research" in kw_joined or "analyze" in kw_joined
+    has_repo = any(x in kw_joined for x in ("repo", "repository", "analyze_repo", "git"))
+    return has_research and has_repo
+
+
+def _apply_research_url_boost(
+    results: list[dict[str, Any]], effective_query: str, param_types: list[str]
+) -> list[dict[str, Any]]:
+    """Boost researcher-like tools when query has research/analyze intent + URL.
+
+    For 'help me research https://github.com/...', researcher (analyze repo) should
+    rank above crawl4ai (fetch page). Data-driven: uses routing_keywords, no skill names.
+    """
+    if not results or "url" not in param_types:
+        return results
+    intent_terms = _intent_terms_from_query(effective_query)
+    if not intent_terms or not (intent_terms & {"research", "analyze", "analyzing"}):
+        return results
+    for r in results:
+        if _is_researcher_like_tool(r):
+            s = float(r.get("score") or 0)
+            f = float(r.get("final_score") or s)
+            r["score"] = s + _RESEARCH_URL_BOOST
+            r["final_score"] = f + _RESEARCH_URL_BOOST
     results.sort(key=lambda x: float(x.get("score") or 0), reverse=True)
     return results
 
@@ -629,6 +671,7 @@ class HybridSearch:
         confidence_profile: dict[str, float] | None = None,
         intent_override: str | None = None,
         skip_translation: bool = False,
+        record_timings: dict[str, float] | None = None,
     ) -> list[dict[str, Any]]:
         """Perform hybrid search using Rust omni-vector engine.
 
@@ -682,6 +725,7 @@ class HybridSearch:
         See Also:
             - Rust omni-vector hybrid search for underlying algorithm
         """
+        _t_search_start = time.perf_counter() if record_timings is not None else None
         # Optional: translate non-English query to English (SKILL.md is English-only)
         from omni.core.router.translate import translate_query_to_english
 
@@ -713,7 +757,9 @@ class HybridSearch:
             )
 
         # Get query embedding from intent-focused text (required for vector search)
-        # Use custom embed function if set (e.g., for MCP server access)
+        if record_timings is not None and _t_search_start is not None:
+            record_timings["pre_embed_s"] = time.perf_counter() - _t_search_start
+        _t_embed_0 = time.perf_counter() if record_timings is not None else None
         if self._embed_func is not None:
             # Custom embedding function (async)
             vectors = await self._embed_func([intent_text])
@@ -727,6 +773,9 @@ class HybridSearch:
             # Default: use local embedding service
             embed_service = self._get_embed_service()
             query_vector = embed_service.embed(intent_text)[0]
+        if record_timings is not None and _t_embed_0 is not None:
+            record_timings["embed_s"] = time.perf_counter() - _t_embed_0
+        _t_embed_end = time.perf_counter() if record_timings is not None else None
 
         # Use agentic search when available (intent + category_filter from rule-based or optional LLM).
         from omni.foundation.config.settings import get_setting
@@ -773,12 +822,31 @@ class HybridSearch:
                 "keyword_weight": fusion.keyword_weight,
             }
 
+        # When query has concrete URL, fetch more candidates so URL-accepting tools (crawl4ai) can enter top-N.
+        # effective_query replaces "https://..." with "github url", so use original query for this check.
+        has_concrete_url = "url" in param_types and _query_has_concrete_url(query)
+        has_rerank_signals = bool(param_types) or bool(_intent_terms_from_query(effective_query))
+        rust_limit = min(limit * 20, 200) if (has_rerank_signals and has_concrete_url) else limit
+
+        if record_timings is not None and _t_embed_end is not None:
+            record_timings["intent_fusion_s"] = time.perf_counter() - _t_embed_end
+        _t_rust_0 = time.perf_counter() if record_timings is not None else None
+        keyword_text = intent_text
+        if has_concrete_url:
+            intent_terms_for_kw = _intent_terms_from_query(effective_query)
+            if intent_terms_for_kw and intent_terms_for_kw & {"research", "analyze", "analyzing"}:
+                # Research+URL: favor researcher (analyze repo) but keep crawl4ai in candidates
+                keyword_text = (
+                    f"{intent_text} analyze repo research repository crawl url fetch".strip()
+                )
+            else:
+                keyword_text = f"{intent_text} crawl url fetch web page".strip()
         if hasattr(self._store, "agentic_search"):
             results = await self._store.agentic_search(
                 table_name="skills",
                 query_vector=query_vector,
-                query_text=intent_text,
-                limit=limit,
+                query_text=keyword_text,
+                limit=rust_limit,
                 threshold=min_score,
                 intent=resolved_intent,
                 confidence_profile=confidence_profile,
@@ -795,8 +863,8 @@ class HybridSearch:
                 results = await self._store.agentic_search(
                     table_name="skills",
                     query_vector=query_vector,
-                    query_text=intent_text,
-                    limit=limit,
+                    query_text=keyword_text,
+                    limit=rust_limit,
                     threshold=min_score,
                     intent=resolved_intent,
                     confidence_profile=confidence_profile,
@@ -808,12 +876,15 @@ class HybridSearch:
             results = await self._store.search_tools(
                 table_name="skills",
                 query_vector=query_vector,
-                query_text=intent_text,
-                limit=limit,
+                query_text=keyword_text,
+                limit=rust_limit,
                 threshold=min_score,
                 confidence_profile=confidence_profile,
                 rerank=True,
             )
+        if record_timings is not None and _t_rust_0 is not None:
+            record_timings["rust_s"] = time.perf_counter() - _t_rust_0
+        _t_rust_end = time.perf_counter() if record_timings is not None else None
 
         # Format results for Python consumers
         formatted = []
@@ -875,6 +946,8 @@ class HybridSearch:
         # Schema-aware boost: tools whose input_schema accepts detected param types get a bonus
         if param_types:
             formatted = _apply_param_schema_boost(formatted, param_types)
+        # Research+URL: when user says "research [URL]", favor researcher over crawl4ai
+        formatted = _apply_research_url_boost(formatted, effective_query, param_types)
         # Associative rerank: boost tools related to top results (relationship graph)
         graph = self._get_relationship_graph()
         if graph:
@@ -902,6 +975,11 @@ class HybridSearch:
         # would still show "low" confidence.
         formatted = _recalibrate_confidence(formatted, confidence_profile)
 
+        if len(formatted) > limit:
+            formatted = formatted[:limit]
+
+        if record_timings is not None and _t_rust_end is not None:
+            record_timings["post_rust_s"] = time.perf_counter() - _t_rust_end
         logger.debug(f"Hybrid search for '{query}': {len(formatted)} results")
         return formatted
 

@@ -129,7 +129,7 @@ pub const ALL_TOPICS: &[(&str, &str)] = &[
 
 /// Topics grouped by category
 pub mod file {
-    use super::*;
+    use super::{FILE_CHANGED, FILE_CREATED, FILE_DELETED, FILE_RENAMED};
 
     /// File-related topics.
     pub const TOPICS: &[(&str, &str)] = &[
@@ -142,7 +142,7 @@ pub mod file {
 
 /// Agent-related topics.
 pub mod agent {
-    use super::*;
+    use super::{AGENT_ACTION, AGENT_RESULT, AGENT_THINK};
 
     /// Agent lifecycle topics.
     pub const TOPICS: &[(&str, &str)] = &[
@@ -154,7 +154,10 @@ pub mod agent {
 
 /// Omega workflow topics.
 pub mod omega {
-    use super::*;
+    use super::{
+        OMEGA_MISSION_COMPLETE, OMEGA_MISSION_FAIL, OMEGA_MISSION_START, OMEGA_TASK_COMPLETE,
+        OMEGA_TASK_FAIL, OMEGA_TASK_START,
+    };
 
     /// Core omega execution topics.
     pub const TOPICS: &[(&str, &str)] = &[

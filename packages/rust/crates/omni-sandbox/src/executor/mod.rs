@@ -11,6 +11,7 @@ use tokio::process::Command;
 
 /// Unified sandbox configuration (from NCL-exported JSON)
 #[pyclass]
+#[allow(clippy::unsafe_derive_deserialize)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct SandboxConfig {
     /// Unique skill identifier
@@ -93,6 +94,7 @@ impl SandboxConfig {
 
 /// Mount configuration
 #[pyclass]
+#[allow(clippy::unsafe_derive_deserialize)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct MountConfig {
     /// Source path
@@ -189,7 +191,11 @@ pub trait SandboxExecutor: Send + Sync {
     async fn execute(&self, config_path: &Path, input: &str) -> Result<ExecutionResult, String>;
 
     /// Get the executor name (e.g., "nsjail", "seatbelt")
-    fn name(&self) -> &str;
+    fn name(&self) -> &'static str;
+}
+
+fn millis_to_u64(ms: u128) -> u64 {
+    u64::try_from(ms).unwrap_or(u64::MAX)
 }
 
 /// Execute a command with resource limits
@@ -212,7 +218,7 @@ async fn execute_with_limits(
                     exit_code: o.status.code(),
                     stdout: String::from_utf8_lossy(&o.stdout).to_string(),
                     stderr: String::from_utf8_lossy(&o.stderr).to_string(),
-                    execution_time_ms: elapsed.as_millis() as u64,
+                    execution_time_ms: millis_to_u64(elapsed.as_millis()),
                     memory_used_bytes: None,
                     error: None,
                 })
@@ -222,9 +228,9 @@ async fn execute_with_limits(
                 exit_code: None,
                 stdout: String::new(),
                 stderr: String::new(),
-                execution_time_ms: start_time.elapsed().as_millis() as u64,
+                execution_time_ms: millis_to_u64(start_time.elapsed().as_millis()),
                 memory_used_bytes: None,
-                error: Some(format!("Failed to execute: {}", e)),
+                error: Some(format!("Failed to execute: {e}")),
             }),
         },
         Err(_) => Ok(ExecutionResult {
@@ -232,7 +238,7 @@ async fn execute_with_limits(
             exit_code: Some(-1),
             stdout: String::new(),
             stderr: String::from("Timeout: execution exceeded limit"),
-            execution_time_ms: start_time.elapsed().as_millis() as u64,
+            execution_time_ms: millis_to_u64(start_time.elapsed().as_millis()),
             memory_used_bytes: None,
             error: Some(String::from("Timeout")),
         }),

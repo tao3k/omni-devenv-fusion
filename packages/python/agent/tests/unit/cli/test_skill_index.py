@@ -278,32 +278,18 @@ class TestNoDuplicateTools:
     would append tools, causing duplicates.
     """
 
-    def test_reindex_always_drops_table_first(self):
-        """Verify that reindex drops existing table before indexing."""
+    def test_reindex_calls_index_skill_tools(self):
+        """Verify that reindex calls index_skill_tools (Rust drops internally when it has tools)."""
         with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
             mock_store_instance = MagicMock()
-            mock_store_instance.drop_table = AsyncMock(return_value=True)
             mock_store_instance.index_skill_tools = AsyncMock(return_value=10)
             mock_store.return_value = mock_store_instance
 
             runner = CliRunner()
             result = runner.invoke(app, ["skill", "reindex"])
 
-            # drop_table must be called before index_skill_tools
-            calls = mock_store_instance.method_calls
-            drop_call_found = False
-            index_call_found = False
-
-            for call in calls:
-                if call[0] == "drop_table":
-                    drop_call_found = True
-                if call[0] == "index_skill_tools":
-                    index_call_found = True
-                    # drop_table must have been called first
-                    assert drop_call_found, "drop_table must be called before index_skill_tools"
-
-            assert drop_call_found, "drop_table must be called"
-            assert index_call_found, "index_skill_tools must be called"
+            mock_store_instance.index_skill_tools.assert_called_once()
+            assert result.exit_code == 0
 
 
 class TestSyncStability:

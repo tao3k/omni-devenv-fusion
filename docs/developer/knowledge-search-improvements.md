@@ -1,4 +1,4 @@
-# Knowledge and ZK Search: Why "Project Progress" Was Missing and What We Improved
+# Knowledge and LinkGraph Search: Why "Project Progress" Was Missing and What We Improved
 
 ## What We Observed
 
@@ -6,7 +6,7 @@ When searching for "project progress" or "current project status":
 
 - **knowledge.recall** (vector search on `knowledge_chunks`): **0 results** — collection was empty or had no docs content.
 - **knowledge.search** (ripgrep over docs/references/skills): **0 results** — no line contained the exact phrase.
-- **ZK** (zk_search / zk_hybrid_search): ZK has notes but project progress lives in `docs/` (milestones, plan); ZK content is separate, so ZK may not cover that vocabulary. Hybrid’s vector fallback also returned nothing because the vector store had no docs.
+- **LinkGraph** (link_graph_search / link_graph_hybrid_search): LinkGraph has notes but project progress lives in `docs/` (milestones, plan); content sets can be separate, so graph-only search may not cover that vocabulary. Hybrid’s vector fallback also returned nothing because the vector store had no docs.
 
 The actual project progress content exists in `docs/index.md`, `docs/milestones/*.md`, and `docs/plan/` but was not findable by the current pipelines.
 
@@ -18,7 +18,7 @@ The actual project progress content exists in `docs/index.md`, `docs/milestones/
 
 - **`omni sync knowledge`** only indexes paths listed in **`knowledge_dirs`** in references.yaml (system default: **`packages/conf/references.yaml`**; user override: `$PRJ_CONFIG_HOME/omni-dev-fusion/references.yaml`).
 - Only **`assets/knowledge`** was active; **`docs/`** was commented out. So `docs/milestones`, `docs/plan`, `docs/reference` were never ingested.
-- Result: `knowledge.recall` and the vector leg of `zk_hybrid_search` return nothing for doc-based queries.
+- Result: `knowledge.recall` and the vector leg of `link_graph_hybrid_search` return nothing for doc-based queries.
 
 ### 2. Text search (ripgrep) is phrase-only
 
@@ -26,9 +26,9 @@ The actual project progress content exists in `docs/index.md`, `docs/milestones/
 - A query like "project progress current status" only matches lines that contain that **exact phrase**. No line in the repo does, so we got 0 matches.
 - Users expect at least some hits when words like "progress", "milestone", "roadmap" appear in docs.
 
-### 3. ZK and docs are separate content sets
+### 3. LinkGraph and docs are separate content sets
 
-- ZK notes (e.g. in `.zk` or `assets/knowledge`) and `docs/` are different trees. If "project progress" is only described in `docs/`, ZK-only or ZK-first search won’t find it unless we also search docs or ingest docs into the vector store (which ZK hybrid then uses as fallback).
+- LinkGraph notes (for example `assets/knowledge`) and `docs/` are different trees. If "project progress" is only described in `docs/`, graph-only or graph-first search won’t find it unless we also search docs or ingest docs into the vector store (which hybrid search then uses as fallback).
 
 ---
 
@@ -36,14 +36,14 @@ The actual project progress content exists in `docs/index.md`, `docs/milestones/
 
 ### 0. Same DB for sync and recall (path alignment)
 
-**Root cause:** `omni sync knowledge` writes to `get_database_path("knowledge")` = `.../omni-vector/knowledge.lance`. The foundation `VectorStoreClient` (used by `knowledge.recall`, `knowledge.stats`, and ZK hybrid vector fallback) used the **base** path `.../omni-vector`, so it was reading a different Lance DB and saw 0 documents.
+**Root cause:** `omni sync knowledge` writes to `get_database_path("knowledge")` = `.../omni-vector/knowledge.lance`. The foundation `VectorStoreClient` (used by `knowledge.recall`, `knowledge.stats`, and hybrid vector fallback) used the **base** path `.../omni-vector`, so it was reading a different Lance DB and saw 0 documents.
 
 **Change:** In `packages/python/foundation/src/omni/foundation/services/vector.py`, `VectorStoreClient` now has a dedicated store for the knowledge DB: when the collection is `"knowledge_chunks"`, all operations (search, add, count, delete, create_index, etc.) use a store opened on `get_database_path("knowledge")`. So sync and recall/stats/ingest/clear use the same DB. No reconnect or hot reload needed beyond loading the updated code.
 
 ### 1. Include `docs/` in knowledge sync (references.yaml)
 
 - **Add** a `knowledge_dirs` entry for `docs/` (e.g. `path: "docs"`, `globs: ["**/*.md"]`) in **`packages/conf/references.yaml`** (or in your user override) so `omni sync knowledge` indexes documentation.
-- After running **`omni sync knowledge`**, `knowledge_chunks` will contain chunks from `docs/milestones`, `docs/plan`, `docs/reference`, etc., so **knowledge.recall** and **zk_hybrid_search** vector fallback can return project progress–related content.
+- After running **`omni sync knowledge`**, `knowledge_chunks` will contain chunks from `docs/milestones`, `docs/plan`, `docs/reference`, etc., so **knowledge.recall** and **link_graph_hybrid_search** vector fallback can return project progress–related content.
 
 ### 2. Multi-word / OR behavior for knowledge.search (search.py)
 
@@ -55,8 +55,8 @@ The actual project progress content exists in `docs/index.md`, `docs/milestones/
 
 - **knowledge.recall**: Best when the vector store is populated (after sync including docs). Use for semantic queries like "project progress" or "current milestones".
 - **knowledge.search**: Good for literal and multi-word keyword search over docs/references/skills; now improved for multi-word OR.
-- **zk_hybrid_search**: Combines ZK reasoning with vector fallback; once docs are in the vector store, hybrid will also surface doc content for "project progress" type questions.
-- For "project status / progress / roadmap" we can recommend: run **`omni sync knowledge`** (with docs in knowledge_dirs), then use **knowledge.recall** or **zk_hybrid_search**; for quick keyword scan use **knowledge.search** with scope `"docs"` or `"all"`.
+- **link_graph_hybrid_search**: Combines LinkGraph reasoning with vector fallback; once docs are in the vector store, hybrid will also surface doc content for "project progress" type questions.
+- For "project status / progress / roadmap" we can recommend: run **`omni sync knowledge`** (with docs in knowledge_dirs), then use **knowledge.recall** or **link_graph_hybrid_search**; for quick keyword scan use **knowledge.search** with scope `"docs"` or `"all"`.
 
 ---
 
@@ -66,9 +66,9 @@ The actual project progress content exists in `docs/index.md`, `docs/milestones/
 | --------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------ |
 | recall returns 0 for project progress   | docs/ not in knowledge_dirs; vector store empty of docs | Add docs/ to knowledge_dirs; run `omni sync knowledge` |
 | search returns 0 for "project progress" | Ripgrep phrase-only; no line has exact phrase           | Multi-word query → OR of words in search.py            |
-| ZK/hybrid don’t surface docs            | ZK content ≠ docs/; vector fallback empty               | Same as recall: index docs and rely on vector + hybrid |
+| LinkGraph/hybrid don’t surface docs     | LinkGraph content ≠ docs/; vector fallback empty        | Same as recall: index docs and rely on vector + hybrid |
 
-These changes improve both **knowledge** and **ZK** search so that project progress and similar doc-based queries are findable and the system can be further tuned (e.g. more knowledge_dirs, or adding a text-search fallback in ZK hybrid) as needed.
+These changes improve both **knowledge** and **LinkGraph** search so that project progress and similar doc-based queries are findable and the system can be further tuned (e.g. more knowledge_dirs, or adding a text-search fallback in hybrid search) as needed.
 
 ---
 

@@ -85,7 +85,7 @@ expression: report
     },
     {
       "matched_relevant": [
-        "knowledge.zk_hybrid_search",
+        "knowledge.link_graph_hybrid_search",
         "memory.search_memory"
       ],
       "mrr_rr": "1.0000",
@@ -94,8 +94,8 @@ expression: report
       "query": "memory_and_knowledge_lookup",
       "r_at_5": "1.0000",
       "success_at_1": "1.0000",
-      "text": "找历史经验 zk 笔记 hybrid search",
-      "top1": "knowledge.zk_hybrid_search"
+      "text": "找历史经验 link_graph 笔记 hybrid search",
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
@@ -209,7 +209,7 @@ expression: report
     },
     {
       "matched_relevant": [
-        "knowledge.zk_hybrid_search",
+        "knowledge.link_graph_hybrid_search",
         "memory.search_memory"
       ],
       "mrr_rr": "1.0000",
@@ -218,8 +218,8 @@ expression: report
       "query": "memory_and_knowledge_lookup",
       "r_at_5": "1.0000",
       "success_at_1": "1.0000",
-      "text": "找历史经验 zk 笔记 hybrid search",
-      "top1": "knowledge.zk_hybrid_search"
+      "text": "找历史经验 link_graph 笔记 hybrid search",
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [

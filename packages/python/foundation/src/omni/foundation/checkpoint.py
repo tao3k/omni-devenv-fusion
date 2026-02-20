@@ -57,16 +57,17 @@ def _get_store() -> Any:
 
     if db_path not in _checkpoint_store_cache:
         try:
-            # Import Rust bindings
-            from omni_core_rs import PyCheckpointStore, create_checkpoint_store
-
-            dimension = get_setting("checkpoint.embedding_dimension")
-            _checkpoint_store_cache[db_path] = create_checkpoint_store(db_path, dimension)
-            # Note: LanceDB reuses existing files; this just creates the Python wrapper
-            logger.debug("Initialized checkpoint store wrapper", db_path=db_path)
+            from omni_core_rs import create_checkpoint_store
         except ImportError as e:
-            logger.warning(f"Rust bindings not available: {e}, using fallback SQLite")
-            _checkpoint_store_cache[db_path] = None
+            raise RuntimeError(
+                "Rust bindings (omni_core_rs) are required for checkpoint storage. "
+                "Build/install omni-core-rs before running checkpoint workflows."
+            ) from e
+
+        dimension = get_setting("checkpoint.embedding_dimension")
+        _checkpoint_store_cache[db_path] = create_checkpoint_store(db_path, dimension)
+        # Note: LanceDB reuses existing files; this just creates the Python wrapper
+        logger.debug("Initialized checkpoint store wrapper", db_path=db_path)
 
     return _checkpoint_store_cache[db_path]
 
@@ -87,12 +88,21 @@ def get_checkpointer(workflow_type: str) -> Any:
     Returns:
         PyCheckpointStore instance for the workflow type
     """
-    store = _get_store()
-    if store is None:
-        return None
+    _ = _get_table_name(workflow_type)
+    return _get_store()
 
-    table_name = _get_table_name(workflow_type)
-    return store
+
+def get_checkpoint_schema_id() -> str:
+    """Return checkpoint schema id for observability/debugging."""
+    store = _get_store()
+    schema_method = getattr(store, "checkpoint_schema_id", None)
+    if callable(schema_method):
+        return str(schema_method())
+
+    # Fallback: Python schema API (same shared schema file)
+    from omni.foundation.api.checkpoint_schema import get_schema_id
+
+    return str(get_schema_id())
 
 
 def save_workflow_state(
@@ -115,26 +125,36 @@ def save_workflow_state(
         True if save succeeded
     """
     store = _get_store()
-    if store is None:
-        logger.warning("No checkpoint store available, state not persisted")
-        return False
 
     try:
+        from omni.foundation.api.checkpoint_schema import validate_checkpoint_write
+
         table_name = _get_table_name(workflow_type)
         checkpoint_id = f"{workflow_id}-{int(time.time() * 1000)}"
         timestamp = time.time()
         content = json.dumps(state)
         metadata_json = json.dumps(metadata) if metadata else None
 
+        payload = {
+            "checkpoint_id": checkpoint_id,
+            "thread_id": workflow_id,
+            "timestamp": timestamp,
+            "content": content,
+            "parent_id": parent_id,
+            "embedding": None,
+            "metadata": metadata_json,
+        }
+        validate_checkpoint_write(table_name, payload)
+
         store.save_checkpoint(
             table_name=table_name,
-            checkpoint_id=checkpoint_id,
-            thread_id=workflow_id,
-            content=content,
-            timestamp=timestamp,
-            parent_id=parent_id,
-            embedding=None,
-            metadata=metadata_json,
+            checkpoint_id=payload["checkpoint_id"],
+            thread_id=payload["thread_id"],
+            content=payload["content"],
+            timestamp=payload["timestamp"],
+            parent_id=payload["parent_id"],
+            embedding=payload["embedding"],
+            metadata=payload["metadata"],
         )
 
         logger.debug("Saved workflow state", workflow_type=workflow_type, workflow_id=workflow_id)
@@ -156,8 +176,6 @@ def load_workflow_state(workflow_type: str, workflow_id: str) -> dict[str, Any] 
         State dict or None if not found
     """
     store = _get_store()
-    if store is None:
-        return None
 
     try:
         table_name = _get_table_name(workflow_type)
@@ -168,8 +186,79 @@ def load_workflow_state(workflow_type: str, workflow_id: str) -> dict[str, Any] 
         return None
 
     except Exception as e:
+        table_name = _get_table_name(workflow_type)
+        auto_repair = bool(get_setting("checkpoint.auto_repair_on_load", True))
+        if auto_repair and hasattr(store, "cleanup_orphan_checkpoints"):
+            try:
+                removed = int(store.cleanup_orphan_checkpoints(table_name, False))
+                logger.warning(
+                    "Checkpoint load failed; auto-repair attempted",
+                    workflow_type=workflow_type,
+                    workflow_id=workflow_id,
+                    removed=removed,
+                    error=str(e),
+                )
+                content = store.get_latest(table_name, workflow_id)
+                if content:
+                    return json.loads(content)
+                return None
+            except Exception as repair_error:
+                logger.error(
+                    "Checkpoint auto-repair failed",
+                    workflow_type=workflow_type,
+                    workflow_id=workflow_id,
+                    error=str(repair_error),
+                )
         logger.error("Failed to load workflow state", error=str(e))
         return None
+
+
+def repair_workflow_state(
+    workflow_type: str,
+    *,
+    dry_run: bool = False,
+    force_recover: bool = False,
+) -> dict[str, Any]:
+    """Run checkpoint repair workflow for a workflow table."""
+    store = _get_store()
+    table_name = _get_table_name(workflow_type)
+    result: dict[str, Any] = {
+        "workflow_type": workflow_type,
+        "table_name": table_name,
+        "dry_run": dry_run,
+        "force_recover": force_recover,
+        "schema_id": None,
+        "removed_orphans": 0,
+        "status": "success",
+        "details": [],
+    }
+
+    try:
+        result["schema_id"] = get_checkpoint_schema_id()
+    except Exception as e:
+        result["details"].append(f"schema_id_unavailable: {e}")
+
+    try:
+        if hasattr(store, "cleanup_orphan_checkpoints"):
+            removed = int(store.cleanup_orphan_checkpoints(table_name, dry_run))
+            result["removed_orphans"] = removed
+            result["details"].append(f"cleanup_orphan_checkpoints removed={removed}")
+        else:
+            result["details"].append("cleanup_orphan_checkpoints unavailable in rust binding")
+
+        if force_recover:
+            if dry_run:
+                result["details"].append("force_recover skipped because dry_run=true")
+            elif hasattr(store, "force_recover_table"):
+                store.force_recover_table(table_name)
+                result["details"].append("force_recover_table executed")
+            else:
+                result["details"].append("force_recover_table unavailable in rust binding")
+    except Exception as e:
+        result["status"] = "error"
+        result["error"] = str(e)
+
+    return result
 
 
 def get_workflow_history(
@@ -188,8 +277,6 @@ def get_workflow_history(
         List of checkpoint dicts with content, metadata, and timestamp
     """
     store = _get_store()
-    if store is None:
-        return []
 
     try:
         table_name = _get_table_name(workflow_type)
@@ -221,8 +308,6 @@ def delete_workflow_state(workflow_type: str, workflow_id: str) -> bool:
         True if deletion succeeded
     """
     store = _get_store()
-    if store is None:
-        return False
 
     try:
         table_name = _get_table_name(workflow_type)
@@ -241,9 +326,11 @@ def delete_workflow_state(workflow_type: str, workflow_id: str) -> bool:
 
 
 __all__ = [
-    "get_checkpointer",
-    "save_workflow_state",
-    "load_workflow_state",
-    "get_workflow_history",
     "delete_workflow_state",
+    "get_checkpoint_schema_id",
+    "get_checkpointer",
+    "get_workflow_history",
+    "load_workflow_state",
+    "repair_workflow_state",
+    "save_workflow_state",
 ]

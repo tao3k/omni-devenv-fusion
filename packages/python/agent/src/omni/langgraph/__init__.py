@@ -1,78 +1,49 @@
-"""
-omni/langgraph/__init__.py - LangGraph Cognitive Graph System
+"""Public LangGraph namespace with lazy exports for low startup overhead."""
 
-LangGraph-based cognitive state machine for Omni Agent.
-Provides plan -> execute -> reflect workflow with checkpoint persistence.
+from __future__ import annotations
 
-Modules:
-    - graph.py: OmniGraph cognitive state machine
-    - state.py: GraphState TypedDict and StateCheckpointer
-    - orchestrator/: Dynamic graph building and dispatch
-    - skills/: Graph-based skill implementations
+from importlib import import_module
+from typing import Any
 
-Usage:
-    from omni.langgraph.graph import OmniGraph, get_graph
-    from omni.langgraph.orchestrator import DynamicGraphBuilder
+_EXPORTS: dict[str, tuple[str, str]] = {
+    "CompiledGraph": (".orchestrator", "CompiledGraph"),
+    "DynamicGraphBuilder": (".orchestrator", "DynamicGraphBuilder"),
+    "GraphInput": (".graph", "GraphInput"),
+    "GraphOutput": (".graph", "GraphOutput"),
+    "GraphState": (".state", "GraphState"),
+    "NodeMetadata": (".orchestrator", "NodeMetadata"),
+    "OmniGraph": (".graph", "OmniGraph"),
+    "StateCheckpointer": (".state", "StateCheckpointer"),
+    "VisualFormat": (".visualize", "VisualFormat"),
+    "build_execution_levels": (".parallel", "build_execution_levels"),
+    "create_initial_state": (".state", "create_initial_state"),
+    "dispatch_graph_mode": (".orchestrator", "dispatch_graph_mode"),
+    "execute_node": (".graph", "execute_node"),
+    "get_checkpointer": (".state", "get_checkpointer"),
+    "get_graph": (".graph", "get_graph"),
+    "list_workflows": (".visualize", "list_workflows"),
+    "merge_state": (".state", "merge_state"),
+    "plan_node": (".graph", "plan_node"),
+    "reflect_node": (".graph", "reflect_node"),
+    "register_workflow": (".visualize", "register_workflow"),
+    "reset_graph": (".graph", "reset_graph"),
+    "run_parallel_levels": (".parallel", "run_parallel_levels"),
+    "visualize_workflow": (".visualize", "visualize_workflow"),
+}
 
-    # Create a simple graph
-    graph = get_graph()
-    result = await graph.run(user_query="Fix bug", thread_id="session-123")
-"""
+__all__ = sorted(_EXPORTS)
 
-from omni.langgraph.graph import (
-    GraphInput,
-    GraphOutput,
-    OmniGraph,
-    execute_node,
-    get_graph,
-    plan_node,
-    reflect_node,
-    reset_graph,
-)
-from omni.langgraph.orchestrator import (
-    CompiledGraph,
-    DynamicGraphBuilder,
-    NodeMetadata,
-    dispatch_graph_mode,
-)
-from omni.langgraph.state import (
-    GraphState,
-    StateCheckpointer,
-    create_initial_state,
-    get_checkpointer,
-    merge_state,
-)
-from omni.langgraph.visualize import (
-    VisualFormat,
-    list_workflows,
-    register_workflow,
-    visualize_workflow,
-)
 
-__all__ = [
-    # Graph
-    "OmniGraph",
-    "get_graph",
-    "reset_graph",
-    "plan_node",
-    "execute_node",
-    "reflect_node",
-    "GraphInput",
-    "GraphOutput",
-    # State
-    "GraphState",
-    "StateCheckpointer",
-    "get_checkpointer",
-    "create_initial_state",
-    "merge_state",
-    # Orchestrator
-    "DynamicGraphBuilder",
-    "NodeMetadata",
-    "CompiledGraph",
-    "dispatch_graph_mode",
-    # Visualization
-    "VisualFormat",
-    "visualize_workflow",
-    "register_workflow",
-    "list_workflows",
-]
+def __getattr__(name: str) -> Any:
+    target = _EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module_name, attr_name = target
+    module = import_module(module_name, package=__name__)
+    value = getattr(module, attr_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

@@ -1,0 +1,28 @@
+[package]
+name = "omni-mcp-client"
+version.workspace = true
+edition.workspace = true
+description = "MCP client for omni-agent: connect to MCP servers via Streamable HTTP or stdio (ref: codex-rs)"
+authors = ["Omni-Dev-Fusion Team"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "process", "sync", "time"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+
+rmcp = { workspace = true }
+reqwest = { workspace = true }
+schemars = "1.0"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+# For mock MCP server in integration test (rmcp StreamableHttpService + axum)
+axum = "0.8"
+tokio-util = "0.7"
+
+[lints]
+workspace = true

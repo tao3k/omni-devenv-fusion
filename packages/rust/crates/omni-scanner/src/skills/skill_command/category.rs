@@ -1,12 +1,12 @@
 //! Category inference for script scanners.
 //!
 //! Provides sensible default categories when not explicitly specified
-//! in the @skill_command decorator.
+//! in the @`skill_command` decorator.
 
 /// Infer category from skill name using pattern matching.
 ///
 /// Provides a sensible default category when not explicitly specified
-/// in the @skill_command decorator.
+/// in the @`skill_command` decorator.
 ///
 /// # Arguments
 ///

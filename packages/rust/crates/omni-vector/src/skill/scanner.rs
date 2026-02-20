@@ -1,11 +1,11 @@
-//! SkillScannerModule - Skill manifest parsing from SKILL.md
+//! `SkillScannerModule` - Skill manifest parsing from `SKILL.md`.
 //!
 //! Scans skill directories to extract:
 //! - Skill name, version, description
-//! - routing_keywords for hybrid search
+//! - `routing_keywords` for hybrid search
 //! - Authors and intents
 //!
-//! Follows Anthropic official SKILL.md format:
+//! Follows Anthropic official `SKILL.md` format:
 //! ```yaml
 //! ---
 //! name: <skill-identifier>
@@ -65,6 +65,11 @@ impl SkillScannerModule {
     ///
     /// Returns `Ok(Some(manifest))` if SKILL.md is found and valid.
     /// Returns `Ok(None)` if SKILL.md is missing or invalid.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if reading `SKILL.md` from disk fails.
+    #[allow(clippy::unused_self)]
     pub fn scan_skill(
         &self,
         skill_path: &Path,
@@ -72,12 +77,12 @@ impl SkillScannerModule {
         let skill_md_path = skill_path.join("SKILL.md");
 
         if !skill_md_path.exists() {
-            log::debug!("SKILL.md not found for skill: {:?}", skill_path);
+            log::debug!("SKILL.md not found for skill: {}", skill_path.display());
             return Ok(None);
         }
 
         let content = fs::read_to_string(&skill_md_path)?;
-        let manifest = self.parse_skill_md(&content, skill_path)?;
+        let manifest = Self::parse_skill_md(&content, skill_path)?;
 
         log::info!(
             "Scanned skill manifest: {} (v{}) - {} keywords",
@@ -92,6 +97,11 @@ impl SkillScannerModule {
     /// Scan all skills in a base directory.
     ///
     /// Returns a vector of skill manifests for all skills with valid SKILL.md.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the base directory cannot be read.
+    #[allow(clippy::collapsible_if)]
     pub fn scan_all(
         &self,
         base_path: &Path,
@@ -99,7 +109,7 @@ impl SkillScannerModule {
         let mut manifests = Vec::new();
 
         if !base_path.exists() {
-            log::warn!("Skills base directory not found: {:?}", base_path);
+            log::warn!("Skills base directory not found: {}", base_path.display());
             return Ok(manifests);
         }
 
@@ -114,13 +124,16 @@ impl SkillScannerModule {
             }
         }
 
-        log::info!("Scanned {} skills from {:?}", manifests.len(), base_path);
+        log::info!(
+            "Scanned {} skills from {}",
+            manifests.len(),
+            base_path.display()
+        );
         Ok(manifests)
     }
 
     /// Parse YAML frontmatter from SKILL.md content.
     fn parse_skill_md(
-        &self,
         content: &str,
         skill_path: &Path,
     ) -> Result<SkillManifest, Box<dyn std::error::Error>> {
@@ -132,44 +145,41 @@ impl SkillScannerModule {
             .to_string();
 
         // Find YAML frontmatter (between first and second ---)
-        let frontmatter = match extract_frontmatter(content) {
-            Some(fm) => fm,
-            None => {
-                log::warn!("No YAML frontmatter found in SKILL.md for: {}", skill_name);
-                return Ok(SkillManifest {
-                    skill_name,
-                    version: String::new(),
-                    description: String::new(),
-                    routing_keywords: Vec::new(),
-                    authors: Vec::new(),
-                    intents: Vec::new(),
-                });
-            }
+        let Some(frontmatter) = extract_frontmatter(content) else {
+            log::warn!("No YAML frontmatter found in SKILL.md for: {skill_name}");
+            return Ok(SkillManifest {
+                skill_name,
+                version: String::new(),
+                description: String::new(),
+                routing_keywords: Vec::new(),
+                authors: Vec::new(),
+                intents: Vec::new(),
+            });
         };
 
         // Parse YAML frontmatter (Anthropic official format)
         let frontmatter_parsed: SkillFrontmatter = serde_yaml::from_str(&frontmatter)?;
 
         // Extract from metadata block (new format)
-        let (version, routing_keywords, authors, intents) = match &frontmatter_parsed.metadata {
-            Some(meta) => (
-                meta.version.clone().unwrap_or_default(),
-                meta.routing_keywords.clone().unwrap_or_default(),
-                // Support both "author" (single) and "authors" (multiple)
-                if let Some(authors_vec) = &meta.authors {
-                    authors_vec.clone()
-                } else if let Some(a) = &meta.author {
-                    vec![a.clone()]
-                } else {
-                    Vec::new()
-                },
-                meta.intents.clone().unwrap_or_default(),
-            ),
-            None => {
-                log::warn!("No metadata block found in SKILL.md for: {}", skill_name);
+        let (version, routing_keywords, authors, intents) =
+            if let Some(meta) = &frontmatter_parsed.metadata {
+                (
+                    meta.version.clone().unwrap_or_default(),
+                    meta.routing_keywords.clone().unwrap_or_default(),
+                    // Support both "author" (single) and "authors" (multiple)
+                    if let Some(authors_vec) = &meta.authors {
+                        authors_vec.clone()
+                    } else if let Some(a) = &meta.author {
+                        vec![a.clone()]
+                    } else {
+                        Vec::new()
+                    },
+                    meta.intents.clone().unwrap_or_default(),
+                )
+            } else {
+                log::warn!("No metadata block found in SKILL.md for: {skill_name}");
                 (String::new(), Vec::new(), Vec::new(), Vec::new())
-            }
-        };
+            };
 
         Ok(SkillManifest {
             skill_name,

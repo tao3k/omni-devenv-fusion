@@ -1,4 +1,4 @@
-//! Script Scanner - Parses Python scripts for @skill_command decorated functions.
+//! Script Scanner - Parses Python scripts for @`skill_command` decorated functions.
 //!
 //! Uses ast-grep for precise AST pattern matching to find functions
 //! decorated with `@skill_command`.
@@ -64,7 +64,7 @@ impl ToolsScanner {
         Self
     }
 
-    /// Scan a scripts directory for @skill_command decorated functions.
+    /// Scan a scripts directory for @`skill_command` decorated functions.
     ///
     /// # Arguments
     ///
@@ -75,6 +75,10 @@ impl ToolsScanner {
     /// # Returns
     ///
     /// A vector of `ToolRecord` objects representing discovered tools.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when script parsing fails for any scanned Python file.
     ///
     /// # Examples
     ///
@@ -96,14 +100,14 @@ impl ToolsScanner {
         let mut tools = Vec::new();
 
         if !scripts_dir.exists() {
-            log::debug!("Scripts directory not found: {:?}", scripts_dir);
+            log::debug!("Scripts directory not found: {}", scripts_dir.display());
             return Ok(tools);
         }
 
         for entry in WalkDir::new(scripts_dir)
             .follow_links(false)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
         {
             let path = entry.path();
 
@@ -112,7 +116,7 @@ impl ToolsScanner {
             }
 
             // Only scan Python files
-            if path.extension().map_or(false, |ext| ext != "py") {
+            if path.extension().is_none_or(|ext| ext != "py") {
                 continue;
             }
 
@@ -126,9 +130,9 @@ impl ToolsScanner {
                 self.parse_script(path, skill_name, skill_keywords, skill_intents)?;
             if !parsed_tools.is_empty() {
                 log::debug!(
-                    "ToolsScanner: Found {} tools in {:?}",
+                    "ToolsScanner: Found {} tools in {}",
                     parsed_tools.len(),
-                    path
+                    path.display()
                 );
             }
             tools.extend(parsed_tools);
@@ -136,10 +140,9 @@ impl ToolsScanner {
 
         if !tools.is_empty() {
             log::info!(
-                "Scanned {} tools from {:?} for skill '{}'",
+                "Scanned {} tools from {} for skill '{skill_name}'",
                 tools.len(),
-                scripts_dir,
-                skill_name
+                scripts_dir.display()
             );
         }
 
@@ -161,6 +164,10 @@ impl ToolsScanner {
     /// # Returns
     ///
     /// A vector of `ToolRecord` objects.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when script parsing fails.
     pub fn scan_skill_scripts(
         &self,
         skill_path: &Path,
@@ -188,6 +195,10 @@ impl ToolsScanner {
     /// # Returns
     ///
     /// A vector of `ToolRecord` objects from all scanned directories.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when scanning any configured scripts directory fails.
     pub fn scan_with_structure(
         &self,
         skill_path: &Path,
@@ -215,7 +226,7 @@ impl ToolsScanner {
 
     /// Parse a single script file for tool definitions.
     ///
-    /// Uses tree-sitter for robust parsing of @skill_command decorated functions
+    /// Uses tree-sitter for robust parsing of @`skill_command` decorated functions
     /// with proper handling of triple-quoted strings in decorator arguments.
     ///
     /// # Arguments
@@ -235,6 +246,7 @@ impl ToolsScanner {
         skill_keywords: &[String],
         skill_intents: &[String],
     ) -> Result<Vec<ToolRecord>, Box<dyn std::error::Error>> {
+        let _ = self;
         // Use read_to_string first, fall back to lossy reading for non-UTF-8 files
         let content = match fs::read_to_string(path) {
             Ok(content) => content,
@@ -245,7 +257,7 @@ impl ToolsScanner {
                     Err(_) => {
                         return Err(Box::new(std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
-                            format!("Failed to read file as UTF-8: {}", e),
+                            format!("Failed to read file as UTF-8: {e}"),
                         )));
                     }
                 }
@@ -267,9 +279,9 @@ impl ToolsScanner {
 
         if !decorated_funcs.is_empty() {
             log::debug!(
-                "ToolsScanner: Found {} @skill_command decorated functions in {:?}",
+                "ToolsScanner: Found {} @skill_command decorated functions in {}",
                 decorated_funcs.len(),
-                path
+                path.display()
             );
         }
 
@@ -299,7 +311,7 @@ impl ToolsScanner {
             let description = match decorator_args.and_then(|a| a.description.clone()) {
                 Some(desc) => desc,
                 None if !docstring.is_empty() => docstring.clone(),
-                _ => format!("Execute {}.{}", skill_name, tool_name),
+                _ => format!("Execute {skill_name}.{tool_name}"),
             };
 
             // Build category
@@ -335,14 +347,14 @@ impl ToolsScanner {
             let annotations = build_annotations(&decorator_args, &func.name, &parameters);
 
             // Generate input_schema from parameters with description for param docs
-            let input_schema = self.generate_input_schema(&parameters, &description);
+            let input_schema = Self::generate_input_schema(&parameters, &description);
 
             // Combine keywords
             let mut combined_keywords = vec![skill_name.to_string(), tool_name.clone()];
             combined_keywords.extend(skill_keywords.iter().cloned());
 
             tools.push(ToolRecord::with_enrichment(
-                format!("{}.{}", skill_name, tool_name),
+                format!("{skill_name}.{tool_name}"),
                 description,
                 skill_name.to_string(),
                 file_path.clone(),
@@ -354,7 +366,7 @@ impl ToolsScanner {
                 docstring,
                 category,
                 annotations,
-                parameters,
+                &parameters,
                 input_schema,
                 Vec::new(), // skill_tools_refers filled from markdown front matter (references/*.md for_tools), not decorator
                 resource_uri.unwrap_or_default(),
@@ -368,9 +380,9 @@ impl ToolsScanner {
     ///
     /// # Arguments
     ///
-    /// * `parameters` - List of ParsedParameter with type and default info
+    /// * `parameters` - List of `ParsedParameter` with type and default info
     /// * `description` - Full decorator description for extracting param descriptions
-    fn generate_input_schema(&self, parameters: &[ParsedParameter], description: &str) -> String {
+    fn generate_input_schema(parameters: &[ParsedParameter], description: &str) -> String {
         // Extract parameter descriptions from the decorator description
         let param_descriptions = extract_param_descriptions(description);
 
@@ -403,7 +415,7 @@ impl ToolsScanner {
             Vec::new()
         };
 
-        for param in parameters.iter() {
+        for param in parameters {
             // Use extracted description or fallback to placeholder
             let desc = if let Some(d) = param_descriptions.get(&param.name) {
                 d.clone()
@@ -429,7 +441,7 @@ impl ToolsScanner {
 
         // Output collected debug info (only if debug logging is enabled)
         if !param_debug_info.is_empty() {
-            log::debug!("Param processing: {:?}", param_debug_info);
+            log::debug!("Param processing: {param_debug_info:?}");
         }
 
         let schema = serde_json::json!({
@@ -443,7 +455,7 @@ impl ToolsScanner {
 
     /// Parse script content directly without reading from disk.
     ///
-    /// Uses tree-sitter for robust parsing of @skill_command decorated functions
+    /// Uses tree-sitter for robust parsing of @`skill_command` decorated functions
     /// with proper handling of triple-quoted strings in decorator arguments.
     ///
     /// # Arguments
@@ -457,6 +469,10 @@ impl ToolsScanner {
     /// # Returns
     ///
     /// A vector of `ToolRecord` objects with enriched metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `file_path` is empty.
     pub fn parse_content(
         &self,
         content: &str,
@@ -465,6 +481,11 @@ impl ToolsScanner {
         skill_keywords: &[String],
         skill_intents: &[String],
     ) -> Result<Vec<ToolRecord>, Box<dyn std::error::Error>> {
+        let _ = self;
+        if file_path.trim().is_empty() {
+            return Err("file_path cannot be empty".into());
+        }
+
         let mut tools = Vec::new();
 
         // Compute SHA256 hash for incremental indexing
@@ -512,7 +533,7 @@ impl ToolsScanner {
             let description = match decorator_args.and_then(|a| a.description.clone()) {
                 Some(desc) => desc,
                 None if !docstring.is_empty() => docstring.clone(),
-                _ => format!("Execute {}.{}", skill_name, tool_name),
+                _ => format!("Execute {skill_name}.{tool_name}"),
             };
 
             // Build category
@@ -548,14 +569,14 @@ impl ToolsScanner {
             let annotations = build_annotations(&decorator_args, &func.name, &parameters);
 
             // Generate input_schema from parameters with description for param docs
-            let input_schema = self.generate_input_schema(&parameters, &description);
+            let input_schema = Self::generate_input_schema(&parameters, &description);
 
             // Combine keywords
             let mut combined_keywords = vec![skill_name.to_string(), tool_name.clone()];
             combined_keywords.extend(skill_keywords.iter().cloned());
 
             tools.push(ToolRecord::with_enrichment(
-                format!("{}.{}", skill_name, tool_name),
+                format!("{skill_name}.{tool_name}"),
                 description,
                 skill_name.to_string(),
                 file_path.to_string(),
@@ -567,7 +588,7 @@ impl ToolsScanner {
                 docstring,
                 category,
                 annotations,
-                parameters,
+                &parameters,
                 input_schema,
                 Vec::new(), // skill_tools_refers filled from markdown front matter (references/*.md for_tools), not decorator
                 resource_uri.unwrap_or_default(),
@@ -587,7 +608,7 @@ impl ToolsScanner {
     ///
     /// # Arguments
     ///
-    /// * `files` - Vector of tuples: (file_path: String, content: String)
+    /// * `files` - Vector of tuples: (`file_path`: String, content: String)
     /// * `skill_name` - Name of the parent skill
     /// * `skill_keywords` - Routing keywords from SKILL.md
     /// * `skill_intents` - Intents from SKILL.md
@@ -595,6 +616,10 @@ impl ToolsScanner {
     /// # Returns
     ///
     /// A vector of `ToolRecord` objects from all scanned files.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when parsing any file content fails.
     ///
     /// # Examples
     ///
@@ -638,7 +663,10 @@ impl ToolsScanner {
             }
 
             // Only process Python files
-            if !file_path.ends_with(".py") {
+            if !std::path::Path::new(file_path)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("py"))
+            {
                 continue;
             }
 

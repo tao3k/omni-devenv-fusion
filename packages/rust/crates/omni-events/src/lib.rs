@@ -18,7 +18,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
@@ -50,11 +50,13 @@ impl OmniEvent {
     }
 
     /// Create a simple string payload event
+    #[must_use]
     pub fn with_string(source: &str, topic: &str, message: &str) -> Self {
         Self::new(source, topic, json!({ "message": message }))
     }
 
     /// Create a file-related event
+    #[must_use]
     pub fn file_event(source: &str, topic: &str, path: &str, is_dir: bool) -> Self {
         Self::new(source, topic, json!({ "path": path, "is_dir": is_dir }))
     }
@@ -89,12 +91,14 @@ pub struct EventBus {
 
 impl EventBus {
     /// Create a new event bus with specified capacity
+    #[must_use]
     pub fn new(capacity: usize) -> Self {
         let (tx, _) = broadcast::channel(capacity);
         Self { tx, capacity }
     }
 
     /// Get the bus capacity
+    #[must_use]
     pub fn capacity(&self) -> usize {
         self.capacity
     }
@@ -103,11 +107,13 @@ impl EventBus {
     ///
     /// Returns the number of subscribers who received the event.
     /// Returns 0 if there are no subscribers (not an error).
+    #[must_use]
     pub fn publish(&self, event: OmniEvent) -> usize {
         self.tx.send(event).unwrap_or(0)
     }
 
     /// Publish an event with topic and payload convenience
+    #[must_use]
     pub fn emit(&self, source: &str, topic: &str, payload: Value) -> usize {
         self.publish(OmniEvent::new(source, topic, payload))
     }
@@ -116,20 +122,20 @@ impl EventBus {
     ///
     /// Returns a receiver that will receive all future events.
     /// Dropping the receiver automatically unsubscribes.
+    #[must_use]
     pub fn subscribe(&self) -> broadcast::Receiver<OmniEvent> {
         self.tx.subscribe()
     }
 
     /// Get current subscriber count
+    #[must_use]
     pub fn subscriber_count(&self) -> usize {
         self.tx.receiver_count()
     }
 }
 
-lazy_static::lazy_static! {
-    /// Global event bus singleton
-    pub static ref GLOBAL_BUS: Arc<EventBus> = Arc::new(EventBus::new(2048));
-}
+/// Global event bus singleton
+pub static GLOBAL_BUS: LazyLock<Arc<EventBus>> = LazyLock::new(|| Arc::new(EventBus::new(2048)));
 
 /// Convenience function to publish to the global bus
 pub fn publish(source: &str, topic: &str, payload: Value) {
@@ -139,10 +145,11 @@ pub fn publish(source: &str, topic: &str, payload: Value) {
 
 /// Convenience function to emit to the global bus
 pub fn emit(source: &str, topic: &str, payload: Value) {
-    GLOBAL_BUS.emit(source, topic, payload);
+    let _ = GLOBAL_BUS.emit(source, topic, payload);
 }
 
 /// Get a subscriber for the global bus
+#[must_use]
 pub fn subscribe() -> broadcast::Receiver<OmniEvent> {
     GLOBAL_BUS.subscribe()
 }

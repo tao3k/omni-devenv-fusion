@@ -16,7 +16,7 @@ fn generate_python_file(line_count: usize) -> String {
     // Add classes with methods
     for i in 0..(line_count / 30) {
         content.push_str(&format!(
-            r#"class Class{i} {{
+            r#"class Class{i}:
     """A sample class for benchmarking."""
 
     def __init__(self, name: str, value: int):

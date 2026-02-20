@@ -77,7 +77,10 @@ def get_server(verbose: bool = False) -> MCPServer:
         result = await handler.handle_request(
             {"method": "tools/list", "params": params, "id": None}
         )
-        log.info(
+        if result.get("error") is not None:
+            err = result["error"]
+            raise ValueError(err.get("message", "tools/list failed"))
+        log.debug(
             f"[MCP] tools/list returned {len(result.get('result', {}).get('tools', []))} tools"
         )
         return result.get("result", {})

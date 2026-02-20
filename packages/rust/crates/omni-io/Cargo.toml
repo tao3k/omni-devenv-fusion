@@ -3,6 +3,9 @@ name = "omni-io"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 thiserror = { workspace = true }
 memchr = { workspace = true }

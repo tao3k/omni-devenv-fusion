@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import socket
+import time
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -24,6 +24,7 @@ from rich.table import Table
 from omni.foundation.utils.asyncio import run_async_blocking
 
 from ..console import err_console
+from ..mcp_embed import detect_mcp_port, make_mcp_embed_func
 
 route_app = typer.Typer(
     name="route",
@@ -32,8 +33,6 @@ route_app = typer.Typer(
 
 console = Console()
 
-# Default embedding HTTP server port
-EMBEDDING_HTTP_PORT = 18501
 ROUTE_TEST_SCHEMA_V1 = "omni.router.route_test.v1"
 
 
@@ -140,8 +139,12 @@ def _build_route_test_json_payload(
 async def _select_confidence_profile(
     query: str,
     explicit_profile_name: str | None,
+    *,
+    skip_llm: bool = False,
 ) -> tuple[dict[str, float] | None, str | None, str]:
-    """Select confidence profile (explicit > LLM auto > active_profile fallback)."""
+    """Select confidence profile (explicit > LLM auto > active_profile fallback).
+    When skip_llm is True, use active_profile without calling the LLM (fast path for route test).
+    """
     if explicit_profile_name:
         selected = _load_named_confidence_profile(explicit_profile_name)
         if selected is None:
@@ -155,7 +158,8 @@ async def _select_confidence_profile(
     names = list(config.profiles.keys())
     active_profile = config.active_profile
     auto_select = config.auto_profile_select
-    if not auto_select:
+
+    if not auto_select or skip_llm:
         selected = _load_named_confidence_profile(active_profile)
         if selected is not None:
             return selected, active_profile, "active-profile"
@@ -196,139 +200,6 @@ async def _select_confidence_profile(
     return _load_named_confidence_profile(fallback_name), fallback_name, "first-profile"
 
 
-async def _embed_via_http(
-    texts: list[str], port: int = EMBEDDING_HTTP_PORT
-) -> list[list[float]] | None:
-    """Get embeddings via embedding HTTP server.
-
-    Args:
-        texts: List of texts to embed
-        port: Embedding HTTP server port (default: 18501)
-
-    Returns None if server is not available.
-    """
-    try:
-        import httpx
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                f"http://127.0.0.1:{port}/embed/batch",
-                json={"texts": texts},
-            )
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("vectors")
-            return None
-    except Exception:
-        return None
-
-
-async def _detect_embedding_server() -> int:
-    """Detect if embedding HTTP server is running.
-
-    Checks if port 18501 is available and responds to health check.
-    Returns the port number if server is running, 0 otherwise.
-    """
-    # First check if port is in use
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(1)
-    try:
-        result = sock.connect_ex(("127.0.0.1", EMBEDDING_HTTP_PORT))
-        if result != 0:
-            return 0  # Port not in use
-    except Exception:
-        return 0
-    finally:
-        sock.close()
-
-    # Port is in use, try health check
-    try:
-        import httpx
-
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            response = await client.get(f"http://127.0.0.1:{EMBEDDING_HTTP_PORT}/health")
-            if response.status_code == 200:
-                return EMBEDDING_HTTP_PORT
-    except Exception:
-        pass
-
-    return 0
-
-
-async def _embed_via_mcp(texts: list[str], port: int = 3001) -> list[list[float]] | None:
-    """Try to get embeddings via MCP server.
-
-    Args:
-        texts: List of texts to embed
-        port: MCP server port (default: 3001)
-
-    Returns None if MCP server is not available.
-    """
-    try:
-        import httpx
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            request = {
-                "jsonrpc": "2.0",
-                "id": "route-test",
-                "method": "tools/call",
-                "params": {
-                    "name": "embedding.embed_texts",
-                    "arguments": {"texts": texts},
-                },
-            }
-            response = await client.post(
-                f"http://127.0.0.1:{port}/message",
-                json=request,
-                headers={"Content-Type": "application/json"},
-            )
-            response.raise_for_status()
-            result = response.json()
-
-            if "result" in result and result["result"]:
-                content = result["result"].get("content", [])
-                if content and isinstance(content, list):
-                    text_content = content[0].get("text", "")
-                    if text_content:
-                        data = json.loads(text_content)
-                        if data.get("success"):
-                            return data.get("vectors")
-            return None
-    except Exception:
-        return None
-
-
-async def _detect_mcp_port() -> int:
-    """Detect the MCP server port for embedding.
-
-    Tries embedding HTTP server (18501) first, then MCP ports (3001, 3000).
-    Returns the port number that responds successfully.
-    """
-    # First check embedding HTTP server
-    embedding_port = await _detect_embedding_server()
-    if embedding_port > 0:
-        return embedding_port
-
-    # Fall back to MCP ports
-    for port in [3001, 3000]:
-        vectors = await _embed_via_mcp(["[DETECT]"], port=port)
-        if vectors is not None:
-            return port
-
-    return 0  # No server available
-
-
-async def _embed_via_local_only(texts: list[str]) -> list[list[float]]:
-    """Embed using local model only (no MCP/HTTP). Dimension matches index from omni sync."""
-    from omni.foundation.services.embedding import get_embedding_service
-
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None,
-        lambda: get_embedding_service().embed_force_local(texts),
-    )
-
-
 @route_app.command("test")
 def test_route(
     query: str = typer.Argument(..., help="User intent to route"),
@@ -358,6 +229,11 @@ def test_route(
         "-e",
         help="With --json, add per-result score breakdown (raw_rrf, vector_score, keyword_score, final_score)",
     ),
+    timing: bool = typer.Option(
+        False,
+        "--timing",
+        help="Print per-phase timing breakdown (profile, store_init, dimension_warm, search).",
+    ),
 ) -> None:
     """
     Test hybrid routing for a required query intent.
@@ -371,6 +247,7 @@ def test_route(
         omni route test "search python symbols" --threshold 0.45 --number 5
         omni route test "refactor rust module" --debug
     """
+    t_cmd_start = time.perf_counter()
     try:
         from omni.core.router.hybrid_search import HybridSearch
     except ImportError as e:
@@ -380,9 +257,16 @@ def test_route(
     default_limit, default_threshold = _load_route_test_defaults()
     resolved_limit = default_limit if limit is None else limit
     resolved_threshold = default_threshold if threshold is None else threshold
+    # Fast path: when no explicit --confidence-profile, use active_profile without LLM (saves ~1–2s).
+    t0 = time.perf_counter()
     confidence_profile, selected_profile_name, selected_profile_source = run_async_blocking(
-        _select_confidence_profile(query, confidence_profile_name)
+        _select_confidence_profile(
+            query, confidence_profile_name, skip_llm=(confidence_profile_name is None)
+        )
     )
+    t_profile = time.perf_counter() - t0
+    if timing and not json_output:
+        console.print(f"[dim]Timing: profile_select={t_profile:.3f}s[/dim]")
     if confidence_profile_name and confidence_profile is None:
         available = ", ".join(_available_confidence_profiles()) or "(none configured)"
         err_console.print(
@@ -402,12 +286,12 @@ def test_route(
                 f"[yellow]Index dimension mismatch (index={status.index_dim}, current={status.current_dim}). Reindexing skills...[/yellow]"
             )
         try:
-            from omni.agent.cli.commands.reindex import (
-                _reindex_skills_only,
+            from omni.agent.services.reindex import (
+                reindex_skills_only,
                 _write_embedding_signature,
             )
 
-            reindex_result = _reindex_skills_only(clear=True)
+            reindex_result = reindex_skills_only(clear=True)
             if reindex_result.get("status") == "success":
                 _write_embedding_signature()
                 if not json_output:
@@ -420,17 +304,20 @@ def test_route(
                 err_console.print(f"[red]Dimension repair failed: {e}[/]")
         return False
 
-    async def _warm_embed_service() -> None:
-        """Trigger embedding service init in executor so first real embed() is fast."""
-        from omni.foundation.services.embedding import get_embedding_service
-
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, lambda: get_embedding_service().embed("_warm_"))
-
     async def run_test():
+        t_run0 = time.perf_counter()
         search = HybridSearch()
-
-        await asyncio.gather(_ensure_dimension_aligned(), _warm_embed_service())
+        t_store = time.perf_counter()
+        # Prefer MCP embedding so we use the already-warm model in the MCP process (fast); fall back to direct Ollama.
+        mcp_port = await detect_mcp_port()
+        if mcp_port > 0:
+            search._embed_func = make_mcp_embed_func(mcp_port)
+            if not json_output:
+                console.print(
+                    f"[dim]Using MCP embedding (port {mcp_port}) for fast warm path.[/dim]"
+                )
+        # Skip upfront dimension check (~1.2s embed) on hot path; run it only when results are empty (fallback below).
+        t_dim = time.perf_counter()
 
         if not json_output:
             console.print(f"[dim]Searching for: '{query}'[/dim]")
@@ -438,13 +325,55 @@ def test_route(
                 console.print(
                     f"[dim]Confidence profile: {selected_profile_name} ({selected_profile_source})[/dim]"
                 )
+            console.print(
+                f"[dim]Search params: limit={resolved_limit}, min_score={resolved_threshold} "
+                "(results with score < min_score are filtered)[/dim]"
+            )
+        record_timings: dict[str, float] | None = {} if (timing and not json_output) else None
+        # When timing: measure first touch of Rust store (cold cache may open DB; warm cache reuses).
+        if record_timings is not None:
+            _t0 = time.perf_counter()
+            _loop = asyncio.get_running_loop()
+            await _loop.run_in_executor(None, lambda: search._store._inner.get_table_info("skills"))
+            record_timings["store_first_touch_s"] = time.perf_counter() - _t0
         results = await search.search(
             query=query,
             limit=resolved_limit,
             min_score=resolved_threshold,
             confidence_profile=confidence_profile,
             skip_translation=True,
+            record_timings=record_timings,
         )
+        t_search = time.perf_counter()
+        if timing and not json_output and record_timings is not None:
+            store_touch_s = record_timings.get("store_first_touch_s", 0.0)
+            pre_embed_s = record_timings.get("pre_embed_s", 0.0)
+            embed_s = record_timings.get("embed_s", 0.0)
+            intent_fusion_s = record_timings.get("intent_fusion_s", 0.0)
+            rust_s = record_timings.get("rust_s", 0.0)
+            post_rust_s = record_timings.get("post_rust_s", 0.0)
+            run_test_total = t_search - t_run0
+            # Build step table (order = execution order)
+            steps = [
+                ("store_init", t_store - t_run0, "HybridSearch + get_vector_store"),
+                ("store_first_touch", store_touch_s, "Rust DB get_table_info"),
+                ("pre_embed", pre_embed_s, "translate, normalize, intent_text"),
+                ("embed", embed_s, "Ollama/LiteLLM query embedding"),
+                ("intent_fusion", intent_fusion_s, "intent classification, fusion weights"),
+                ("rust", rust_s, "Rust agentic_search (vector+keyword)"),
+                ("post_rust", post_rust_s, "format, rerank, recalibrate"),
+            ]
+            console.print("[dim]Timing breakdown (--timing):[/dim]")
+            for name, sec, desc in steps:
+                pct = (100 * sec / run_test_total) if run_test_total else 0
+                console.print(f"  [dim]{name:16} {sec:.3f}s ({pct:4.0f}%)  {desc}[/dim]")
+            console.print(f"  [dim]{'run_test total':16} {run_test_total:.3f}s[/dim]")
+            # Hint: largest cost
+            worst = max(steps, key=lambda x: x[1])
+            if worst[1] > 0.1:
+                console.print(
+                    f"[yellow]  → Largest: {worst[0]} ({worst[1]:.3f}s) — {worst[2]}. Optimize this step first.[/yellow]"
+                )
         # Fallback: when threshold filters everything, retry with 0 so routing still returns top-k from skills DB
         if not results and resolved_threshold > 0.0:
             results = await search.search(
@@ -466,12 +395,12 @@ def test_route(
                         f"[yellow]Index dimension mismatch (index={status.index_dim}, current={status.current_dim}). Reindexing skills...[/yellow]"
                     )
                 try:
-                    from omni.agent.cli.commands.reindex import (
-                        _reindex_skills_only,
+                    from omni.agent.services.reindex import (
+                        reindex_skills_only,
                         _write_embedding_signature,
                     )
 
-                    reindex_result = _reindex_skills_only(clear=True)
+                    reindex_result = reindex_skills_only(clear=True)
                     if reindex_result.get("status") == "success":
                         _write_embedding_signature()
                         results = await search.search(
@@ -623,7 +552,15 @@ def test_route(
             f"\n[dim]Search weights: semantic={stats['semantic_weight']}, keyword={stats['keyword_weight']}[/dim]"
         )
 
+    t_before_run = time.perf_counter()
     run_async_blocking(run_test())
+    t_after_run = time.perf_counter()
+    if timing and not json_output:
+        command_setup_s = t_before_run - t_cmd_start
+        total_cmd_s = t_after_run - t_cmd_start
+        console.print(
+            f"[dim]  command_setup (before run_test) {command_setup_s:.3f}s  |  total command {total_cmd_s:.3f}s[/dim]"
+        )
 
 
 @route_app.command("stats")
@@ -743,7 +680,7 @@ def route_schema(
         Panel.fit(
             f"[bold]Router Search Schema Exported[/]\n\n"
             f"Path: [cyan]{output_path}[/]\n"
-            f"Resolution: [dim]settings.yaml + --conf override[/dim]",
+            f"Resolution: [dim]packages/conf/settings.yaml + user settings / --conf override[/dim]",
             title="Router Schema",
             border_style="green",
         )
@@ -752,6 +689,9 @@ def route_schema(
 
 def register_route_command(parent_app: typer.Typer) -> None:
     """Register the route command with the parent app."""
+    from omni.agent.cli.load_requirements import register_requirements
+
+    register_requirements("route", ollama=False)
     parent_app.add_typer(route_app, name="route")
 
 

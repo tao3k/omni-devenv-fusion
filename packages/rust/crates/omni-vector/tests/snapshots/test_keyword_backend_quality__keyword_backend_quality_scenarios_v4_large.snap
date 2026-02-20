@@ -1,5 +1,6 @@
 ---
 source: packages/rust/crates/omni-vector/tests/test_keyword_backend_quality.rs
+assertion_line: 1192
 expression: report
 ---
 {
@@ -579,7 +580,7 @@ expression: report
     },
     {
       "matched_relevant": [
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.7453",
@@ -588,13 +589,13 @@ expression: report
       "r_at_5": "0.3333",
       "scene": "exact_keyword",
       "success_at_1": "1.0000",
-      "text": "knowledge zk hybrid",
-      "top1": "knowledge.zk_hybrid_search"
+      "text": "knowledge link_graph hybrid",
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
         "knowledge.dependency_search",
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "0.5000",
       "ndcg_at_5": "0.5741",
@@ -608,7 +609,7 @@ expression: report
     },
     {
       "matched_relevant": [
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.7453",
@@ -618,11 +619,11 @@ expression: report
       "scene": "bilingual_mix",
       "success_at_1": "1.0000",
       "text": "knowledge 中文 场景 find related notes",
-      "top1": "knowledge.zk_hybrid_search"
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.7453",
@@ -631,12 +632,12 @@ expression: report
       "r_at_5": "0.3333",
       "scene": "workflow_ambiguous",
       "success_at_1": "1.0000",
-      "text": "run knowledge workflow zk",
-      "top1": "knowledge.zk_hybrid_search"
+      "text": "run knowledge workflow link_graph",
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
-        "knowledge.zk_hybrid_search",
+        "knowledge.link_graph_hybrid_search",
         "skill.discover"
       ],
       "mrr_rr": "1.0000",
@@ -647,11 +648,11 @@ expression: report
       "scene": "tool_discovery",
       "success_at_1": "1.0000",
       "text": "discover right tool for knowledge hybrid",
-      "top1": "knowledge.zk_hybrid_search"
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.7453",
@@ -660,12 +661,12 @@ expression: report
       "r_at_5": "0.3333",
       "scene": "ops_short",
       "success_at_1": "1.0000",
-      "text": "knowledge zk",
-      "top1": "knowledge.zk_hybrid_search"
+      "text": "knowledge link_graph",
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.7453",
@@ -675,11 +676,11 @@ expression: report
       "scene": "troubleshooting",
       "success_at_1": "1.0000",
       "text": "fix issue with knowledge and hybrid",
-      "top1": "knowledge.zk_hybrid_search"
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "0.5000",
       "ndcg_at_5": "0.4702",
@@ -688,12 +689,12 @@ expression: report
       "r_at_5": "0.3333",
       "scene": "planning",
       "success_at_1": "0.0000",
-      "text": "plan task using find related notes zk",
+      "text": "plan task using find related notes link_graph",
       "top1": "crawl4ai.crawl_url"
     },
     {
       "matched_relevant": [
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.7453",
@@ -703,11 +704,11 @@ expression: report
       "scene": "audit",
       "success_at_1": "1.0000",
       "text": "audit and verify knowledge find related notes",
-      "top1": "knowledge.zk_hybrid_search"
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.7453",
@@ -716,8 +717,8 @@ expression: report
       "r_at_5": "0.3333",
       "scene": "automation",
       "success_at_1": "1.0000",
-      "text": "automate knowledge zk pipeline",
-      "top1": "knowledge.zk_hybrid_search"
+      "text": "automate knowledge link_graph pipeline",
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
@@ -1804,7 +1805,7 @@ expression: report
       "queries": 12,
       "scene": "tool_discovery",
       "tantivy": {
-        "mean_ndcg_at_5": "0.7153",
+        "mean_ndcg_at_5": "0.7196",
         "mean_p_at_5": "0.4333",
         "mean_r_at_5": "0.9444"
       }
@@ -1847,7 +1848,7 @@ expression: report
       "success_at_1": "0.9083"
     },
     "tantivy": {
-      "mean_ndcg_at_5": "0.8795",
+      "mean_ndcg_at_5": "0.8799",
       "mean_p_at_5": "0.2967",
       "mean_r_at_5": "0.6500",
       "mrr": "0.9958",
@@ -1919,7 +1920,7 @@ expression: report
         "skill.discover"
       ],
       "mrr_rr": "1.0000",
-      "ndcg_at_5": "0.5510",
+      "ndcg_at_5": "0.6026",
       "p_at_5": "0.6000",
       "query": "v4_0_4_tool_discovery",
       "r_at_5": "1.0000",
@@ -2421,7 +2422,7 @@ expression: report
     {
       "matched_relevant": [
         "knowledge.dependency_search",
-        "knowledge.zk_hybrid_search",
+        "knowledge.link_graph_hybrid_search",
         "skill.discover"
       ],
       "mrr_rr": "1.0000",
@@ -2451,7 +2452,7 @@ expression: report
     {
       "matched_relevant": [
         "knowledge.dependency_search",
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9468",
@@ -2460,13 +2461,13 @@ expression: report
       "r_at_5": "0.6667",
       "scene": "exact_keyword",
       "success_at_1": "1.0000",
-      "text": "knowledge zk hybrid",
-      "top1": "knowledge.zk_hybrid_search"
+      "text": "knowledge link_graph hybrid",
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
         "knowledge.dependency_search",
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.8688",
@@ -2476,12 +2477,12 @@ expression: report
       "scene": "intent_phrase",
       "success_at_1": "1.0000",
       "text": "find related notes semantic notebook search",
-      "top1": "knowledge.zk_hybrid_search"
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
         "knowledge.dependency_search",
-        "knowledge.zk_hybrid_search",
+        "knowledge.link_graph_hybrid_search",
         "skill.discover"
       ],
       "mrr_rr": "1.0000",
@@ -2492,12 +2493,12 @@ expression: report
       "scene": "bilingual_mix",
       "success_at_1": "1.0000",
       "text": "knowledge 中文 场景 find related notes",
-      "top1": "knowledge.zk_hybrid_search"
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
         "knowledge.dependency_search",
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9468",
@@ -2506,13 +2507,13 @@ expression: report
       "r_at_5": "0.6667",
       "scene": "workflow_ambiguous",
       "success_at_1": "1.0000",
-      "text": "run knowledge workflow zk",
-      "top1": "knowledge.zk_hybrid_search"
+      "text": "run knowledge workflow link_graph",
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
         "knowledge.dependency_search",
-        "knowledge.zk_hybrid_search",
+        "knowledge.link_graph_hybrid_search",
         "skill.discover"
       ],
       "mrr_rr": "1.0000",
@@ -2528,7 +2529,7 @@ expression: report
     {
       "matched_relevant": [
         "knowledge.dependency_search",
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9468",
@@ -2537,13 +2538,13 @@ expression: report
       "r_at_5": "0.6667",
       "scene": "ops_short",
       "success_at_1": "1.0000",
-      "text": "knowledge zk",
-      "top1": "knowledge.zk_hybrid_search"
+      "text": "knowledge link_graph",
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
         "knowledge.dependency_search",
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9049",
@@ -2553,11 +2554,11 @@ expression: report
       "scene": "troubleshooting",
       "success_at_1": "1.0000",
       "text": "fix issue with knowledge and hybrid",
-      "top1": "knowledge.zk_hybrid_search"
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
-        "knowledge.zk_hybrid_search",
+        "knowledge.link_graph_hybrid_search",
         "skill.discover"
       ],
       "mrr_rr": "1.0000",
@@ -2567,13 +2568,13 @@ expression: report
       "r_at_5": "0.6667",
       "scene": "planning",
       "success_at_1": "1.0000",
-      "text": "plan task using find related notes zk",
-      "top1": "knowledge.zk_hybrid_search"
+      "text": "plan task using find related notes link_graph",
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
         "knowledge.dependency_search",
-        "knowledge.zk_hybrid_search",
+        "knowledge.link_graph_hybrid_search",
         "skill.discover"
       ],
       "mrr_rr": "1.0000",
@@ -2584,12 +2585,12 @@ expression: report
       "scene": "audit",
       "success_at_1": "1.0000",
       "text": "audit and verify knowledge find related notes",
-      "top1": "knowledge.zk_hybrid_search"
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [
         "knowledge.dependency_search",
-        "knowledge.zk_hybrid_search"
+        "knowledge.link_graph_hybrid_search"
       ],
       "mrr_rr": "1.0000",
       "ndcg_at_5": "0.9468",
@@ -2598,8 +2599,8 @@ expression: report
       "r_at_5": "0.6667",
       "scene": "automation",
       "success_at_1": "1.0000",
-      "text": "automate knowledge zk pipeline",
-      "top1": "knowledge.zk_hybrid_search"
+      "text": "automate knowledge link_graph pipeline",
+      "top1": "knowledge.link_graph_hybrid_search"
     },
     {
       "matched_relevant": [

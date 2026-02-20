@@ -1,10 +1,9 @@
 """Tests for dual_core.py - Dual-Core Knowledge Fusion Engine.
 
-Tests the four bridges that connect Core 1 (ZK) and Core 2 (LanceDB):
-1. ZK Link Proximity Boost for recall results
-2. LanceDB vector search function for ZK hybrid search
-3. ZK entity graph enrichment for router skill relationships
-4. Shared Entity Registry: skill docs → KnowledgeGraph (omni sync hook)
+Tests the four bridges that connect Core 1 (LinkGraph) and Core 2 (LanceDB):
+1. LinkGraph proximity boost for recall results
+2. Entity graph enrichment for router skill relationships
+3. Shared Entity Registry: skill docs -> KnowledgeGraph (omni sync hook)
 """
 
 from __future__ import annotations
@@ -12,20 +11,19 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import types
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from omni.rag.dual_core import (
-    build_vector_search_for_zk,
-    enrich_skill_graph_from_zk,
+    LINK_GRAPH_LINK_PROXIMITY_BOOST,
+    LINK_GRAPH_TAG_PROXIMITY_BOOST,
+    enrich_skill_graph_from_link_graph,
+    link_graph_proximity_boost,
     register_skill_entities,
-    zk_link_proximity_boost,
-    ZK_LINK_PROXIMITY_BOOST,
-    ZK_TAG_PROXIMITY_BOOST,
-    ZK_ENTITY_GRAPH_BOOST,
 )
 
 # ---------------------------------------------------------------------------
@@ -40,10 +38,6 @@ _VERY_LOW_SCORE = 0.3
 _TOP_SCORE = 0.9
 _ALT_SCORE = 0.7
 
-# Expected boosted values
-_HIGH_BOOSTED = _HIGH_SCORE + ZK_LINK_PROXIMITY_BOOST
-_MID_BOOSTED = _MID_SCORE + ZK_LINK_PROXIMITY_BOOST
-
 # Relationship graph weight thresholds
 _STRONG_EDGE = 0.5
 _MEDIUM_EDGE = 0.35
@@ -57,7 +51,8 @@ _MEDIUM_EDGE = 0.35
 def _import_skill_script(skills_dir: Path, skill_name: str, script_name: str) -> Any:
     """Import a skill script via importlib using the skills_dir fixture."""
     script_path = skills_dir / skill_name / "scripts" / script_name
-    spec = importlib.util.spec_from_file_location(f"_skill_{script_name}", str(script_path))
+    mod_name = f"_skill_{script_name.replace('/', '_').replace('.py', '')}"
+    spec = importlib.util.spec_from_file_location(mod_name, str(script_path))
     assert spec and spec.loader, f"Cannot load {script_path}"
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -65,7 +60,7 @@ def _import_skill_script(skills_dir: Path, skill_name: str, script_name: str) ->
 
 
 def _make_mock_note(stem: str, tags: list[str] | None = None) -> MagicMock:
-    """Create a mock ZK note."""
+    """Create a mock graph note."""
     note = MagicMock()
     note.filename_stem = stem
     note.tags = tags or []
@@ -77,60 +72,36 @@ def _make_result(source: str, score: float) -> dict[str, Any]:
     return {"source": source, "score": score}
 
 
-def _make_zk_client_mock(link_map: dict[str, list[str]]) -> AsyncMock:
-    """Create a mock ZK client with a configurable link map.
-
-    link_map: stem -> list of stems it links to (bidirectional).
-    """
-
-    async def _list_notes(**kwargs: Any) -> list[MagicMock]:
-        linked_by = kwargs.get("linked_by", [])
-        link_to = kwargs.get("link_to", [])
-
-        for stem in linked_by:
-            targets = link_map.get(stem, [])
-            return [_make_mock_note(t) for t in targets]
-
-        for stem in link_to:
-            # Reverse lookup: who links to this stem?
-            sources = [s for s, ts in link_map.items() if stem in ts]
-            return [_make_mock_note(s) for s in sources]
-
-        return []
-
-    client = AsyncMock()
-    client.list_notes = _list_notes
-    return client
-
-
 # ---------------------------------------------------------------------------
-# Bridge 1: ZK Link Proximity Boost
+# Bridge 1: LinkGraph Proximity Boost
 # ---------------------------------------------------------------------------
 
 
-class TestZkLinkProximityBoost:
-    """Tests for zk_link_proximity_boost (Core 1 → Core 2 bridge)."""
+class TestLinkGraphProximityBoost:
+    """Tests for link_graph_proximity_boost (Core 1 → Core 2 bridge)."""
 
     @pytest.mark.asyncio
     async def test_passthrough_empty_results(self) -> None:
-        result = await zk_link_proximity_boost([], "test query")
+        result = await link_graph_proximity_boost([], "test query")
         assert result == []
 
     @pytest.mark.asyncio
     async def test_passthrough_single_result(self) -> None:
         results = [_make_result("docs/a.md", _HIGH_SCORE)]
-        result = await zk_link_proximity_boost(results, "test")
+        result = await link_graph_proximity_boost(results, "test")
         assert len(result) == 1
         assert result[0]["score"] == _HIGH_SCORE
 
     @pytest.mark.asyncio
-    async def test_graceful_when_zk_unavailable(self) -> None:
+    async def test_graceful_when_graph_backend_unavailable(self) -> None:
         results = [
             _make_result("docs/a.md", _HIGH_SCORE),
             _make_result("docs/b.md", _MID_SCORE),
         ]
-        with patch("omni.rag.zk_integration.ZkClient", side_effect=ImportError("no zk")):
-            result = await zk_link_proximity_boost(results, "test")
+        with patch(
+            "omni.rag.link_graph.proximity.get_link_graph_backend", side_effect=RuntimeError
+        ):
+            result = await link_graph_proximity_boost(results, "test")
             assert len(result) == 2
             assert result[0]["score"] == _HIGH_SCORE
 
@@ -142,22 +113,31 @@ class TestZkLinkProximityBoost:
             _make_result("docs/unrelated.md", _LOW_SCORE),
         ]
 
-        mock_client = _make_zk_client_mock(
-            {
-                "router": ["skill"],
-                "skill": ["router"],
-            }
-        )
+        class _MockBackend:
+            backend_name = "dual_core_test"
 
-        with patch("omni.rag.zk_integration.ZkClient", return_value=mock_client):
-            boosted = await zk_link_proximity_boost(results, "test query")
+            async def neighbors(self, stem: str, **kwargs):
+                del kwargs
+                links = {"router": ["skill"], "skill": ["router"]}
+                return [types.SimpleNamespace(stem=s) for s in links.get(stem, [])]
+
+            async def metadata(self, stem: str):
+                tags = {"router": ["shared"], "skill": ["shared"]}
+                return types.SimpleNamespace(stem=stem, tags=tags.get(stem, []))
+
+        with patch(
+            "omni.rag.link_graph.proximity.get_link_graph_backend",
+            return_value=_MockBackend(),
+        ):
+            boosted = await link_graph_proximity_boost(results, "test query")
 
         router = next(r for r in boosted if r["source"] == "docs/router.md")
         skill = next(r for r in boosted if r["source"] == "docs/skill.md")
         unrelated = next(r for r in boosted if r["source"] == "docs/unrelated.md")
 
-        assert router["score"] == pytest.approx(_HIGH_BOOSTED, abs=0.01)
-        assert skill["score"] == pytest.approx(_MID_BOOSTED, abs=0.01)
+        expected_pair_boost = LINK_GRAPH_LINK_PROXIMITY_BOOST + LINK_GRAPH_TAG_PROXIMITY_BOOST
+        assert router["score"] == pytest.approx(_HIGH_SCORE + expected_pair_boost, abs=0.01)
+        assert skill["score"] == pytest.approx(_MID_SCORE + expected_pair_boost, abs=0.01)
         assert unrelated["score"] == _LOW_SCORE
 
     @pytest.mark.asyncio
@@ -168,68 +148,57 @@ class TestZkLinkProximityBoost:
             _make_result("docs/c.md", _ALT_SCORE),
         ]
 
-        mock_client = _make_zk_client_mock(
-            {
-                "a": ["b"],
-                "b": ["a"],
-            }
-        )
+        class _MockBackend:
+            backend_name = "dual_core_test_sort"
 
-        with patch("omni.rag.zk_integration.ZkClient", return_value=mock_client):
-            boosted = await zk_link_proximity_boost(results, "test")
+            async def neighbors(self, stem: str, **kwargs):
+                del kwargs
+                links = {"a": ["b"], "b": ["a"]}
+                return [types.SimpleNamespace(stem=s) for s in links.get(stem, [])]
+
+            async def metadata(self, stem: str):
+                return types.SimpleNamespace(stem=stem, tags=[])
+
+        with patch(
+            "omni.rag.link_graph.proximity.get_link_graph_backend",
+            return_value=_MockBackend(),
+        ):
+            boosted = await link_graph_proximity_boost(results, "test")
 
         scores = [r["score"] for r in boosted]
         assert scores == sorted(scores, reverse=True)
 
-
-# ---------------------------------------------------------------------------
-# Bridge 2: LanceDB Vector Search for ZK
-# ---------------------------------------------------------------------------
-
-
-class TestBuildVectorSearchForZk:
-    """Tests for build_vector_search_for_zk (Core 2 → Core 1 bridge)."""
-
-    def test_returns_callable(self) -> None:
-        fn = build_vector_search_for_zk()
-        assert callable(fn)
-
     @pytest.mark.asyncio
-    async def test_returns_list_on_failure(self) -> None:
-        fn = build_vector_search_for_zk("nonexistent_collection")
-        result = await fn("test query", limit=5)
-        assert isinstance(result, list)
+    async def test_skips_uuid_sources_no_graph_lookup(self) -> None:
+        """LanceDB chunk IDs (UUIDs) are not passed to graph lookup."""
+        uuid_source = "e077e713-3e85-46c2-ad01-6fb4c10722fc"
+        results = [
+            _make_result("docs/real-note.md", _HIGH_SCORE),
+            _make_result(uuid_source, _MID_SCORE),
+        ]
 
-    @pytest.mark.asyncio
-    async def test_returns_zk_compatible_dicts(self) -> None:
-        mock_result = MagicMock()
-        mock_result.id = "docs/test.md"
-        mock_result.content = "Test content for vector search"
-        mock_result.score = _HIGH_SCORE
-        mock_result.metadata = {}
+        class _MockBackend:
+            backend_name = "dual_core_test_uuid"
 
-        mock_backend = AsyncMock()
-        mock_backend.search.return_value = [mock_result]
+            async def neighbors(self, stem: str, **kwargs):
+                del stem, kwargs
+                return []
 
-        with patch("omni.rag.retrieval.lancedb.LanceRetrievalBackend", return_value=mock_backend):
-            fn = build_vector_search_for_zk()
-            results = await fn("test query", limit=5)
+            async def metadata(self, stem: str):
+                return types.SimpleNamespace(stem=stem, tags=[])
 
-        assert len(results) == 1
-        r = results[0]
-        # Verify ZK-compatible keys
-        for key in ("id", "filename_stem", "score", "source"):
-            assert key in r, f"Missing key: {key}"
-        assert r["source"] == "vector"
-        assert r["filename_stem"] == "test"
-
-    def test_custom_collection(self) -> None:
-        fn = build_vector_search_for_zk("custom_collection")
-        assert callable(fn)
+        with patch(
+            "omni.rag.link_graph.proximity.get_link_graph_backend",
+            return_value=_MockBackend(),
+        ):
+            boosted = await link_graph_proximity_boost(results, "test")
+        assert len(boosted) == 2
+        uuid_result = next(r for r in boosted if r["source"] == uuid_source)
+        assert uuid_result["score"] == _MID_SCORE
 
 
 # ---------------------------------------------------------------------------
-# Bridge 3: ZK Entity Graph → Router Skill Relationships
+# Bridge 2: Entity Graph -> Router Skill Relationships
 # ---------------------------------------------------------------------------
 
 
@@ -256,19 +225,22 @@ def _setup_mock_knowledge_graph(
 
     mock_module = MagicMock()
     mock_module.PyKnowledgeGraph = MagicMock(return_value=mock_kg)
+    mock_module.load_kg_from_lance_cached = MagicMock(return_value=mock_kg)
     return mock_module, mock_kg
 
 
-class TestEnrichSkillGraphFromZk:
-    """Tests for enrich_skill_graph_from_zk (Core 1 → Router bridge)."""
+class TestEnrichSkillGraphFromLinkGraph:
+    """Tests for enrich_skill_graph_from_link_graph (Core 1 -> Router bridge)."""
 
     def test_passthrough_when_no_lance_dir(self, tmp_path: Path) -> None:
         original = {"git.commit": [("git.smart_commit", _MEDIUM_EDGE)]}
-        result = enrich_skill_graph_from_zk(original, lance_dir=tmp_path / "nonexistent.lance")
+        result = enrich_skill_graph_from_link_graph(
+            original, lance_dir=tmp_path / "nonexistent.lance"
+        )
         assert result == original
 
     def test_passthrough_empty_graph(self) -> None:
-        result = enrich_skill_graph_from_zk({}, lance_dir=Path("/nonexistent"))
+        result = enrich_skill_graph_from_link_graph({}, lance_dir=Path("/nonexistent"))
         assert result == {}
 
     def test_enrichment_with_shared_entities(self, tmp_path: Path) -> None:
@@ -290,7 +262,7 @@ class TestEnrichSkillGraphFromZk:
         (lance_dir / "kg_entities").mkdir(parents=True)
 
         with patch.dict(sys.modules, {"omni_core_rs": mock_module}):
-            result = enrich_skill_graph_from_zk(original, lance_dir=lance_dir)
+            result = enrich_skill_graph_from_link_graph(original, lance_dir=lance_dir)
 
         git_neighbors = dict(result.get("git.commit", []))
         researcher_neighbors = dict(result.get("researcher.git_repo_analyer", []))
@@ -312,7 +284,7 @@ class TestEnrichSkillGraphFromZk:
         (lance_dir / "kg_entities").mkdir(parents=True)
 
         with patch.dict(sys.modules, {"omni_core_rs": mock_module}):
-            result = enrich_skill_graph_from_zk(original, lance_dir=lance_dir)
+            result = enrich_skill_graph_from_link_graph(original, lance_dir=lance_dir)
 
         git_neighbors = dict(result.get("git.commit", []))
         assert git_neighbors.get("git.smart_commit", 0) >= _STRONG_EDGE
@@ -325,7 +297,7 @@ class TestEnrichSkillGraphFromZk:
         saved = sys.modules.get("omni_core_rs")
         sys.modules["omni_core_rs"] = None  # type: ignore[assignment]
         try:
-            result = enrich_skill_graph_from_zk(original, lance_dir=lance_dir)
+            result = enrich_skill_graph_from_link_graph(original, lance_dir=lance_dir)
             assert result == original
         finally:
             if saved is not None:
@@ -342,10 +314,9 @@ class TestEnrichSkillGraphFromZk:
 class TestSkillCommandWiring:
     """Tests that skill commands properly use DualCore bridges."""
 
-    def test_zk_hybrid_uses_dual_core_vector_func(self, skills_dir: Path) -> None:
-        mod = _import_skill_script(skills_dir, "knowledge", "zk_search.py")
-        fn = mod._build_vector_search_func()
-        assert callable(fn)
+    def test_hybrid_search_exports_run_entry(self, skills_dir: Path) -> None:
+        mod = _import_skill_script(skills_dir, "knowledge", "search/hybrid.py")
+        assert callable(mod.run_hybrid_search)
 
     def test_recall_imports_dual_core_boost(self, skills_dir: Path) -> None:
         mod = _import_skill_script(skills_dir, "knowledge", "recall.py")
@@ -366,23 +337,23 @@ class TestSkillCommandWiring:
 
 
 class TestRouterSkillRelationshipsWiring:
-    """Tests that the router properly calls ZK enrichment."""
+    """Tests that the router properly calls LinkGraph enrichment."""
 
     def test_enrich_function_exists(self) -> None:
-        from omni.core.router.skill_relationships import _enrich_with_zk_graph
+        from omni.core.router.skill_relationships import _enrich_with_link_graph
 
-        assert callable(_enrich_with_zk_graph)
+        assert callable(_enrich_with_link_graph)
 
     def test_enrich_graceful_fallback(self) -> None:
-        from omni.core.router.skill_relationships import _enrich_with_zk_graph
+        from omni.core.router.skill_relationships import _enrich_with_link_graph
 
         original = {"tool.a": [("tool.b", _VERY_LOW_SCORE)]}
-        result = _enrich_with_zk_graph(original)
+        result = _enrich_with_link_graph(original)
         assert isinstance(result, dict)
 
 
 # ---------------------------------------------------------------------------
-# Bridge 4: Shared Entity Registry (omni sync hook)
+# Bridge 3: Shared Entity Registry (omni sync hook)
 # ---------------------------------------------------------------------------
 
 
@@ -409,7 +380,7 @@ def _make_skill_doc(
 
 
 class TestRegisterSkillEntities:
-    """Tests for register_skill_entities (Bridge 4: Core 2 → Core 1)."""
+    """Tests for register_skill_entities (Bridge 3: Core 2 → Core 1)."""
 
     def test_skipped_when_rust_unavailable(self, tmp_path: Path) -> None:
         saved = sys.modules.get("omni_core_rs")
@@ -514,24 +485,24 @@ class TestRegisterSkillEntities:
 
 
 class TestFusionWeights:
-    """Tests for compute_fusion_weights() — dynamic ZK vs LanceDB weighting."""
+    """Tests for compute_fusion_weights() — dynamic graph vs LanceDB weighting."""
 
     def test_empty_query_returns_balanced(self):
         from omni.rag.dual_core import FusionWeights, compute_fusion_weights
 
         w = compute_fusion_weights("")
         assert isinstance(w, FusionWeights)
-        assert w.zk_proximity_scale == 1.0
+        assert w.link_graph_proximity_scale == 1.0
         assert w.kg_rerank_scale == 1.0
         assert w.vector_weight == 1.0
         assert w.keyword_weight == 1.0
 
-    def test_knowledge_query_boosts_zk(self):
+    def test_knowledge_query_boosts_graph(self):
         from omni.rag.dual_core import compute_fusion_weights
 
         w = compute_fusion_weights("search for knowledge about rust patterns")
-        # Knowledge target → ZK boost
-        assert w.zk_proximity_scale > 1.0
+        # Knowledge target -> graph boost.
+        assert w.link_graph_proximity_scale > 1.0
         assert w.kg_rerank_scale > 1.0
         assert w.intent_target == "knowledge"
 
@@ -541,7 +512,7 @@ class TestFusionWeights:
         w = compute_fusion_weights("find the function in the codebase")
         # Code target → vector emphasis
         assert w.vector_weight >= 1.0
-        assert w.zk_proximity_scale <= 1.0
+        assert w.link_graph_proximity_scale <= 1.0
         assert w.intent_target == "code"
 
     def test_git_commit_favors_tool_routing(self):

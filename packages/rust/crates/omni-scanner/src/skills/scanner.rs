@@ -65,7 +65,7 @@ fn parse_rules_toml(skill_path: &Path) -> Vec<SnifferRule> {
     let content = match fs::read_to_string(&rules_path) {
         Ok(c) => c,
         Err(e) => {
-            log::warn!("Failed to read rules.toml: {}", e);
+            log::warn!("Failed to read rules.toml: {e}");
             return Vec::new();
         }
     };
@@ -73,7 +73,7 @@ fn parse_rules_toml(skill_path: &Path) -> Vec<SnifferRule> {
     let rules_toml: RulesToml = match toml::from_str(&content) {
         Ok(r) => r,
         Err(e) => {
-            log::warn!("Failed to parse rules.toml: {}", e);
+            log::warn!("Failed to parse rules.toml: {e}");
             return Vec::new();
         }
     };
@@ -86,7 +86,11 @@ fn parse_rules_toml(skill_path: &Path) -> Vec<SnifferRule> {
     }
 
     if log::log_enabled!(log::Level::Debug) {
-        log::debug!("Parsed {} sniffer rules from {:?}", rules.len(), rules_path);
+        log::debug!(
+            "Parsed {} sniffer rules from {}",
+            rules.len(),
+            rules_path.display()
+        );
     }
 
     rules
@@ -103,12 +107,12 @@ struct ReferenceFrontmatter {
 /// Contents of the `metadata` block in reference front matter.
 #[derive(Debug, Deserialize)]
 struct ReferenceMetadataBlock {
-    /// Tool(s) this reference is for, full name e.g. git.smart_commit (string or array).
+    /// Tool(s) this reference is for, full name e.g. `git.smart_commit` (string or array).
     #[serde(default, rename = "for_tools")]
     for_tools: Option<serde_yaml::Value>,
     #[serde(default)]
     title: Option<String>,
-    /// Optional description (reserved for future use on ReferenceRecord).
+    /// Optional description (reserved for future use on `ReferenceRecord`).
     #[serde(default)]
     #[allow(dead_code)]
     description: Option<String>,
@@ -118,7 +122,8 @@ struct ReferenceMetadataBlock {
     intents: Option<Vec<String>>,
 }
 
-/// Derive unique skill names from a list of full tool names (e.g. "researcher.run_research_graph" -> "researcher").
+/// Derive unique skill names from a list of full tool names
+/// (e.g. `"researcher.run_research_graph"` -> `"researcher"`).
 fn skills_from_tool_list(tools: &[String]) -> Vec<String> {
     let mut skills: Vec<String> = tools
         .iter()
@@ -165,19 +170,18 @@ fn scan_references(skill_path: &Path, skill_name: &str) -> Vec<ReferenceRecord> 
     let read_dir = match fs::read_dir(&refs_dir) {
         Ok(d) => d,
         Err(e) => {
-            log::debug!("Could not read references dir {:?}: {}", refs_dir, e);
+            log::debug!("Could not read references dir {}: {e}", refs_dir.display());
             return records;
         }
     };
 
     for entry in read_dir.filter_map(Result::ok) {
         let path = entry.path();
-        if path.extension().map_or(true, |e| e != "md") {
+        if path.extension().is_none_or(|e| e != "md") {
             continue;
         }
-        let content = match fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(_) => continue,
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
         };
         let ref_name = path
             .file_stem()
@@ -336,9 +340,9 @@ impl SkillScanner {
                 let required_path = skill_path.join(&item.path);
                 if !required_path.exists() {
                     log::debug!(
-                        "Missing required file: {:?} for skill: {:?}",
+                        "Missing required file: {:?} for skill: {}",
                         item.path,
-                        skill_path
+                        skill_path.display()
                     );
                     return false;
                 }
@@ -359,6 +363,10 @@ impl SkillScanner {
     /// * `skill_path` - Path to the skill directory (e.g., "assets/skills/writer")
     /// * `structure` - Optional skill structure for validation (uses default if None)
     ///
+    /// # Errors
+    ///
+    /// Returns an error if `SKILL.md` cannot be read or parsed.
+    ///
     /// # Examples
     ///
     /// ```ignore
@@ -378,18 +386,18 @@ impl SkillScanner {
         let skill_md_path = skill_path.join("SKILL.md");
 
         if !skill_md_path.exists() {
-            log::debug!("SKILL.md not found for skill: {:?}", skill_path);
+            log::debug!("SKILL.md not found for skill: {}", skill_path.display());
             return Ok(None);
         }
 
         // Validate structure if provided
-        if let Some(structure) = structure {
-            if !Self::validate_structure(skill_path, structure) {
-                log::warn!(
-                    "Skill at {:?} does not match required structure",
-                    skill_path
-                );
-            }
+        if let Some(structure) = structure
+            && !Self::validate_structure(skill_path, structure)
+        {
+            log::warn!(
+                "Skill at {} does not match required structure",
+                skill_path.display()
+            );
         }
 
         let content = fs::read_to_string(&skill_md_path)?;
@@ -414,6 +422,10 @@ impl SkillScanner {
     ///
     /// * `base_path` - Path to the skills directory (e.g., "assets/skills")
     /// * `structure` - Optional skill structure for validation (uses default if None)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the skills directory cannot be read.
     pub fn scan_all(
         &self,
         base_path: &Path,
@@ -423,13 +435,13 @@ impl SkillScanner {
         use std::sync::Arc;
 
         if !base_path.exists() {
-            log::warn!("Skills base directory not found: {:?}", base_path);
+            log::warn!("Skills base directory not found: {}", base_path.display());
             return Ok(Vec::new());
         }
 
         // Collect all skill directories first
         let skill_dirs: Vec<PathBuf> = fs::read_dir(base_path)?
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|e| e.path().is_dir())
             .map(|e| e.path())
             .collect();
@@ -443,7 +455,11 @@ impl SkillScanner {
             .filter_map(|skill_path| self.scan_skill_inner(skill_path, validate_struct.as_deref()))
             .collect();
 
-        log::info!("Scanned {} skills from {:?}", metadatas.len(), base_path);
+        log::info!(
+            "Scanned {} skills from {}",
+            metadatas.len(),
+            base_path.display()
+        );
         Ok(metadatas)
     }
 
@@ -460,13 +476,13 @@ impl SkillScanner {
         }
 
         // Validate structure if provided
-        if let Some(structure) = structure {
-            if !Self::validate_structure(skill_path, structure) {
-                log::warn!(
-                    "Skill at {:?} does not match required structure",
-                    skill_path
-                );
-            }
+        if let Some(structure) = structure
+            && !Self::validate_structure(skill_path, structure)
+        {
+            log::warn!(
+                "Skill at {} does not match required structure",
+                skill_path.display()
+            );
         }
 
         // Read and parse the file
@@ -483,7 +499,7 @@ impl SkillScanner {
         Some(metadata)
     }
 
-    /// Build a full SkillIndexEntry from metadata and tools.
+    /// Build a full `SkillIndexEntry` from metadata and tools.
     ///
     /// Combines skill metadata from SKILL.md frontmatter with discovered
     /// tools from the script scanner to create a complete skill index entry.
@@ -493,12 +509,14 @@ impl SkillScanner {
     /// * `metadata` - Skill metadata from SKILL.md
     /// * `tools` - Tools discovered in the skill's scripts directory
     /// * `skill_path` - Path to the skill directory
+    #[must_use]
     pub fn build_index_entry(
         &self,
         metadata: SkillMetadata,
         tools: &[ToolRecord],
         skill_path: &Path,
     ) -> SkillIndexEntry {
+        let _ = self;
         let path = format!("assets/skills/{}", metadata.skill_name);
 
         let mut entry = SkillIndexEntry::new(
@@ -550,14 +568,16 @@ impl SkillScanner {
 
     /// Build the canonical per-skill payload (Rust schema) from metadata, tools, and filesystem.
     ///
-    /// Fills `skill_tools` (each tool + ref_key → path from references' `for_tools`) and
-    /// `references` (ref_id → ReferenceRecord). Used to wire the agreed schema to the scanner.
+    /// Fills `skill_tools` (each tool + `ref_key` → path from references' `for_tools`) and
+    /// `references` (`ref_id` → `ReferenceRecord`). Used to wire the agreed schema to the scanner.
+    #[must_use]
     pub fn build_canonical_payload(
         &self,
         metadata: SkillMetadata,
         tools: &[ToolRecord],
         skill_path: &Path,
     ) -> CanonicalSkillPayload {
+        let _ = self;
         let skill_md_path = skill_path.join("SKILL.md").to_string_lossy().to_string();
         let refs = scan_references(skill_path, &metadata.skill_name);
         let references: HashMap<String, ReferenceRecord> =
@@ -570,7 +590,7 @@ impl SkillScanner {
                 if rec
                     .for_tools
                     .as_ref()
-                    .map_or(false, |v| v.contains(&tool.tool_name))
+                    .is_some_and(|v| v.contains(&tool.tool_name))
                 {
                     let ref_key = format!("{}.references.{}", metadata.skill_name, rec.ref_name);
                     skill_tool_references.insert(ref_key, rec.file_path.clone());
@@ -601,6 +621,10 @@ impl SkillScanner {
     /// * `content` - Raw content of the SKILL.md file
     /// * `skill_path` - Path to the skill directory (for extracting skill name)
     ///
+    /// # Errors
+    ///
+    /// Returns an error if YAML frontmatter cannot be parsed.
+    ///
     /// # Examples
     ///
     /// ```ignore
@@ -612,6 +636,7 @@ impl SkillScanner {
         content: &str,
         skill_path: &Path,
     ) -> Result<SkillMetadata, Box<dyn std::error::Error>> {
+        let _ = self;
         // Extract skill name from path if not already set
         let skill_name = skill_path
             .file_name()
@@ -620,32 +645,22 @@ impl SkillScanner {
             .to_string();
 
         // Find YAML frontmatter (between first and second ---)
-        let frontmatter = match extract_frontmatter(content) {
-            Some(fm) => fm,
-            None => {
-                log::warn!("No YAML frontmatter found in SKILL.md for: {}", skill_name);
-                return Ok(SkillMetadata {
-                    skill_name,
-                    version: String::new(),
-                    description: String::new(),
-                    routing_keywords: Vec::new(),
-                    authors: Vec::new(),
-                    intents: Vec::new(),
-                    require_refs: Vec::new(),
-                    repository: String::new(),
-                    permissions: Vec::new(),
-                });
-            }
+        let Some(frontmatter) = extract_frontmatter(content) else {
+            log::warn!("No YAML frontmatter found in SKILL.md for: {skill_name}");
+            return Ok(SkillMetadata {
+                skill_name,
+                ..SkillMetadata::default()
+            });
         };
 
         // Parse YAML frontmatter
         let frontmatter_data: SkillFrontmatter = serde_yaml::from_str(&frontmatter)
-            .map_err(|e| anyhow::anyhow!("Failed to parse SKILL.md frontmatter: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to parse SKILL.md frontmatter: {e}"))?;
 
         // Extract from metadata block (new format)
         let (version, routing_keywords, authors, intents, require_refs, repository, permissions) =
-            match &frontmatter_data.metadata {
-                Some(meta) => (
+            if let Some(meta) = &frontmatter_data.metadata {
+                (
                     meta.version.clone().unwrap_or_default(),
                     meta.routing_keywords.clone().unwrap_or_default(),
                     // Support both "author" (single) and "authors" (multiple)
@@ -660,19 +675,18 @@ impl SkillScanner {
                     meta.require_refs.clone().unwrap_or_default(),
                     meta.source.clone().unwrap_or_default(),
                     meta.permissions.clone().unwrap_or_default(),
-                ),
-                None => {
-                    log::warn!("No metadata block found in SKILL.md for: {}", skill_name);
-                    (
-                        String::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        String::new(),
-                        Vec::new(),
-                    )
-                }
+                )
+            } else {
+                log::warn!("No metadata block found in SKILL.md for: {skill_name}");
+                (
+                    String::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    String::new(),
+                    Vec::new(),
+                )
             };
 
         Ok(SkillMetadata {

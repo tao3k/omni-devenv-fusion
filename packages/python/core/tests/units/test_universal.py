@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -11,6 +12,9 @@ from omni.core.skills.universal import (
     UniversalScriptSkill,
     UniversalSkillFactory,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestSimpleSkillMetadata:
@@ -130,6 +134,30 @@ __all__ = ["hello"]
         commands = skill.list_commands()
         assert len(commands) >= 1
 
+    @pytest.mark.asyncio
+    async def test_execute_reports_missing_required_args_from_schema(self, tmp_path: Path):
+        """Execution should fast-fail with a clear validation error for missing required args."""
+        skill_path = tmp_path / "required_args"
+        skill_path.mkdir()
+        scripts_dir = skill_path / "scripts"
+        scripts_dir.mkdir()
+
+        (scripts_dir / "required_tool.py").write_text(
+            """
+from omni.foundation.api.decorators import skill_command
+
+@skill_command(name="run_research_graph", description="Research repo")
+async def run_research_graph(repo_url: str, request: str = "Analyze"):
+    return {"repo_url": repo_url, "request": request}
+"""
+        )
+
+        skill = UniversalScriptSkill("required_args", skill_path)
+        await skill.load()
+
+        with pytest.raises(ValueError, match="missing required field\\(s\\): repo_url"):
+            await skill.execute("run_research_graph", request="Compaction mechanism")
+
     def test_list_commands_before_load(self, tmp_path: Path):
         """Test listing commands before loading returns empty."""
         skill_path = tmp_path / "test"
@@ -154,6 +182,30 @@ __all__ = ["hello"]
         skill = UniversalScriptSkill("test", skill_path)
         assert "test" in repr(skill)
         assert "not loaded" in repr(skill)
+
+    @pytest.mark.asyncio
+    async def test_load_target_command_does_not_fallback_to_load_all(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Targeted load should use load_command only (no non-Rust fallback load_all)."""
+        skill_path = tmp_path / "targeted"
+        skill_path.mkdir()
+        (skill_path / "scripts").mkdir()
+
+        fake_loader = MagicMock()
+        fake_loader.load_command.return_value = False
+        fake_loader.__len__.return_value = 0
+
+        monkeypatch.setattr(
+            "omni.core.skills.universal.create_tools_loader",
+            lambda *_args, **_kwargs: fake_loader,
+        )
+
+        skill = UniversalScriptSkill("targeted", skill_path)
+        await skill.load({"cwd": str(tmp_path), "target_command": "recall"})
+
+        fake_loader.load_command.assert_called_once_with("recall")
+        fake_loader.load_all.assert_not_called()
 
 
 class TestUniversalSkillFactory:

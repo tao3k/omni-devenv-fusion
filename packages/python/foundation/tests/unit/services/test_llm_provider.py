@@ -8,7 +8,7 @@ Tests verify LLM provider functionality:
 """
 
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -19,11 +19,33 @@ from omni.foundation.services.llm.provider import (
     NoOpProvider,
     get_llm_provider,
     reset_provider,
+    _minimax_model_casing,
 )
 
 
 # Get the default model from settings for use in tests
 DEFAULT_MODEL = get_setting("inference.model", "MiniMax-M2.1")
+
+
+class TestMinimaxModelCasing:
+    """Tests for MiniMax model name normalization (2013 fix)."""
+
+    def test_lowercased_minimax_model_is_fixed(self):
+        assert _minimax_model_casing("minimax-m2.1-highspeed") == "MiniMax-M2.1-lightning"
+        assert _minimax_model_casing("minimax-m2.5") == "MiniMax-M2.5"
+
+    def test_highspeed_mapped_to_lightning(self):
+        # Platform docs say highspeed; v1 API expects lightning (LiteLLM Supported Models)
+        assert _minimax_model_casing("MiniMax-M2.1-highspeed") == "MiniMax-M2.1-lightning"
+        assert _minimax_model_casing("minimax-m2.1-highspeed") == "MiniMax-M2.1-lightning"
+
+    def test_correct_casing_unchanged(self):
+        assert _minimax_model_casing("MiniMax-M2.1-lightning") == "MiniMax-M2.1-lightning"
+        assert _minimax_model_casing("MiniMax-M2.5") == "MiniMax-M2.5"
+
+    def test_non_minimax_unchanged(self):
+        assert _minimax_model_casing("gpt-4") == "gpt-4"
+        assert _minimax_model_casing("") == ""
 
 
 class TestLLMConfig:
@@ -140,6 +162,32 @@ class TestLiteLLMProvider:
             with patch.dict("os.environ", {"MINIMAX_API_KEY": "secret-key"}):
                 provider = LiteLLMProvider()
                 assert provider._get_api_key() == "secret-key"
+
+    @pytest.mark.asyncio
+    async def test_minimax_passes_cased_model_to_litellm(self):
+        """MiniMax uses LiteLLM; model is normalised with _minimax_model_casing before call."""
+        with patch("omni.foundation.config.settings.get_setting") as mock_setting:
+            mock_setting.side_effect = lambda key, default=None: {
+                "inference.provider": "minimax",
+                "inference.model": "MiniMax-M2.1",
+                "inference.base_url": None,
+                "inference.api_key_env": "MINIMAX_API_KEY",
+                "inference.timeout": 60,
+                "inference.max_tokens": 4096,
+            }.get(key, default)
+
+            with patch.dict("os.environ", {"MINIMAX_API_KEY": "test-key"}):
+                provider = LiteLLMProvider()
+                mock_resp = type("R", (), {"choices": [], "usage": None})()
+                mock_resp.choices = [
+                    type("C", (), {"message": type("M", (), {"content": "ok"})()})()
+                ]
+                mock_acompletion = AsyncMock(return_value=mock_resp)
+                provider._litellm.acompletion = mock_acompletion
+                await provider.complete("sys", "user")
+                call_kwargs = mock_acompletion.call_args.kwargs
+                assert call_kwargs["model"] == "MiniMax-M2.1"
+                assert call_kwargs.get("custom_llm_provider") == "minimax"
 
 
 class TestNoOpProvider:
@@ -270,7 +318,7 @@ class TestProviderConfig:
     """Tests for provider configuration loading."""
 
     def test_config_from_settings(self):
-        """Test that config is loaded from settings.yaml."""
+        """Test that config is loaded from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml)."""
         reset_provider()
 
         with patch("omni.foundation.config.settings.get_setting") as mock_setting:

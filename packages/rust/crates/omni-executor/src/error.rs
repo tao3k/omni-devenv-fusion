@@ -1,4 +1,4 @@
-//! Error types for OmniCell execution.
+//! Error types for `OmniCell` execution.
 //!
 //! Follows ODF-EP: Explicit error enums with context.
 

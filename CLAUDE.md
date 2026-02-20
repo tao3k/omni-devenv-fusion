@@ -52,6 +52,10 @@ Memory system, knowledge indexing, context optimization
 - **Overload Management**: Avoid activating more than 5 skills simultaneously. If you see a `COGNITIVE LOAD WARNING`, disable unused skills to maintain precision.
 - **Tool Selection**: Prioritize skill-specific MCP tools over generic shell commands for all write operations.
 
+### Language
+
+**All project content in English**: All documentation, commit messages, and committed content in this repository must be written in English (`docs/`, skill docs, code comments, commit messages). This is a persistent rule; do not add or commit non-English docs or messages.
+
 ### Git Commit
 
 **Use `/commit` slash command** - Never `git commit` via terminal.

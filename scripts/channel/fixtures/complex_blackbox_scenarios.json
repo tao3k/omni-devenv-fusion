@@ -1,0 +1,169 @@
+{
+  "scenarios": [
+    {
+      "id": "cross_group_control_plane_stress",
+      "description": "Cross-group and multi-session workflow with dependency chaining and mixed parallel waves.",
+      "required_complexity": {
+        "steps": 18,
+        "dependency_edges": 20,
+        "critical_path_len": 8,
+        "parallel_waves": 4
+      },
+      "steps": [
+        {
+          "id": "a_session_json_boot",
+          "session": "a",
+          "prompt": "/session json",
+          "expect_event": "telegram.command.session_status_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_context"]
+        },
+        {
+          "id": "b_session_json_boot",
+          "session": "b",
+          "prompt": "/session json",
+          "expect_event": "telegram.command.session_status_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_context"]
+        },
+        {
+          "id": "c_session_json_boot",
+          "session": "c",
+          "prompt": "/session json",
+          "expect_event": "telegram.command.session_status_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_context"]
+        },
+        {
+          "id": "a_memory_json_boot",
+          "session": "a",
+          "prompt": "/session memory json",
+          "expect_event": "telegram.command.session_memory_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_memory"],
+          "depends_on": ["a_session_json_boot"]
+        },
+        {
+          "id": "b_memory_json_boot",
+          "session": "b",
+          "prompt": "/session memory json",
+          "expect_event": "telegram.command.session_memory_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_memory"],
+          "depends_on": ["b_session_json_boot"]
+        },
+        {
+          "id": "c_memory_json_boot",
+          "session": "c",
+          "prompt": "/session memory json",
+          "expect_event": "telegram.command.session_memory_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_memory"],
+          "depends_on": ["c_session_json_boot"]
+        },
+        {
+          "id": "a_feedback_up_1",
+          "session": "a",
+          "prompt": "/session feedback up json",
+          "expect_event": "telegram.command.session_feedback_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_feedback"],
+          "depends_on": ["a_memory_json_boot"]
+        },
+        {
+          "id": "b_feedback_down_1",
+          "session": "b",
+          "prompt": "/session feedback down json",
+          "expect_event": "telegram.command.session_feedback_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_feedback"],
+          "depends_on": ["b_memory_json_boot"]
+        },
+        {
+          "id": "c_feedback_up_1",
+          "session": "c",
+          "prompt": "/session feedback up json",
+          "expect_event": "telegram.command.session_feedback_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_feedback"],
+          "depends_on": ["c_memory_json_boot"]
+        },
+        {
+          "id": "a_session_json_after_feedback",
+          "session": "a",
+          "prompt": "/session json",
+          "expect_event": "telegram.command.session_status_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_context"],
+          "depends_on": ["a_feedback_up_1", "b_feedback_down_1"]
+        },
+        {
+          "id": "b_session_json_after_feedback",
+          "session": "b",
+          "prompt": "/session json",
+          "expect_event": "telegram.command.session_status_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_context"],
+          "depends_on": ["b_feedback_down_1", "a_feedback_up_1"]
+        },
+        {
+          "id": "c_session_json_after_feedback",
+          "session": "c",
+          "prompt": "/session json",
+          "expect_event": "telegram.command.session_status_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_context"],
+          "depends_on": ["c_feedback_up_1"]
+        },
+        {
+          "id": "a_memory_json_final",
+          "session": "a",
+          "prompt": "/session memory json",
+          "expect_event": "telegram.command.session_memory_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_memory"],
+          "depends_on": ["a_session_json_after_feedback"]
+        },
+        {
+          "id": "b_memory_json_final",
+          "session": "b",
+          "prompt": "/session memory json",
+          "expect_event": "telegram.command.session_memory_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_memory"],
+          "depends_on": ["b_session_json_after_feedback"]
+        },
+        {
+          "id": "c_memory_json_final",
+          "session": "c",
+          "prompt": "/session memory json",
+          "expect_event": "telegram.command.session_memory_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_memory"],
+          "depends_on": ["c_session_json_after_feedback"]
+        },
+        {
+          "id": "a_feedback_down_final",
+          "session": "a",
+          "prompt": "/session feedback down json",
+          "expect_event": "telegram.command.session_feedback_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_feedback"],
+          "depends_on": ["a_memory_json_final", "b_memory_json_final"]
+        },
+        {
+          "id": "b_feedback_up_final",
+          "session": "b",
+          "prompt": "/session feedback up json",
+          "expect_event": "telegram.command.session_feedback_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_feedback"],
+          "depends_on": ["b_memory_json_final", "a_memory_json_final"]
+        },
+        {
+          "id": "c_feedback_down_final",
+          "session": "c",
+          "prompt": "/session feedback down json",
+          "expect_event": "telegram.command.session_feedback_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_feedback"],
+          "depends_on": [
+            "c_memory_json_final",
+            "a_feedback_down_final",
+            "b_feedback_up_final"
+          ]
+        },
+        {
+          "id": "c_session_json_gate",
+          "session": "c",
+          "prompt": "/session json",
+          "expect_event": "telegram.command.session_status_json.replied",
+          "expect_reply_json_fields": ["json_kind=session_context"],
+          "depends_on": ["c_feedback_down_final"]
+        }
+      ]
+    }
+  ]
+}

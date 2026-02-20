@@ -6,11 +6,11 @@ import asyncio
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
-import pytest
 
 import omni_core_rs as rs
+import pytest
+
 from omni.core.kernel.watcher import (
     FileChangeEvent,
     FileChangeType,
@@ -134,6 +134,46 @@ class TestReactiveSkillWatcher:
         assert watcher._extract_skill_name("/some/__pycache__/test.py") is None
         assert watcher._extract_skill_name("/some/.hidden/test.py") is None
 
+    def test_reactive_skill_watcher_config_includes_markdown_patterns(self, mock_indexer) -> None:
+        """Watcher config should include markdown patterns for LinkGraph delta refresh."""
+        watcher = ReactiveSkillWatcher(indexer=mock_indexer)
+
+        assert str(watcher.skills_dir) in watcher.config.paths
+        assert "**/*.py" in watcher.config.patterns
+        assert "**/*.md" in watcher.config.patterns
+
+    def test_reactive_skill_watcher_uses_explicit_watch_dirs_and_patterns(
+        self,
+        mock_indexer,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        """Explicit link_graph.watch_dirs/watch_patterns should drive watcher scope."""
+        skills_dir = tmp_path / "assets" / "skills"
+        skills_dir.mkdir(parents=True, exist_ok=True)
+        docs_dir = tmp_path / "notes"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+
+        settings = {
+            "link_graph.watch_dirs": ["notes"],
+            "link_graph.watch_patterns": ["**/*.md", "**/*.wiki"],
+            "link_graph.root_dir": "",
+        }
+
+        monkeypatch.setattr(
+            "omni.core.kernel.watcher.get_setting",
+            lambda key, default=None: settings.get(key, default),
+        )
+        monkeypatch.setattr("omni.foundation.runtime.gitops.get_project_root", lambda: tmp_path)
+        monkeypatch.setattr("omni.foundation.config.skills.SKILLS_DIR", lambda: skills_dir)
+
+        watcher = ReactiveSkillWatcher(indexer=mock_indexer)
+
+        assert watcher._link_graph_patterns == ["**/*.md", "**/*.wiki"]
+        assert watcher._link_graph_watch_roots == [docs_dir.resolve()]
+        assert str(docs_dir.resolve()) in watcher.config.paths
+        assert "**/*.wiki" in watcher.config.patterns
+
     async def test_reactive_skill_watcher_start_stop(self, mock_indexer) -> None:
         """Test ReactiveSkillWatcher start and stop."""
         watcher = ReactiveSkillWatcher(indexer=mock_indexer)
@@ -211,21 +251,209 @@ class TestReactiveSkillWatcherEvents:
 
         mock_indexer.remove_file.assert_called_once_with("/skills/git/test.py")
 
-    async def test_created_event_calls_index_file(self, watcher, mock_indexer) -> None:
-        """Test that CREATED events trigger index_file on the indexer."""
-        event = FileChangeEvent(event_type=FileChangeType.CREATED, path="/skills/git/new_tool.py")
+    async def test_skill_md_event_triggers_link_graph_delta_refresh(
+        self,
+        watcher,
+        mock_indexer,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        """SKILL.md changes should call common LinkGraph delta refresh API."""
+        backend = MagicMock()
+        backend.refresh_with_delta = AsyncMock(
+            return_value={"mode": "delta", "changed_count": 1, "fallback": False}
+        )
+        monkeypatch.setattr(
+            "omni.rag.link_graph.get_link_graph_backend",
+            lambda notebook_dir=None, **_: backend,
+        )
+        watcher.project_root = tmp_path
 
+        skill_md = tmp_path / "git" / "SKILL.md"
+        skill_md.parent.mkdir(parents=True, exist_ok=True)
+        skill_md.write_text("---\nname: git\n---\n")
+
+        event = FileChangeEvent(event_type=FileChangeType.MODIFIED, path=str(skill_md))
         await watcher._handle_event(event)
 
-        mock_indexer.index_file.assert_called_once_with("/skills/git/new_tool.py")
+        backend.refresh_with_delta.assert_awaited_once_with([str(skill_md)], force_full=False)
+        mock_indexer.reindex_file.assert_called_once_with(str(skill_md))
 
-    async def test_changed_event_calls_reindex_file(self, watcher, mock_indexer) -> None:
-        """Test that CHANGED events trigger reindex_file on the indexer."""
-        event = FileChangeEvent(event_type=FileChangeType.CHANGED, path="/skills/git/existing.py")
+    async def test_python_event_skips_link_graph_delta_refresh(
+        self,
+        watcher,
+        mock_indexer,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        """Python script changes should not invoke LinkGraph markdown delta refresh."""
+        backend = MagicMock()
+        backend.refresh_with_delta = AsyncMock()
+        monkeypatch.setattr(
+            "omni.rag.link_graph.get_link_graph_backend",
+            lambda notebook_dir=None, **_: backend,
+        )
+        watcher.project_root = tmp_path
 
+        py_file = tmp_path / "git" / "commands.py"
+        py_file.parent.mkdir(parents=True, exist_ok=True)
+        py_file.write_text('"""hot reload test"""')
+
+        event = FileChangeEvent(event_type=FileChangeType.CHANGED, path=str(py_file))
         await watcher._handle_event(event)
 
-        mock_indexer.reindex_file.assert_called_once_with("/skills/git/existing.py")
+        backend.refresh_with_delta.assert_not_awaited()
+        mock_indexer.reindex_file.assert_called_once_with(str(py_file))
+
+    async def test_link_graph_refresh_failure_does_not_block_watcher_flow(
+        self,
+        watcher,
+        mock_indexer,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        """LinkGraph refresh errors should be isolated from hot-reload indexing."""
+        backend = MagicMock()
+        backend.refresh_with_delta = AsyncMock(side_effect=RuntimeError("refresh failure"))
+        monkeypatch.setattr(
+            "omni.rag.link_graph.get_link_graph_backend",
+            lambda notebook_dir=None, **_: backend,
+        )
+        watcher.project_root = tmp_path
+
+        skill_md = tmp_path / "knowledge" / "SKILL.md"
+        skill_md.parent.mkdir(parents=True, exist_ok=True)
+        skill_md.write_text("---\nname: knowledge\n---\n")
+
+        event = FileChangeEvent(event_type=FileChangeType.MODIFIED, path=str(skill_md))
+        await watcher._handle_event(event)
+
+        mock_indexer.reindex_file.assert_called_once_with(str(skill_md))
+        backend.refresh_with_delta.assert_awaited_once_with([str(skill_md)], force_full=False)
+
+    async def test_process_batch_markdown_event_triggers_only_link_graph_refresh(
+        self,
+        watcher,
+        mock_indexer,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        """Markdown events under watched roots should refresh graph without skill indexing."""
+        backend = MagicMock()
+        backend.refresh_with_delta = AsyncMock(
+            return_value={"mode": "delta", "changed_count": 1, "fallback": False}
+        )
+        monkeypatch.setattr(
+            "omni.rag.link_graph.get_link_graph_backend",
+            lambda notebook_dir=None, **_: backend,
+        )
+        watcher.project_root = tmp_path
+
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        note_path = docs_dir / "graph.md"
+        note_path.write_text("# Graph\n")
+        watcher._link_graph_watch_roots = [docs_dir.resolve()]
+
+        event = FileChangeEvent(event_type=FileChangeType.MODIFIED, path=str(note_path))
+        await watcher._process_batch([event])
+
+        backend.refresh_with_delta.assert_awaited_once_with([str(note_path)], force_full=False)
+        mock_indexer.index_file.assert_not_called()
+        mock_indexer.reindex_file.assert_not_called()
+        mock_indexer.remove_file.assert_not_called()
+
+    async def test_process_batch_markdown_event_outside_watch_roots_is_skipped(
+        self,
+        watcher,
+        mock_indexer,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        """Markdown events outside configured roots should be ignored."""
+        backend = MagicMock()
+        backend.refresh_with_delta = AsyncMock()
+        monkeypatch.setattr(
+            "omni.rag.link_graph.get_link_graph_backend",
+            lambda notebook_dir=None, **_: backend,
+        )
+        watcher.project_root = tmp_path
+
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        watcher._link_graph_watch_roots = [docs_dir.resolve()]
+
+        other_dir = tmp_path / "tmp"
+        other_dir.mkdir(parents=True, exist_ok=True)
+        note_path = other_dir / "outside.md"
+        note_path.write_text("# Outside\n")
+
+        event = FileChangeEvent(event_type=FileChangeType.MODIFIED, path=str(note_path))
+        await watcher._process_batch([event])
+
+        backend.refresh_with_delta.assert_not_awaited()
+        mock_indexer.index_file.assert_not_called()
+        mock_indexer.reindex_file.assert_not_called()
+        mock_indexer.remove_file.assert_not_called()
+
+    async def test_process_batch_python_event_outside_skills_root_is_skipped(
+        self,
+        watcher,
+        mock_indexer,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        """Python files outside skills root must not trigger skill index operations."""
+        backend = MagicMock()
+        backend.refresh_with_delta = AsyncMock()
+        monkeypatch.setattr(
+            "omni.rag.link_graph.get_link_graph_backend",
+            lambda notebook_dir=None, **_: backend,
+        )
+        watcher.project_root = tmp_path
+
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        watcher._link_graph_watch_roots = [docs_dir.resolve()]
+
+        py_file = docs_dir / "outside.py"
+        py_file.write_text("def noop():\n    return 1\n")
+
+        event = FileChangeEvent(event_type=FileChangeType.MODIFIED, path=str(py_file))
+        await watcher._process_batch([event])
+
+        backend.refresh_with_delta.assert_not_awaited()
+        mock_indexer.index_file.assert_not_called()
+        mock_indexer.reindex_file.assert_not_called()
+        mock_indexer.remove_file.assert_not_called()
+
+    async def test_process_batch_python_event_under_skills_root_reindexes(
+        self,
+        watcher,
+        mock_indexer,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        """Python files under configured skills root should still hot-reload index."""
+        backend = MagicMock()
+        backend.refresh_with_delta = AsyncMock()
+        monkeypatch.setattr(
+            "omni.rag.link_graph.get_link_graph_backend",
+            lambda notebook_dir=None, **_: backend,
+        )
+        watcher.project_root = tmp_path
+
+        skills_root = tmp_path / "assets" / "skills"
+        skill_file = skills_root / "knowledge" / "recall.py"
+        skill_file.parent.mkdir(parents=True, exist_ok=True)
+        skill_file.write_text("def recall():\n    return None\n")
+
+        watcher.skills_dir = skills_root.resolve()
+        event = FileChangeEvent(event_type=FileChangeType.MODIFIED, path=str(skill_file))
+        await watcher._process_batch([event])
+
+        mock_indexer.reindex_file.assert_called_once_with(str(skill_file))
+        backend.refresh_with_delta.assert_not_awaited()
 
     async def test_callback_triggered_on_created(self, watcher, mock_indexer) -> None:
         """Test that on_change_callback is triggered for CREATED events."""
@@ -282,7 +510,9 @@ class TestReactiveSkillWatcherEvents:
         # This means remove_file should be called, not index_file
         mock_indexer.remove_file.assert_called()
 
-    async def test_created_event_calls_index_file(self, watcher, mock_indexer, tmp_path) -> None:
+    async def test_created_event_calls_index_file_when_file_exists(
+        self, watcher, mock_indexer, tmp_path
+    ) -> None:
         """Test that CREATED events trigger index_file on the indexer."""
         # Use tmp_path to create a real file that exists
         test_file = tmp_path / "git" / "new_tool.py"
@@ -295,7 +525,9 @@ class TestReactiveSkillWatcherEvents:
 
         mock_indexer.index_file.assert_called_once_with(str(test_file))
 
-    async def test_changed_event_calls_reindex_file(self, watcher, mock_indexer, tmp_path) -> None:
+    async def test_changed_event_calls_reindex_file_when_file_exists(
+        self, watcher, mock_indexer, tmp_path
+    ) -> None:
         """Test that CHANGED events trigger reindex_file on the indexer."""
         # Use tmp_path to create a real file that exists
         test_file = tmp_path / "git" / "existing.py"

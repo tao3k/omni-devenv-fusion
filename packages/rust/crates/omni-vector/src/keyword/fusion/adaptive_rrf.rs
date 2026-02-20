@@ -15,6 +15,7 @@ use super::match_util::{
 use super::types::HybridSearchResult;
 
 /// Apply Adaptive RRF: soft fallback for code queries via keyword confidence (β).
+#[must_use]
 pub fn apply_adaptive_rrf(
     vector_results: Vec<(String, f32)>,
     keyword_results: Vec<ToolSearchResult>,
@@ -31,7 +32,7 @@ pub fn apply_adaptive_rrf(
     let kw_confidence: f32 = if kw_count >= 5 {
         1.0
     } else {
-        (kw_count as f32) * 0.2
+        f32::from(u16::try_from(kw_count).unwrap_or(u16::MAX)) * 0.2
     };
 
     let w_vec = base_semantic_weight * (1.0 + (1.0 - kw_confidence));
@@ -39,10 +40,7 @@ pub fn apply_adaptive_rrf(
 
     if log::log_enabled!(log::Level::Debug) && kw_confidence < 1.0 {
         log::debug!(
-            "Adaptive RRF: kw_confidence={:.2}, w_vec={:.2}, w_kw={:.2}",
-            kw_confidence,
-            w_vec,
-            w_kw
+            "Adaptive RRF: kw_confidence={kw_confidence:.2}, w_vec={w_vec:.2}, w_kw={w_kw:.2}"
         );
     }
 
@@ -101,12 +99,14 @@ pub fn apply_adaptive_rrf(
                 exact_phrase,
             } = ac_and_exact
                 .as_ref()
-                .map(|(ac, exact_id)| count_name_token_matches_and_exact(ac, name_lower, *exact_id))
-                .unwrap_or(NameMatchResult::default());
+                .map_or_else(NameMatchResult::default, |(ac, exact_id)| {
+                    count_name_token_matches_and_exact(ac, name_lower, *exact_id)
+                });
 
             let mut delta = 0.0;
             if match_count > 0 {
-                delta += (match_count as f32) * NAME_TOKEN_BOOST;
+                delta +=
+                    f32::from(u16::try_from(match_count).unwrap_or(u16::MAX)) * NAME_TOKEN_BOOST;
             }
             if exact_phrase {
                 delta += EXACT_PHRASE_BOOST;

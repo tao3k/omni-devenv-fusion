@@ -4,13 +4,18 @@
 
 use omni_vector::CheckpointStore;
 use pyo3::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+use std::process::Command;
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::Mutex as AsyncMutex;
 
 /// Global connection pool: path -> Arc<Mutex<CheckpointStore>>
 /// Ensures same path reuses the same store instance (connection复用)
 static STORE_CACHE: OnceLock<Mutex<HashMap<String, Arc<AsyncMutex<CheckpointStore>>>>> =
+    OnceLock::new();
+const CHECKPOINT_SCHEMA_NAME: &str = "omni.checkpoint.record.v1.schema.json";
+static CHECKPOINT_SCHEMA_META: OnceLock<Result<(jsonschema::JSONSchema, String), String>> =
     OnceLock::new();
 
 /// Get or create the global runtime for Python bindings
@@ -22,6 +27,202 @@ fn get_runtime() -> &'static tokio::runtime::Runtime {
             .build()
             .expect("Failed to create Tokio runtime for Python bindings")
     })
+}
+
+fn resolve_checkpoint_schema_path() -> Result<PathBuf, String> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    let mut seen: HashSet<PathBuf> = HashSet::new();
+
+    let mut push_root_candidate = |root: PathBuf| {
+        let path = root
+            .join("packages")
+            .join("shared")
+            .join("schemas")
+            .join(CHECKPOINT_SCHEMA_NAME);
+        if seen.insert(path.clone()) {
+            candidates.push(path);
+        }
+    };
+
+    if let Ok(prj_root) = std::env::var("PRJ_ROOT") {
+        let trimmed = prj_root.trim();
+        if !trimmed.is_empty() {
+            push_root_candidate(PathBuf::from(trimmed));
+        }
+    }
+
+    push_root_candidate(omni_io::PrjDirs::project_root());
+
+    if let Ok(cwd) = std::env::current_dir() {
+        if let Some(git_root) = resolve_git_toplevel(&cwd) {
+            push_root_candidate(git_root);
+        }
+        push_root_candidate(cwd);
+    }
+
+    for path in &candidates {
+        if path.exists() {
+            return Ok(path.clone());
+        }
+    }
+
+    let attempted = candidates
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(format!(
+        "Checkpoint schema '{CHECKPOINT_SCHEMA_NAME}' not found. Tried: {attempted}"
+    ))
+}
+
+fn resolve_git_toplevel(start: &std::path::Path) -> Option<PathBuf> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(start)
+        .arg("rev-parse")
+        .arg("--show-toplevel")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let raw = String::from_utf8(output.stdout).ok()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(PathBuf::from(trimmed))
+}
+
+fn checkpoint_schema_validator() -> PyResult<&'static jsonschema::JSONSchema> {
+    let init = CHECKPOINT_SCHEMA_META.get_or_init(|| {
+        let schema_path = resolve_checkpoint_schema_path()?;
+        let raw = std::fs::read_to_string(&schema_path).map_err(|e| {
+            format!(
+                "Failed to read checkpoint schema at {}: {e}",
+                schema_path.display()
+            )
+        })?;
+        let schema_json = serde_json::from_str::<serde_json::Value>(&raw).map_err(|e| {
+            format!(
+                "Invalid checkpoint schema JSON at {}: {e}",
+                schema_path.display()
+            )
+        })?;
+        let schema_id = schema_json
+            .get("$id")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+            .ok_or_else(|| {
+                format!(
+                    "Checkpoint schema missing '$id' at {}",
+                    schema_path.display()
+                )
+            })?;
+        let validator = jsonschema::JSONSchema::compile(&schema_json)
+            .map_err(|e| format!("Failed to compile checkpoint schema: {e}"))?;
+        Ok((validator, schema_id))
+    });
+
+    match init {
+        Ok((validator, _)) => Ok(validator),
+        Err(message) => Err(pyo3::exceptions::PyRuntimeError::new_err(message.clone())),
+    }
+}
+
+fn checkpoint_schema_id() -> PyResult<&'static str> {
+    let _ = checkpoint_schema_validator()?;
+    match CHECKPOINT_SCHEMA_META.get() {
+        Some(Ok((_, schema_id))) => Ok(schema_id.as_str()),
+        Some(Err(message)) => Err(pyo3::exceptions::PyRuntimeError::new_err(message.clone())),
+        None => Err(pyo3::exceptions::PyRuntimeError::new_err(
+            "checkpoint schema metadata not initialized",
+        )),
+    }
+}
+
+fn validate_checkpoint_input(
+    table_name: &str,
+    checkpoint_id: &str,
+    thread_id: &str,
+    content: &str,
+    timestamp: f64,
+    parent_id: &Option<String>,
+    embedding: &Option<Vec<f32>>,
+    metadata: &Option<String>,
+) -> PyResult<()> {
+    let validator = checkpoint_schema_validator()?;
+    let schema_instance = serde_json::json!({
+        "checkpoint_id": checkpoint_id,
+        "thread_id": thread_id,
+        "timestamp": timestamp,
+        "content": content,
+        "parent_id": parent_id,
+        "embedding": embedding,
+        "metadata": metadata,
+    });
+    if let Err(errors) = validator.validate(&schema_instance) {
+        let first = errors
+            .into_iter()
+            .next()
+            .map(|err| err.to_string())
+            .unwrap_or_else(|| "unknown checkpoint schema error".to_string());
+        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "checkpoint schema violation: {first}"
+        )));
+    }
+
+    if table_name.trim().is_empty() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "checkpoint table_name must be non-empty",
+        ));
+    }
+    if checkpoint_id.trim().is_empty() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "checkpoint_id must be non-empty",
+        ));
+    }
+    if thread_id.trim().is_empty() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "thread_id must be non-empty",
+        ));
+    }
+    if !timestamp.is_finite() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "timestamp must be finite",
+        ));
+    }
+    if let Some(parent) = parent_id
+        && parent == checkpoint_id
+    {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "parent_id cannot equal checkpoint_id",
+        ));
+    }
+    serde_json::from_str::<serde_json::Value>(content).map_err(|e| {
+        pyo3::exceptions::PyValueError::new_err(format!("content must be valid JSON text: {e}"))
+    })?;
+    if let Some(meta) = metadata {
+        let parsed = serde_json::from_str::<serde_json::Value>(meta).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!("metadata must be valid JSON: {e}"))
+        })?;
+        if !parsed.is_object() {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "metadata must be a JSON object",
+            ));
+        }
+    }
+    if let Some(values) = embedding {
+        for value in values {
+            if !value.is_finite() {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "embedding contains non-finite values",
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Timeline event for time-travel visualization.
@@ -117,6 +318,11 @@ pub struct PyCheckpointStore {
 
 #[pymethods]
 impl PyCheckpointStore {
+    #[staticmethod]
+    fn checkpoint_schema_id() -> PyResult<String> {
+        checkpoint_schema_id().map(ToString::to_string)
+    }
+
     #[new]
     fn new(path: String, dimension: Option<usize>) -> PyResult<Self> {
         let dimension = dimension.unwrap_or(1536);
@@ -161,6 +367,17 @@ impl PyCheckpointStore {
         embedding: Option<Vec<f32>>,
         metadata: Option<String>,
     ) -> PyResult<()> {
+        validate_checkpoint_input(
+            &table_name,
+            &checkpoint_id,
+            &thread_id,
+            &content,
+            timestamp,
+            &parent_id,
+            &embedding,
+            &metadata,
+        )?;
+
         let record = omni_vector::CheckpointRecord {
             checkpoint_id,
             thread_id,
@@ -367,6 +584,45 @@ impl PyCheckpointStore {
             let mut guard = store.lock().await;
             guard
                 .get_by_id(&table_name, &checkpoint_id)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })
+    }
+
+    /// Cleanup orphan checkpoints (interrupted task remnants).
+    #[pyo3(signature = (table_name, dry_run=false))]
+    fn cleanup_orphan_checkpoints(&self, table_name: String, dry_run: bool) -> PyResult<u32> {
+        if table_name.trim().is_empty() {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "checkpoint table_name must be non-empty",
+            ));
+        }
+        let store = self.store.clone();
+        let rt = get_runtime();
+
+        rt.block_on(async {
+            let mut guard = store.lock().await;
+            guard
+                .cleanup_orphan_checkpoints(&table_name, dry_run)
+                .await
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        })
+    }
+
+    /// Force recover a checkpoint table when schema/data drift is unrecoverable.
+    fn force_recover_table(&self, table_name: String) -> PyResult<()> {
+        if table_name.trim().is_empty() {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "checkpoint table_name must be non-empty",
+            ));
+        }
+        let store = self.store.clone();
+        let rt = get_runtime();
+
+        rt.block_on(async {
+            let guard = store.lock().await;
+            guard
+                .force_recover(&table_name)
                 .await
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
         })

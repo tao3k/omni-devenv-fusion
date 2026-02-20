@@ -31,7 +31,7 @@ Hippocampus **only stores valuable learnings**, not every successful task:
 
 ### Embedding Configuration
 
-**settings.yaml**:
+**Merged settings** (packages/conf/settings.yaml + user):
 
 ```yaml
 embedding:
@@ -53,7 +53,7 @@ embedding:
 async def _embed_with_llm_async(self, text: str) -> list[list[float]]:
     """Generate embedding using LLM (async version).
 
-    Returns a semantic vector of configured dimension (from settings.yaml).
+    Returns a semantic vector of configured dimension (from settings).
     LLM generates 16 core values, which are interpolated to the target dimension.
     """
     # Prompt LLM to generate 16 core semantic values
@@ -118,7 +118,7 @@ In the **Omega Architecture**, the Hippocampus serves as the long-term memory ce
 │                   │   LLM Embedding Service │                           │
 │                   │  - Provider: MiniMax    │                           │
 │                   │  - 16 core → 1024 dim   │                           │
-│                   │  - Source: settings.yaml│                           │
+│                   │  - Source: settings│                           │
 │                   └─────────────────────────┘                           │
 │                                                                          │
 └──────────────────────────────────────────────────────────────────────────┘
@@ -179,7 +179,7 @@ class EpisodicMemoryProvider(ContextProvider):
 
 **Path**: `{git_toplevel}/.cache/{project}/memory/lancedb/`
 
-**settings.yaml**:
+**Merged settings** (packages/conf/settings.yaml + user):
 
 ```yaml
 memory:

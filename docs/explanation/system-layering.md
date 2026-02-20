@@ -190,7 +190,7 @@ omni-dev-fusion/
 │   └── rust/
 │       └── crates/
 │           ├── omni-core-rs/    # Rust core (bindings)
-│           └── skills-scanner/  # Rust index generator
+│           └── omni-scanner/    # Rust index generator
 │
 ├── assets/
 │   └── skills/                  # Skill definitions

@@ -476,11 +476,11 @@ cargo test -p omni-tags
 
 ### Rust Test Status
 
-| Crate          | Tests | Status  |
-| -------------- | ----- | ------- |
-| omni-vector    | 35    | PASSING |
-| skills-scanner | 55    | PASSING |
-| omni-tags      | -     | TODO    |
+| Crate        | Tests | Status  |
+| ------------ | ----- | ------- |
+| omni-vector  | 35    | PASSING |
+| omni-scanner | 55    | PASSING |
+| omni-tags    | -     | TODO    |
 
 ---
 

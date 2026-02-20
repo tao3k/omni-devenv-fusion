@@ -8,21 +8,112 @@ Modules:
 - prj: Project directory utilities (PRJ_DIRS, PRJ_DATA, etc.)
 - database: Database path management
 - harvested: Harvested knowledge utilities
-- zk: Zettelkasten notebook utilities
+- link_graph: LinkGraph notebook utilities
 - settings: Settings class and functions
 - paths: Semantic path resolution
 
 SSOT (Single Source of Truth):
     references.yaml - Path and directory configurations
-    settings.yaml - Feature and behavior settings
+    packages/conf/settings.yaml (system) + user settings - General feature and behavior settings
+    packages/conf/wendao.yaml (system) + user wendao.yaml - LinkGraph/Wendao settings
 
 Usage:
     from omni.foundation.config import PRJ_DIRS, get_vector_db_path
     from omni.foundation.config.prj import PRJ_DATA, get_cache_dir
-    from omni.foundation.config.zk import get_zk_notebook_dir
+    from omni.foundation.config.link_graph import get_link_graph_notebook_dir
     from omni.foundation.config.settings import get_setting
 """
 
+from .database import (
+    get_checkpoint_db_path,
+    get_checkpoint_table_name,
+    get_database_path,
+    get_database_paths,
+    get_memory_db_path,
+    get_vector_db_path,
+)
+from .harvested import (
+    get_harvest_dir,
+    get_harvest_file,
+)
+from .link_graph import (
+    get_link_graph_config_path,
+    get_link_graph_harvested_dir,
+    get_link_graph_notebook_dir,
+)
+from .link_graph_runtime import (
+    DEFAULT_LINK_GRAPH_BACKEND,
+    DEFAULT_LINK_GRAPH_CANDIDATE_MULTIPLIER,
+    DEFAULT_LINK_GRAPH_CONFIG_RELATIVE_PATH,
+    DEFAULT_LINK_GRAPH_DELTA_FULL_REBUILD_THRESHOLD,
+    DEFAULT_LINK_GRAPH_EXCLUDED_ADDITIONAL_DIRS,
+    DEFAULT_LINK_GRAPH_EXCLUDED_HIDDEN_DIRS,
+    DEFAULT_LINK_GRAPH_GRAPH_ROWS_PER_SOURCE,
+    DEFAULT_LINK_GRAPH_HYBRID_MIN_HITS,
+    DEFAULT_LINK_GRAPH_HYBRID_MIN_TOP_SCORE,
+    DEFAULT_LINK_GRAPH_MAX_SOURCES,
+    DEFAULT_LINK_GRAPH_POLICY_CACHE_TTL_SECONDS,
+    DEFAULT_LINK_GRAPH_POLICY_SEARCH_TIMEOUT_SCALE_DEFAULT,
+    DEFAULT_LINK_GRAPH_POLICY_SEARCH_TIMEOUT_SCALE_LONG_NATURAL,
+    DEFAULT_LINK_GRAPH_POLICY_SEARCH_TIMEOUT_SCALE_MACHINE_LIKE,
+    DEFAULT_LINK_GRAPH_POLICY_SEARCH_TIMEOUT_SCALE_SHORT,
+    DEFAULT_LINK_GRAPH_POLICY_SEARCH_TIMEOUT_SCALE_SYMBOL_HEAVY,
+    DEFAULT_LINK_GRAPH_POLICY_SEARCH_TIMEOUT_SECONDS,
+    DEFAULT_LINK_GRAPH_POLICY_TIMEOUT_MARKER_TTL_SECONDS,
+    DEFAULT_LINK_GRAPH_PROXIMITY_MAX_PARALLEL_STEMS,
+    DEFAULT_LINK_GRAPH_PROXIMITY_MAX_STEMS,
+    DEFAULT_LINK_GRAPH_PROXIMITY_NEIGHBOR_LIMIT,
+    DEFAULT_LINK_GRAPH_PROXIMITY_STEM_CACHE_TTL_SECONDS,
+    DEFAULT_LINK_GRAPH_PROXIMITY_TIMEOUT_SECONDS,
+    DEFAULT_LINK_GRAPH_RETRIEVAL_MODE,
+    DEFAULT_LINK_GRAPH_STATS_CACHE_TTL_SEC,
+    DEFAULT_LINK_GRAPH_STATS_PERSISTENT_CACHE_TTL_SEC,
+    DEFAULT_LINK_GRAPH_STATS_RESPONSE_PROBE_TIMEOUT_SEC,
+    DEFAULT_LINK_GRAPH_STATS_RESPONSE_REFRESH_TIMEOUT_SEC,
+    DEFAULT_LINK_GRAPH_STATS_TIMEOUT_SEC,
+    LINK_GRAPH_CACHE_VALKEY_URL_ENV,
+    LINK_GRAPH_VALKEY_KEY_PREFIX_ENV,
+    LINK_GRAPH_VALKEY_TTL_SECONDS_ENV,
+    LinkGraphRuntimeConfig,
+    get_link_graph_backend_name,
+    get_link_graph_cache_key_prefix,
+    get_link_graph_cache_ttl_seconds,
+    get_link_graph_cache_valkey_url,
+    get_link_graph_candidate_multiplier,
+    get_link_graph_default_config_relative_path,
+    get_link_graph_excluded_dirs,
+    get_link_graph_graph_rows_per_source,
+    get_link_graph_hybrid_min_hits,
+    get_link_graph_hybrid_min_top_score,
+    get_link_graph_include_dirs,
+    get_link_graph_max_sources,
+    get_link_graph_policy_cache_ttl_seconds,
+    get_link_graph_policy_search_timeout_scale,
+    get_link_graph_policy_search_timeout_seconds,
+    get_link_graph_policy_timeout_marker_ttl_seconds,
+    get_link_graph_proximity_max_parallel_stems,
+    get_link_graph_proximity_max_stems,
+    get_link_graph_proximity_neighbor_limit,
+    get_link_graph_proximity_stem_cache_ttl_seconds,
+    get_link_graph_proximity_timeout_seconds,
+    get_link_graph_retrieval_mode,
+    get_link_graph_root_dir,
+    get_link_graph_runtime_config,
+    get_link_graph_stats_cache_ttl_sec,
+    get_link_graph_stats_response_probe_timeout_sec,
+    get_link_graph_stats_response_refresh_timeout_sec,
+    get_link_graph_stats_timeout_sec,
+    normalize_link_graph_dir_entries,
+    resolve_link_graph_cache_key_prefix,
+    resolve_link_graph_cache_ttl_seconds,
+    resolve_link_graph_cache_valkey_url,
+    resolve_link_graph_excluded_dirs,
+    resolve_link_graph_include_dirs,
+)
+from .paths import (
+    ConfigPaths,
+    get_config_paths,
+)
 from .prj import (
     PRJ_CACHE,
     PRJ_CHECKPOINT,
@@ -38,35 +129,45 @@ from .prj import (
     get_runtime_dir,
     get_skills_dir,
 )
-from .database import (
-    get_checkpoint_db_path,
-    get_checkpoint_table_name,
-    get_database_path,
-    get_database_paths,
-    get_memory_db_path,
-    get_vector_db_path,
-)
-from .harvested import (
-    get_harvest_dir,
-    get_harvest_file,
-)
-from .paths import (
-    ConfigPaths,
-    get_config_paths,
-)
 from .settings import (
     Settings,
     get_setting,
     get_settings,
 )
-from .zk import (
-    get_zk_config_path,
-    get_zk_notebook_dir,
-)
-
 
 __all__ = [
-    # Project directories (from prj.py)
+    "DEFAULT_LINK_GRAPH_BACKEND",
+    "DEFAULT_LINK_GRAPH_CANDIDATE_MULTIPLIER",
+    "DEFAULT_LINK_GRAPH_CONFIG_RELATIVE_PATH",
+    "DEFAULT_LINK_GRAPH_DELTA_FULL_REBUILD_THRESHOLD",
+    "DEFAULT_LINK_GRAPH_EXCLUDED_ADDITIONAL_DIRS",
+    "DEFAULT_LINK_GRAPH_EXCLUDED_HIDDEN_DIRS",
+    "DEFAULT_LINK_GRAPH_GRAPH_ROWS_PER_SOURCE",
+    "DEFAULT_LINK_GRAPH_HYBRID_MIN_HITS",
+    "DEFAULT_LINK_GRAPH_HYBRID_MIN_TOP_SCORE",
+    "DEFAULT_LINK_GRAPH_MAX_SOURCES",
+    "DEFAULT_LINK_GRAPH_POLICY_CACHE_TTL_SECONDS",
+    "DEFAULT_LINK_GRAPH_POLICY_SEARCH_TIMEOUT_SCALE_DEFAULT",
+    "DEFAULT_LINK_GRAPH_POLICY_SEARCH_TIMEOUT_SCALE_LONG_NATURAL",
+    "DEFAULT_LINK_GRAPH_POLICY_SEARCH_TIMEOUT_SCALE_MACHINE_LIKE",
+    "DEFAULT_LINK_GRAPH_POLICY_SEARCH_TIMEOUT_SCALE_SHORT",
+    "DEFAULT_LINK_GRAPH_POLICY_SEARCH_TIMEOUT_SCALE_SYMBOL_HEAVY",
+    "DEFAULT_LINK_GRAPH_POLICY_SEARCH_TIMEOUT_SECONDS",
+    "DEFAULT_LINK_GRAPH_POLICY_TIMEOUT_MARKER_TTL_SECONDS",
+    "DEFAULT_LINK_GRAPH_PROXIMITY_MAX_PARALLEL_STEMS",
+    "DEFAULT_LINK_GRAPH_PROXIMITY_MAX_STEMS",
+    "DEFAULT_LINK_GRAPH_PROXIMITY_NEIGHBOR_LIMIT",
+    "DEFAULT_LINK_GRAPH_PROXIMITY_STEM_CACHE_TTL_SECONDS",
+    "DEFAULT_LINK_GRAPH_PROXIMITY_TIMEOUT_SECONDS",
+    "DEFAULT_LINK_GRAPH_RETRIEVAL_MODE",
+    "DEFAULT_LINK_GRAPH_STATS_CACHE_TTL_SEC",
+    "DEFAULT_LINK_GRAPH_STATS_PERSISTENT_CACHE_TTL_SEC",
+    "DEFAULT_LINK_GRAPH_STATS_RESPONSE_PROBE_TIMEOUT_SEC",
+    "DEFAULT_LINK_GRAPH_STATS_RESPONSE_REFRESH_TIMEOUT_SEC",
+    "DEFAULT_LINK_GRAPH_STATS_TIMEOUT_SEC",
+    "LINK_GRAPH_CACHE_VALKEY_URL_ENV",
+    "LINK_GRAPH_VALKEY_KEY_PREFIX_ENV",
+    "LINK_GRAPH_VALKEY_TTL_SECONDS_ENV",
     "PRJ_CACHE",
     "PRJ_CHECKPOINT",
     "PRJ_CONFIG",
@@ -74,30 +175,61 @@ __all__ = [
     "PRJ_DIRS",
     "PRJ_PATH",
     "PRJ_RUNTIME",
+    "ConfigPaths",
+    "LinkGraphRuntimeConfig",
+    "Settings",
     "get_cache_dir",
-    "get_config_dir",
-    "get_data_dir",
-    "get_prj_dir",
-    "get_runtime_dir",
-    "get_skills_dir",
-    # Database utilities (from database.py)
     "get_checkpoint_db_path",
     "get_checkpoint_table_name",
+    "get_config_dir",
+    "get_config_paths",
+    "get_data_dir",
     "get_database_path",
     "get_database_paths",
-    "get_memory_db_path",
-    "get_vector_db_path",
-    # Harvested knowledge (from harvested.py)
     "get_harvest_dir",
     "get_harvest_file",
-    # Zettelkasten (from zk.py)
-    "get_zk_config_path",
-    "get_zk_notebook_dir",
-    # Settings
-    "Settings",
+    "get_link_graph_backend_name",
+    "get_link_graph_cache_key_prefix",
+    "get_link_graph_cache_ttl_seconds",
+    "get_link_graph_cache_valkey_url",
+    "get_link_graph_candidate_multiplier",
+    "get_link_graph_config_path",
+    "get_link_graph_default_config_relative_path",
+    "get_link_graph_excluded_dirs",
+    "get_link_graph_graph_rows_per_source",
+    "get_link_graph_harvested_dir",
+    "get_link_graph_hybrid_min_hits",
+    "get_link_graph_hybrid_min_top_score",
+    "get_link_graph_include_dirs",
+    "get_link_graph_max_sources",
+    "get_link_graph_notebook_dir",
+    "get_link_graph_policy_cache_ttl_seconds",
+    "get_link_graph_policy_search_timeout_scale",
+    "get_link_graph_policy_search_timeout_seconds",
+    "get_link_graph_policy_timeout_marker_ttl_seconds",
+    "get_link_graph_proximity_max_parallel_stems",
+    "get_link_graph_proximity_max_stems",
+    "get_link_graph_proximity_neighbor_limit",
+    "get_link_graph_proximity_stem_cache_ttl_seconds",
+    "get_link_graph_proximity_timeout_seconds",
+    "get_link_graph_retrieval_mode",
+    "get_link_graph_root_dir",
+    "get_link_graph_runtime_config",
+    "get_link_graph_stats_cache_ttl_sec",
+    "get_link_graph_stats_response_probe_timeout_sec",
+    "get_link_graph_stats_response_refresh_timeout_sec",
+    "get_link_graph_stats_timeout_sec",
+    "get_memory_db_path",
+    "get_prj_dir",
+    "get_runtime_dir",
     "get_setting",
     "get_settings",
-    # Paths
-    "ConfigPaths",
-    "get_config_paths",
+    "get_skills_dir",
+    "get_vector_db_path",
+    "normalize_link_graph_dir_entries",
+    "resolve_link_graph_cache_key_prefix",
+    "resolve_link_graph_cache_ttl_seconds",
+    "resolve_link_graph_cache_valkey_url",
+    "resolve_link_graph_excluded_dirs",
+    "resolve_link_graph_include_dirs",
 ]

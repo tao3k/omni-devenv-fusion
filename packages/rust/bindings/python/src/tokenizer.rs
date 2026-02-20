@@ -2,7 +2,7 @@
 //!
 //! High-performance token counting and context pruning for LangGraph.
 
-use omni_tokenizer::{ContextPruner, Message, count_tokens, truncate};
+use omni_tokenizer::{ContextPruner, Message, chunk_text, count_tokens, truncate};
 use pyo3::prelude::*;
 
 /// Count tokens in text using Rust (20-100x faster than Python).
@@ -32,6 +32,24 @@ pub fn py_count_tokens(text: &str) -> usize {
 #[pyfunction]
 pub fn py_truncate(text: &str, max_tokens: usize) -> String {
     truncate(text, max_tokens)
+}
+
+/// Chunk text by token boundaries with overlap (single pass).
+///
+/// Returns list of (chunk_text, chunk_index) for ingest with source + chunk_index.
+///
+/// # Arguments
+///
+/// * `text` - Full document text
+/// * `chunk_size_tokens` - Target size per chunk
+/// * `overlap_tokens` - Overlap between consecutive chunks
+#[pyfunction]
+pub fn py_chunk_text(
+    text: &str,
+    chunk_size_tokens: usize,
+    overlap_tokens: usize,
+) -> Vec<(String, u32)> {
+    chunk_text(text, chunk_size_tokens, overlap_tokens)
 }
 
 /// Python-friendly Message struct for conversation history.

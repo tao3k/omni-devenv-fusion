@@ -1,4 +1,6 @@
-.zk/notebook.db
+!.zk/templates
+!.zk/config.toml
+.zk
 # Devenv
 .devenv*
 devenv.local.nix
@@ -18,11 +20,13 @@ target
 # prj-spec directories (numtide/prj-spec)
 # See: https://github.com/numtide/prj-spec
 # All content in these dirs is auto-generated and ignored
-.config/
+.config/*
 .run/
 .cache/
 .data/
 .bin/
+
+!.config/omni-dev-fusion
 
 .mcp.json
 

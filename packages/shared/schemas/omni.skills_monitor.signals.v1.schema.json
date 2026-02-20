@@ -1,0 +1,563 @@
+{
+  "$id": "https://schemas.omni.dev/omni.skills_monitor.signals.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Omni Skills Monitor Signals v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "retrieval_signals", "link_graph_signals"],
+  "properties": {
+    "schema": {
+      "const": "omni.skills_monitor.signals.v1"
+    },
+    "retrieval_signals": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/retrievalSignals"
+        }
+      ]
+    },
+    "link_graph_signals": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/linkGraphSignals"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "retrievalSignals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row_budget"],
+      "properties": {
+        "row_budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "count",
+            "query_count",
+            "backend_count",
+            "rows_fetched_sum",
+            "rows_parsed_sum",
+            "rows_input_sum",
+            "rows_returned_sum",
+            "rows_capped_sum",
+            "rows_parse_dropped_sum",
+            "modes",
+            "latest"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "query_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "backend_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rows_fetched_sum": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rows_parsed_sum": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rows_input_sum": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rows_returned_sum": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rows_capped_sum": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rows_parse_dropped_sum": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "memory": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "observed_count",
+                "rss_delta_sum",
+                "rss_peak_delta_sum",
+                "rss_delta_max",
+                "rss_peak_delta_max"
+              ],
+              "properties": {
+                "observed_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "rss_delta_sum": {
+                  "type": ["number", "null"]
+                },
+                "rss_peak_delta_sum": {
+                  "type": ["number", "null"]
+                },
+                "rss_delta_max": {
+                  "type": ["number", "null"]
+                },
+                "rss_peak_delta_max": {
+                  "type": ["number", "null"]
+                }
+              }
+            },
+            "modes": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["count", "rows_returned", "rows_capped"],
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "rows_returned": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "rows_capped": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            },
+            "latest": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "phase",
+                "mode",
+                "collection",
+                "fetch_limit",
+                "rows_fetched",
+                "rows_parsed",
+                "rows_input",
+                "rows_returned",
+                "rows_capped",
+                "rows_parse_dropped"
+              ],
+              "properties": {
+                "phase": {
+                  "type": ["string", "null"]
+                },
+                "mode": {
+                  "type": ["string", "null"]
+                },
+                "collection": {
+                  "type": ["string", "null"]
+                },
+                "fetch_limit": {
+                  "type": ["integer", "null"]
+                },
+                "rows_fetched": {
+                  "type": ["integer", "null"]
+                },
+                "rows_parsed": {
+                  "type": ["integer", "null"]
+                },
+                "rows_input": {
+                  "type": ["integer", "null"]
+                },
+                "rows_returned": {
+                  "type": ["integer", "null"]
+                },
+                "rows_capped": {
+                  "type": ["integer", "null"]
+                },
+                "rows_parse_dropped": {
+                  "type": ["integer", "null"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "linkGraphSignals": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "policy_search": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count", "timeouts", "buckets", "latest"],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "timeouts": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "buckets": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "latest": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "timeout_s",
+                "timeout_bucket",
+                "backend",
+                "timed_out"
+              ],
+              "properties": {
+                "timeout_s": {
+                  "type": ["number", "null"]
+                },
+                "timeout_bucket": {
+                  "type": ["string", "null"]
+                },
+                "backend": {
+                  "type": ["string", "null"]
+                },
+                "timed_out": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "proximity_fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count", "skipped", "timed_out", "reasons"],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "skipped": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "timed_out": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reasons": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "index_refresh": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["observed", "plan", "delta_apply", "full_rebuild"],
+          "properties": {
+            "observed": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["total", "plan", "delta_apply", "full_rebuild"],
+              "properties": {
+                "total": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "plan": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "delta_apply": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "full_rebuild": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "plan": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "count",
+                "strategies",
+                "reasons",
+                "force_full_true",
+                "changed_count_sum",
+                "threshold",
+                "latest"
+              ],
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "strategies": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "reasons": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "force_full_true": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "changed_count_sum": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "threshold": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["max"],
+                  "properties": {
+                    "max": {
+                      "type": ["integer", "null"]
+                    }
+                  }
+                },
+                "latest": {
+                  "type": ["object", "null"],
+                  "additionalProperties": false,
+                  "required": [
+                    "strategy",
+                    "reason",
+                    "changed_count",
+                    "threshold",
+                    "force_full"
+                  ],
+                  "properties": {
+                    "strategy": {
+                      "type": ["string", "null"]
+                    },
+                    "reason": {
+                      "type": ["string", "null"]
+                    },
+                    "changed_count": {
+                      "type": ["integer", "null"]
+                    },
+                    "threshold": {
+                      "type": ["integer", "null"]
+                    },
+                    "force_full": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            },
+            "delta_apply": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "count",
+                "success",
+                "failed",
+                "changed_count_sum",
+                "latest"
+              ],
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "success": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "failed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "changed_count_sum": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "latest": {
+                  "type": ["object", "null"],
+                  "additionalProperties": false,
+                  "required": ["success", "changed_count"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "changed_count": {
+                      "type": ["integer", "null"]
+                    }
+                  }
+                }
+              }
+            },
+            "full_rebuild": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "count",
+                "success",
+                "failed",
+                "reasons",
+                "changed_count_sum",
+                "latest"
+              ],
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "success": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "failed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "reasons": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "changed_count_sum": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "latest": {
+                  "type": ["object", "null"],
+                  "additionalProperties": false,
+                  "required": ["success", "reason", "changed_count"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": ["string", "null"]
+                    },
+                    "changed_count": {
+                      "type": ["integer", "null"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "graph_stats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "count",
+            "sources",
+            "cache_hit_true",
+            "fresh_true",
+            "refresh_scheduled",
+            "age_ms",
+            "latest"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sources": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "cache_hit_true": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "fresh_true": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "refresh_scheduled": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "age_ms": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["avg", "max"],
+              "properties": {
+                "avg": {
+                  "type": ["number", "null"]
+                },
+                "max": {
+                  "type": ["integer", "null"]
+                }
+              }
+            },
+            "latest": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source",
+                "cache_hit",
+                "fresh",
+                "age_ms",
+                "refresh_scheduled",
+                "total_notes"
+              ],
+              "properties": {
+                "source": {
+                  "type": ["string", "null"]
+                },
+                "cache_hit": {
+                  "type": "boolean"
+                },
+                "fresh": {
+                  "type": "boolean"
+                },
+                "age_ms": {
+                  "type": ["integer", "null"]
+                },
+                "refresh_scheduled": {
+                  "type": "boolean"
+                },
+                "total_notes": {
+                  "type": ["integer", "null"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

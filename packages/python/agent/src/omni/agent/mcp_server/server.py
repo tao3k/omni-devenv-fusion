@@ -391,7 +391,7 @@ class AgentMCPServer:
     def _validate_overrides(self):
         """Check if configured overrides actually exist in kernel.
 
-        Logs warnings if settings.yaml contains overrides for tools that don't exist.
+        Logs warnings if settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) contain overrides for tools that don't exist.
         """
         if not self._kernel or not self._kernel.is_ready:
             return
@@ -573,18 +573,26 @@ class AgentMCPServer:
             # Resolve alias before validation so validation always targets canonical command.
             real_command = self._alias_to_real.get(name, name)
 
-            # [NEW] FAST-FAIL: Validate parameters BEFORE kernel execution
-            # This prevents expensive initialization when args are missing/invalid
+            # MCP hot path: validate with short timeout so we never block on Rust scanner.
+            # (Kernel is already up; only validation can block if cache is cold.)
             try:
                 from omni.core.skills.validation import validate_tool_args, format_validation_errors
 
-                validation_errors = validate_tool_args(real_command, arguments)
+                _VALIDATION_TIMEOUT = 2.0  # seconds; skip validation if scanner is slow
+                validation_errors = await asyncio.wait_for(
+                    asyncio.to_thread(validate_tool_args, real_command, arguments),
+                    timeout=_VALIDATION_TIMEOUT,
+                )
                 if validation_errors:
                     error_msg = format_validation_errors(real_command, validation_errors)
                     logger.warning(f"Parameter validation failed: {real_command}")
                     return self._text_response(error_msg)
+            except asyncio.TimeoutError:
+                logger.debug(
+                    "Validation skipped (timeout); proceeding to kernel",
+                    command=real_command,
+                )
             except Exception as validation_error:
-                # Validation is best-effort - if it fails, let kernel handle it
                 logger.debug(
                     "Validation step failed, continuing with kernel execution",
                     command=real_command,
@@ -601,17 +609,27 @@ class AgentMCPServer:
                 if name != real_command:
                     logger.debug(f"🔀 Route Alias: '{name}' -> '{real_command}'")
 
-                # Execute
-                start_t = time.time()
-                result = await self._kernel.execute_tool(real_command, arguments, caller="mcp")
-                duration = time.time() - start_t
+                try:
+                    start_t = time.time()
+                    from omni.agent.mcp_server.memory_monitor import amemory_monitor_scope
+                    from omni.foundation.api.tool_context import run_with_execution_timeout
 
-                # [NEW] Log the OUTGOING result cleanly
-                # Prevents "read_file" from flooding the terminal
-                clean_result = one_line_preview(result, max_len=100)
-                logger.info(f"✅ Done: {name} -> {clean_result} ({duration:.2f}s)")
+                    async with amemory_monitor_scope(name):
+                        result = await run_with_execution_timeout(
+                            self._kernel.execute_tool(real_command, arguments, caller="mcp")
+                        )
+                    duration = time.time() - start_t
 
-                return self._text_response(str(result))
+                    clean_result = one_line_preview(result, max_len=100)
+                    logger.info(f"✅ Done: {name} -> {clean_result} ({duration:.2f}s)")
+
+                    return self._text_response(str(result))
+                except asyncio.TimeoutError as e:
+                    logger.error(f"❌ Timeout: {name} — {e}")
+                    return self._error_response(
+                        str(e)
+                        + " Configure mcp.timeout and mcp.idle_timeout in settings; tools can call heartbeat() during long work."
+                    )
             except Exception as e:
                 logger.error(f"❌ Fail: {name} -> {e}")
                 return self._error_response(str(e))
@@ -909,13 +927,13 @@ class AgentMCPServer:
         """List skill-declared resources from Rust LanceDB (skills table).
 
         Uses list_all_resources() when the table has a metadata column and rows
-        with resource_uri. Falls back to filesystem scan (@skill_resource) when
-        DB returns none (e.g. before reindex or legacy tables).
+        with resource_uri. Falls back to filesystem scan when DB returns none
+        (e.g. before reindex or legacy tables).
         """
-        from omni.foundation.bridge.rust_vector import get_vector_store
-
         resources: list[Resource] = []
         try:
+            from omni.foundation.bridge.rust_vector import get_vector_store
+
             store = get_vector_store()
             rows = store.list_all_resources("skills")
             for r in rows:

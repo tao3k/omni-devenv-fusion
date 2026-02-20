@@ -288,10 +288,14 @@ class SSEServer:
 
         async def health(request: Request) -> Response:
             """GET /health - Health check endpoint."""
+            ready = bool(getattr(self.handler, "is_ready", True))
+            initializing = bool(getattr(self.handler, "is_initializing", False))
             return JSONResponse(
                 {
                     "status": "healthy",
                     "active_sessions": self._session_manager.active_sessions,
+                    "ready": ready,
+                    "initializing": initializing,
                 }
             )
 

@@ -169,7 +169,7 @@ This is a test skill.
 # =============================================================================
 
 # Use load_skill_module from omni.foundation.skills_path instead of manual implementation
-# This handles path resolution from settings.yaml and module loading automatically
+# This handles path resolution from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) and module loading automatically
 
 
 def load_skill_module(skill_name: str):

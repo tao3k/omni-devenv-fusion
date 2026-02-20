@@ -1,6 +1,6 @@
 ---
 name: memory
-description: Use when storing insights, recalling past experiences, saving learning, or retrieving context from vector-based memory.
+description: Use for short-term operational memory: track transient issues/workarounds, recall recent execution context, and support cleanup of stale entries.
 metadata:
   author: omni-dev-fusion
   version: "1.0.0"
@@ -13,27 +13,32 @@ metadata:
     - "learn"
     - "forget"
     - "context"
-    - "persistent"
-    - "long-term"
+    - "short-term"
+    - "transient"
+    - "workaround"
+    - "cleanup"
     - "recall"
     - "embeddings"
     - "vector"
     - "note"
-    - "wisdom"
+    - "revalidation"
   intents:
-    - "Remember or store information"
-    - "Recall past experiences"
-    - "Save learning to memory"
-    - "Retrieve context from memory"
+    - "Track transient operational findings"
+    - "Recall recent issue context"
+    - "Store temporary workaround knowledge"
+    - "Support short-term memory cleanup workflows"
 ---
 
 # Memory Skill Policy
 
+This skill is an MCP-facing facade for memory operations.
+Core memory policy (lifecycle/revalidation/promotion) belongs to Rust memory core, not this skill surface.
+
 ## Router Logic
 
-### Scenario 1: User wants to store something
+### Scenario 1: User wants to store a transient finding
 
-1. **Analyze**: Determine the type of memory (insight, rule, decision)
+1. **Analyze**: Determine if the item is transient operational memory (bug/workaround/incident note)
 2. **Store**: Call `save_memory(content, metadata)`
 3. **Confirm**: Show the saved memory ID
 
@@ -43,63 +48,62 @@ metadata:
 2. **Format**: Present results with relevance scores
 3. **Respond**: "I found X memories about that..."
 
-### Scenario 3: User asks "What have you learned?", "Show memories"
+### Scenario 3: User asks for current operational memory status
 
 1. **List**: Call `get_memory_stats()`
 2. **Recall**: Call `search_memory()` with relevant keywords
-3. **Present**: Show structured summary
+3. **Present**: Show structured summary with transient scope
 
 ## Commands Reference
 
-| Command            | Description                             | Example                                                  |
-| ------------------ | --------------------------------------- | -------------------------------------------------------- |
-| `save_memory`      | Store insight/recipe into vector memory | `save_memory("Use semantic versioning", {"tag": "git"})` |
-| `search_memory`    | Semantic search in memory               | `search_memory("git commit format", limit=5)`            |
-| `index_memory`     | Optimize vector index (IVF-FLAT)        | `index_memory()`                                         |
-| `get_memory_stats` | Get memory count                        | `get_memory_stats()`                                     |
-| `load_skill`       | Load skill manifest into memory         | `load_skill("git")`                                      |
+| Command            | Description                              | Example                                                                          |
+| ------------------ | ---------------------------------------- | -------------------------------------------------------------------------------- |
+| `save_memory`      | Store short-term operational memory item | `save_memory("Temporary workaround for timeout in parser", {"tag": "incident"})` |
+| `search_memory`    | Semantic search in memory                | `search_memory("git commit format", limit=5)`                                    |
+| `index_memory`     | Optimize vector index (IVF-FLAT)         | `index_memory()`                                                                 |
+| `get_memory_stats` | Get memory count                         | `get_memory_stats()`                                                             |
+| `load_skill`       | Load skill manifest into memory          | `load_skill("git")`                                                              |
 
-## Workflow: Store an Insight
+## Workflow: Store a Transient Workaround
 
 ```
-User: Remember that for this project, all commit messages must be in English.
+User: Remember this temporary fix: increase parser timeout when MCP queue spikes.
 
 Claude:
   1. save_memory(
-       content="All commit messages must be in English only",
-       metadata={"domain": "git", "source": "user"}
+       content="Temporary workaround: increase parser timeout under MCP queue spike",
+       metadata={"domain": "runtime", "kind": "workaround", "source": "user"}
      )
-  2. → Saved memory [a1b2c3d4]: All commit messages must be in English only
-  3. → "Got it! I'll remember that commit messages must be in English."
+  2. → Saved memory [a1b2c3d4]: Temporary workaround: increase parser timeout...
+  3. → "Stored as short-term operational memory."
 ```
 
-## Workflow: Recall Past Learning
+## Workflow: Recall Recent Operational Context
 
 ```
-User: What do we use for git tags?
+User: What workaround did we use for MCP queue timeout?
 
 Claude:
-  1. search_memory("git tags semantic versioning")
+  1. search_memory("MCP queue timeout workaround")
   2. → Found 2 matches:
-     - [Score: 0.8921] Always use semantic versioning for git tags...
-     - [Score: 0.7234] v1.2.3 format for releases
-  3. → "I found memories about git tags:
-       - Always use semantic versioning for git tags..."
+     - [Score: 0.8921] Temporary workaround: increase parser timeout...
+     - [Score: 0.7234] Queue backpressure note...
+  3. → "I found recent operational memory for this issue..."
 ```
 
 ## Memory vs Knowledge Skill
 
-| Aspect      | Memory               | Knowledge              |
-| ----------- | -------------------- | ---------------------- |
-| **Source**  | LLM's own learnings  | Project documentation  |
-| **Storage** | LanceDB (vector)     | File system (markdown) |
-| **Query**   | Semantic search      | Keyword/pattern match  |
-| **Purpose** | "What did I learn?"  | "What are the rules?"  |
-| **Update**  | Runtime accumulation | Pre-indexed docs       |
+| Aspect       | Memory (this skill)                            | Knowledge skill                               |
+| ------------ | ---------------------------------------------- | --------------------------------------------- |
+| **Scope**    | Short-term operational context                 | Long-term reusable knowledge                  |
+| **Nature**   | Transient (can be purged after revalidation)   | Stable (promoted/curated)                     |
+| **Purpose**  | "What recent issue/workaround context exists?" | "What durable rule/pattern should be reused?" |
+| **Policy**   | Managed by Rust memory core lifecycle          | Managed by knowledge ingestion/curation flows |
+| **Exposure** | MCP tool facade                                | MCP tool interface                            |
 
 ## Best Practices
 
-1. **Store actionable insights**, not obvious facts
-2. **Include domain in metadata** for filtering
+1. **Store transient operational memory**, not permanent rules
+2. **Include `kind` in metadata** (`incident`, `workaround`, `observation`)
 3. **Use clear, searchable phrasing** in content
-4. **Recall before acting** on project-specific patterns
+4. **Promote only proven durable patterns** to `knowledge`

@@ -88,6 +88,9 @@ from .universal import (
     create_universal_skill,
 )
 
+# Unified skill run (fast path + kernel fallback)
+from .runner import FastPathUnavailable, run_skill, run_skill_with_monitor
+
 # Indexer module
 from .indexer import SkillIndexer
 
@@ -130,6 +133,10 @@ __all__ = [
     "UniversalSkillFactory",
     "create_universal_skill",
     "create_skill_from_assets",
+    # Runner (unified run: fast path + kernel fallback)
+    "run_skill",
+    "run_skill_with_monitor",
+    "FastPathUnavailable",
     # Indexer
     "SkillIndexer",
 ]

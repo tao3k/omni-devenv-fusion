@@ -6,7 +6,7 @@ Modularized.
 
 Provides consistent API key loading from multiple sources:
 1. Environment variable (ANTHROPIC_API_KEY)
-2. .claude/settings.json (via settings.yaml path)
+2. .claude/settings.json (path from packages/conf/settings.yaml or user settings)
 3. .mcp.json (Claude Desktop format)
 
 Usage:
@@ -32,14 +32,14 @@ def _find_project_root() -> Path:
 
 
 def _load_settings_yaml() -> dict:
-    """Load API config from the merged settings view."""
+    """Load API config from the two-layer settings (system + user)."""
     from omni.foundation.config.settings import get_settings
 
     return get_settings().get("api", {})
 
 
 def _get_settings_json_path() -> Path | None:
-    """Get .claude/settings.json path from settings.yaml."""
+    """Get .claude/settings.json path from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml)."""
     api_settings = _load_settings_yaml()
     anthropic_path = api_settings.get("anthropic_settings", ".claude/settings.json")
     project_root = _find_project_root()
@@ -52,7 +52,7 @@ def get_anthropic_api_key() -> str | None:
 
     Priority:
     1. Environment variable ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN
-    2. .claude/settings.json (reads from settings.yaml path)
+    2. .claude/settings.json (path from packages/conf/settings.yaml or user settings)
     3. .mcp.json (Claude Desktop format)
 
     Supports both standard Anthropic format (ANTHROPIC_API_KEY) and
@@ -69,7 +69,7 @@ def get_anthropic_api_key() -> str | None:
 
     project_root = _find_project_root()
 
-    # 2. Try .claude/settings.json (via settings.yaml path)
+    # 2. Try .claude/settings.json (path from packages/conf/settings.yaml or user settings)
     settings_path = _get_settings_json_path()
     if settings_path and settings_path.exists():
         try:
@@ -130,7 +130,7 @@ def ensure_api_key() -> str:
         raise RuntimeError(
             "ANTHROPIC_API_KEY not found. Please set it via:\n"
             "1. Environment variable: export ANTHROPIC_API_KEY=sk-...\n"
-            "2. .claude/settings.json (path configured in agent/settings.yaml)\n"
+            "2. .claude/settings.json (path from packages/conf/settings.yaml or user settings)\n"
             "3. .mcp.json: mcpServers.orchestrator.env.ANTHROPIC_API_KEY"
         )
     return api_key

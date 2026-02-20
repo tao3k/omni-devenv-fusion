@@ -89,16 +89,48 @@ class DocumentParser:
         if ext not in SUPPORTED_FORMATS:
             raise ValueError(f"Unsupported format: {ext}")
 
+        # PDF fast path: text-only extraction (2–5s) instead of Docling (30–40s) when acceptable
+        if ext == ".pdf" and kwargs.get("fast_path_for_pdf", False):
+            min_chars = int(kwargs.get("pdf_fast_path_min_chars", 2000))
+
+            def _pdfminer_extract(path: str) -> str:
+                try:
+                    from pdfminer.high_level import extract_text as pdfminer_extract_text
+
+                    return pdfminer_extract_text(path) or ""
+                except Exception as e:
+                    logger.debug("pdfminer fast path failed", path=path, error=str(e))
+                    return ""
+
+            fast_text = await asyncio.to_thread(_pdfminer_extract, file_path)
+            if len(fast_text.strip()) >= min_chars:
+                logger.info(
+                    "Document parsed (PDF fast path)",
+                    file=file_path,
+                    chars=len(fast_text),
+                    parser="pdfminer",
+                )
+                return [
+                    {
+                        "type": "text",
+                        "text": self._clean_text(fast_text),
+                        "index": 0,
+                        "source": file_path,
+                        "metadata": {"parser": "pdfminer"},
+                    }
+                ]
+
         # Use default method if not specified
         method = method or self.default_method
 
         try:
-            # Use RAG-Anything's BatchParser
+            # Use RAG-Anything's BatchParser (Docling / MinerU etc.)
             from raganything.batch_parser import BatchParser
 
+            max_workers = int(kwargs.get("max_workers", 4))
             parser = BatchParser(
                 parser_type=method if method != "auto" else "docling",
-                max_workers=4,
+                max_workers=max_workers,
                 show_progress=False,
             )
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 import inspect
 import os
 import re
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,16 @@ from omni.foundation.config.logging import get_logger
 from pydantic import BaseModel
 
 logger = get_logger("omni.core.universal")
+
+
+def _record_phase(phase: str, duration_ms: float, **extra: Any) -> None:
+    """Record monitor phase when skills monitor is active."""
+    try:
+        from omni.foundation.runtime.skills_monitor import record_phase
+
+        record_phase(phase, duration_ms, **extra)
+    except Exception:
+        pass
 
 
 class SkillActivationConfig(BaseModel):
@@ -206,51 +217,98 @@ class UniversalScriptSkill:
 
         context = context or {}
         cwd = context.get("cwd", os.getcwd())
+        allow_module_reuse = bool(context.get("allow_module_reuse", False))
+        skip_workflow_clear = bool(context.get("skip_workflow_clear", False))
 
         logger.debug(f"[{self._name}] Loading from {self._path}")
 
         # 0. Clear sys.modules cache for this skill (hot reload support)
-        skill_module_prefix = f"{self._name}."
-        modules_to_remove = [k for k in sys.modules if k.startswith(skill_module_prefix)]
-        for mod in modules_to_remove:
-            del sys.modules[mod]
-        logger.debug(f"[{self._name}] Cleared {len(modules_to_remove)} cached modules")
+        clear_started = time.perf_counter()
+        cleared_modules = 0
+        if allow_module_reuse:
+            logger.debug(f"[{self._name}] Reusing cached modules (fast-path)")
+        else:
+            skill_module_prefix = f"{self._name}."
+            modules_to_remove = [k for k in sys.modules if k.startswith(skill_module_prefix)]
+            for mod in modules_to_remove:
+                del sys.modules[mod]
+            cleared_modules = len(modules_to_remove)
+            logger.debug(f"[{self._name}] Cleared {cleared_modules} cached modules")
+        _record_phase(
+            "runner.fast.load.modules.clear",
+            (time.perf_counter() - clear_started) * 1000,
+            skill=self._name,
+            allow_module_reuse=allow_module_reuse,
+            cleared_modules=cleared_modules,
+        )
 
         # Also clear workflow visualizations for this skill (they cache at module level)
-        try:
-            from omni.langgraph.visualize import clear_workflows
+        workflow_clear_started = time.perf_counter()
+        workflow_cleared = 0
+        if not skip_workflow_clear:
+            try:
+                from omni.langgraph.visualize import clear_workflows
 
-            cleared = clear_workflows(self._name)
-            if cleared:
-                logger.debug(f"[{self._name}] Cleared {cleared} workflow diagrams")
-        except ImportError:
-            pass
+                workflow_cleared = clear_workflows(self._name)
+                if workflow_cleared:
+                    logger.debug(f"[{self._name}] Cleared {workflow_cleared} workflow diagrams")
+            except ImportError:
+                pass
+        _record_phase(
+            "runner.fast.load.workflows.clear",
+            (time.perf_counter() - workflow_clear_started) * 1000,
+            skill=self._name,
+            cleared=workflow_cleared,
+            skipped=skip_workflow_clear,
+        )
 
         # 1. Load Extensions
+        ext_started = time.perf_counter()
+        extension_count = 0
         ext_path = self._path / "extensions"
         if ext_path.exists():
             self._ext_loader = SkillExtensionLoader(str(ext_path), self._name)
             self._ext_loader.load_all()
+            extension_count = len(self._ext_loader.extensions)
+        _record_phase(
+            "runner.fast.load.extensions",
+            (time.perf_counter() - ext_started) * 1000,
+            skill=self._name,
+            extension_count=extension_count,
+        )
 
         # 2. Load Modular Sniffer Extensions
+        sniffer_started = time.perf_counter()
         sniffer_path = self._path / "extensions" / "sniffer"
         if sniffer_path.exists():
             loader = SnifferLoader(sniffer_path)
             self._sniffer_ext = loader.load_all()
             if self._sniffer_ext:
                 logger.debug(f"[{self._name}] {len(self._sniffer_ext)} sniffer extensions")
+        _record_phase(
+            "runner.fast.load.sniffer",
+            (time.perf_counter() - sniffer_started) * 1000,
+            skill=self._name,
+            extension_count=len(self._sniffer_ext),
+        )
 
         # 3. Create Script Loader
         scripts_path = self._path / "scripts"
         self._tools_loader = create_tools_loader(scripts_path, self._name)
+        self._tools_loader.set_allow_module_reuse(allow_module_reuse)
 
         # 4. Auto-Wiring: Inject Rust accelerator if present
+        rust_started = time.perf_counter()
+        rust_active = False
+        rust_present = False
         rust_bridge = self._get_extension("rust_bridge")
         if rust_bridge:
+            rust_present = True
             try:
                 accelerator = rust_bridge.RustAccelerator(cwd)
                 if accelerator.is_active:
                     self._tools_loader.inject("rust", accelerator)
+                    rust_active = True
                     logger.debug(f"[{self._name}] Rust Accelerator active")
                 else:
                     self._tools_loader.inject("rust", None)
@@ -260,9 +318,35 @@ class UniversalScriptSkill:
                 self._tools_loader.inject("rust", None)
         else:
             self._tools_loader.inject("rust", None)
+        _record_phase(
+            "runner.fast.load.rust",
+            (time.perf_counter() - rust_started) * 1000,
+            skill=self._name,
+            extension_present=rust_present,
+            active=rust_active,
+        )
 
-        # 5. Load Scripts
-        self._tools_loader.load_all()
+        # 5. Load Scripts (optionally targeted by command name for fast-path runs)
+        scripts_load_started = time.perf_counter()
+        load_mode = "all"
+        load_hit: bool | None = None
+        target_command = context.get("target_command")
+        if isinstance(target_command, str) and target_command.strip():
+            target = target_command.strip()
+            load_mode = "targeted"
+            load_hit = self._tools_loader.load_command(target)
+            logger.debug(f"[{self._name}] Targeted load attempted: {target}")
+        else:
+            self._tools_loader.load_all()
+        _record_phase(
+            "runner.fast.load.scripts",
+            (time.perf_counter() - scripts_load_started) * 1000,
+            skill=self._name,
+            mode=load_mode,
+            target=target_command if isinstance(target_command, str) else None,
+            hit=load_hit,
+            command_count=len(self._tools_loader),
+        )
 
         self._loaded = True
         logger.debug(f"[{self._name}] Loaded ({len(self._tools_loader)} commands)")
@@ -306,10 +390,43 @@ class UniversalScriptSkill:
                 f"Command '{cmd_name}' not found in skill '{self._name}'. Available: {available}"
             )
 
+        self._validate_required_args(handler, cmd_name, kwargs)
+
         # Execute handler
         if inspect.iscoroutinefunction(handler):
             return await handler(**kwargs)
         return handler(**kwargs)
+
+    def _validate_required_args(
+        self, handler: Callable, cmd_name: str, args: dict[str, Any]
+    ) -> None:
+        """Fast-fail validation using command's own schema metadata.
+
+        This protects runtime calls even when external schema caches are stale.
+        """
+        config = getattr(handler, "_skill_config", None)
+        if not isinstance(config, dict):
+            return
+
+        input_schema = config.get("input_schema", {})
+        if not isinstance(input_schema, dict):
+            return
+
+        required = input_schema.get("required", [])
+        if not isinstance(required, list) or not required:
+            return
+
+        missing = [name for name in required if isinstance(name, str) and name not in args]
+        if not missing:
+            return
+
+        display_name = cmd_name if "." in cmd_name else f"{self._name}.{cmd_name}"
+        missing_text = ", ".join(missing)
+        provided = ", ".join(sorted(args.keys())) if args else "(none)"
+        raise ValueError(
+            f"Argument validation failed for '{display_name}': missing required field(s): "
+            f"{missing_text}. Provided: {provided}"
+        )
 
     def list_commands(self) -> list[str]:
         """List all available commands."""

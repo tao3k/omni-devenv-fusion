@@ -1,6 +1,6 @@
 //! High-performance environment sniffer using libgit2.
 //!
-//! The sensory system of the Omni DevEnv.
+//! The sensory system of the Omni `DevEnv`.
 
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -11,7 +11,7 @@ use crate::git::scan_git_status;
 use omni_types::EnvironmentSnapshot;
 
 /// High-performance environment sniffer using libgit2.
-/// The sensory system of the Omni DevEnv.
+/// The sensory system of the Omni `DevEnv`.
 pub struct OmniSniffer {
     repo_path: std::path::PathBuf,
 }
@@ -34,6 +34,7 @@ impl OmniSniffer {
     }
 
     /// Scan Scratchpad for active context (IO-intensive).
+    #[must_use]
     pub fn scan_context(&self) -> usize {
         scan_scratchpad_context(&self.repo_path)
     }
@@ -52,8 +53,7 @@ impl OmniSniffer {
         // Get current timestamp
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs_f64())
-            .unwrap_or(0.0);
+            .map_or(0.0, |d| d.as_secs_f64());
 
         EnvironmentSnapshot {
             git_branch: branch,

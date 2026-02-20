@@ -43,8 +43,15 @@ pub struct NuSystemBridge {
     pub config: NuConfig,
 }
 
+impl Default for NuSystemBridge {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NuSystemBridge {
     /// Create a new bridge with default config.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             config: NuConfig::default(),
@@ -52,11 +59,13 @@ impl NuSystemBridge {
     }
 
     /// Create with custom configuration.
+    #[must_use]
     pub fn with_config(config: NuConfig) -> Self {
         Self { config }
     }
 
     /// Get reference to the configuration (for testing).
+    #[must_use]
     pub fn config(&self) -> &NuConfig {
         &self.config
     }
@@ -88,7 +97,7 @@ impl NuSystemBridge {
         }
 
         // Detect $() with spaces (common Bash mistake)
-        if cmd.contains("$(") && cmd.contains(" ") && !cmd.contains("${") {
+        if cmd.contains("$(") && cmd.contains(' ') && !cmd.contains("${") {
             hints.push("HINT: In Nushell, command substitution $(cmd) captures the structured output, not just string.");
         }
 
@@ -129,18 +138,18 @@ impl NuSystemBridge {
             let filename = if let Some(start) = corrected.find("save ") {
                 let after_save = &corrected[start + 5..];
                 let parts: Vec<&str> = after_save.split_whitespace().collect();
-                if !parts.is_empty() {
-                    format!("\"{}\"", parts[0])
-                } else {
+                if parts.is_empty() {
                     "\"unknown\"".to_string()
+                } else {
+                    let first = parts[0];
+                    format!("\"{first}\"")
                 }
             } else {
                 "\"operation\"".to_string()
             };
 
             corrected = format!(
-                "{}; {{ status: 'success', file: {}, timestamp: (date now) }} | to json --raw",
-                corrected, filename
+                "{corrected}; {{ status: 'success', file: {filename}, timestamp: (date now) }} | to json --raw"
             );
         }
 
@@ -155,6 +164,10 @@ impl NuSystemBridge {
     ///
     /// # Returns
     /// Parsed JSON value or error.
+    ///
+    /// # Errors
+    /// Returns an error when safety validation fails, the process cannot spawn, the command
+    /// exits with a failure status, or the output cannot be parsed as JSON.
     pub fn execute(&self, cmd: &str, ensure_structured: bool) -> Result<Value> {
         // 0. Auto-correct mutation commands for better LLM feedback
         let cmd = Self::auto_correct_mutation(cmd);
@@ -163,17 +176,17 @@ impl NuSystemBridge {
         self.validate_safety(&cmd)?;
 
         // 2. Construct the actual command
-        let final_cmd = self.build_command(&cmd, ensure_structured);
+        let final_cmd = Self::build_command(&cmd, ensure_structured);
 
         // 3. Spawn and execute
         let output = Command::new(&self.config.nu_path)
-            .args(&["--no-config-file"]) // Reproducible environment
+            .args(["--no-config-file"]) // Reproducible environment
             .arg("-c")
             .arg(&final_cmd)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
-            .map_err(|e| ExecutorError::SystemError(format!("Failed to spawn nu: {}", e)))?;
+            .map_err(|e| ExecutorError::SystemError(format!("Failed to spawn nu: {e}")))?;
 
         // 4. Handle execution errors with LLM-friendly hints
         if !output.status.success() {
@@ -206,6 +219,9 @@ impl NuSystemBridge {
     }
 
     /// Execute with timeout.
+    ///
+    /// # Errors
+    /// Propagates any error returned by [`Self::execute`].
     pub fn execute_with_timeout(
         &self,
         cmd: &str,
@@ -216,10 +232,10 @@ impl NuSystemBridge {
     }
 
     /// Build the command string with JSON transformation.
-    fn build_command(&self, cmd: &str, ensure_structured: bool) -> String {
+    fn build_command(cmd: &str, ensure_structured: bool) -> String {
         if ensure_structured {
             // Force JSON output for observation commands
-            format!("{} | to json --raw", cmd)
+            format!("{cmd} | to json --raw")
         } else {
             cmd.to_string()
         }
@@ -229,7 +245,11 @@ impl NuSystemBridge {
     ///
     /// Uses AST-based analysis (ast-grep) and external tools (shellcheck).
     /// Step 1: Quick pattern check
-    /// Step 2: ShellCheck integration (if enabled)
+    /// Step 2: `ShellCheck` integration (if enabled)
+    ///
+    /// # Errors
+    /// Returns an error when the command contains dangerous patterns, fails `ShellCheck`,
+    /// or is rejected by the configured whitelist.
     pub fn validate_safety(&self, cmd: &str) -> Result<()> {
         // Step 1: Quick pattern check (immutable set)
         if Self::has_dangerous_pattern(cmd) {
@@ -240,7 +260,7 @@ impl NuSystemBridge {
 
         // Step 2: ShellCheck validation (if enabled)
         if self.config.enable_shellcheck {
-            self.run_shellcheck()?;
+            Self::run_shellcheck()?;
         }
 
         // Step 3: Whitelist check
@@ -261,37 +281,33 @@ impl NuSystemBridge {
     }
 
     /// Run shellcheck for comprehensive analysis.
-    fn run_shellcheck(&self) -> Result<()> {
+    fn run_shellcheck() -> Result<()> {
         // Skip if shellcheck not available
         if Command::new("which").arg("shellcheck").output().is_err() {
             return Ok(());
         }
 
         let output = Command::new("shellcheck")
-            .args(&["-e", "SC2034", "-"]) // Allow unused vars
+            .args(["-e", "SC2034", "-"]) // Allow unused vars
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output();
 
-        match output {
-            Ok(output) => {
-                // ShellCheck returns exit code 0 for no errors,
-                // 1 for warnings (which we want to allow),
-                // and > 1 for errors
-                let exit_code = output.status.code().unwrap_or(0);
-                if exit_code > 1 {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    return Err(ExecutorError::SecurityViolation(format!(
-                        "ShellCheck error: {}",
-                        stderr
-                    )));
-                }
-                // Exit codes 0 (no issues) and 1 (warnings only) are OK
+        if let Ok(output) = output {
+            // ShellCheck returns exit code 0 for no errors,
+            // 1 for warnings (which we want to allow),
+            // and > 1 for errors
+            let exit_code = output.status.code().unwrap_or(0);
+            if exit_code > 1 {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(ExecutorError::SecurityViolation(format!(
+                    "ShellCheck error: {stderr}"
+                )));
             }
-            Err(_) => {
-                // ShellCheck not available or failed to run, skip
-            }
+            // Exit codes 0 (no issues) and 1 (warnings only) are OK
+        } else {
+            // ShellCheck not available or failed to run, skip
         }
         Ok(())
     }
@@ -310,6 +326,7 @@ impl NuSystemBridge {
     }
 
     /// Check if a command is a mutation (side-effect) operation.
+    #[must_use]
     pub fn classify_action(cmd: &str) -> ActionType {
         let cmd_trimmed = cmd.trim();
         let cmd_lower = cmd_trimmed.to_lowercase();
@@ -320,7 +337,7 @@ impl NuSystemBridge {
         ];
 
         for keyword in &mutation_keywords {
-            if cmd_lower.starts_with(keyword) || cmd_lower.contains(&format!(" | {}", keyword)) {
+            if cmd_lower.starts_with(keyword) || cmd_lower.contains(&format!(" | {keyword}")) {
                 return ActionType::Mutate;
             }
         }

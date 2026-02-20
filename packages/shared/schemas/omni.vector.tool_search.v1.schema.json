@@ -45,6 +45,13 @@
       "type": "string",
       "enum": ["high", "medium", "low"]
     },
+    "ranking_reason": {
+      "type": "string"
+    },
+    "input_schema_digest": {
+      "type": "string",
+      "pattern": "^sha256:[A-Za-z0-9_-]{4,}$"
+    },
     "skill_name": {
       "type": "string"
     },
@@ -69,6 +76,12 @@
     },
     "category": {
       "type": "string"
+    },
+    "parameters": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   }
 }

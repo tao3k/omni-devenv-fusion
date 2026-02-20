@@ -18,6 +18,9 @@ _console = Console()
 
 def register_dashboard_command(parent_app: typer.Typer) -> None:
     """Register the dashboard command with the parent app."""
+    from omni.agent.cli.load_requirements import register_requirements
+
+    register_requirements("dashboard", ollama=False, embedding_index=False)
 
     @parent_app.command("dashboard")
     def dashboard() -> None:

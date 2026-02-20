@@ -2,7 +2,7 @@
 
 > **Status**: Active (Current Core Architecture)
 > **Version**: v3.0 | 2026-02-09
-> **Related**: Omni Loop, Trinity Architecture (Legacy)
+> **Related**: Omni Loop
 
 ## Overview
 

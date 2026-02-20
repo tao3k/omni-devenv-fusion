@@ -230,12 +230,12 @@ class TestCreateOmniLoopContext:
         orchestrator = create_omni_loop_context()
         assert isinstance(orchestrator, ContextOrchestrator)
 
-    def test_orchestrator_has_five_providers(self):
-        """Test that Omni Loop orchestrator has 5 providers."""
+    def test_orchestrator_has_three_providers(self):
+        """Rust-authoritative mode should include 3 providers."""
         from omni.core.context.orchestrator import create_omni_loop_context
 
         orchestrator = create_omni_loop_context()
-        assert len(orchestrator._providers) == 5
+        assert len(orchestrator._providers) == 3
 
     def test_orchestrator_has_routing_provider(self):
         """Test that orchestrator includes RoutingGuidanceProvider."""
@@ -264,14 +264,24 @@ class TestCreateOmniLoopContext:
         provider_types = [type(p) for p in orchestrator._providers]
         assert AvailableToolsProvider in provider_types
 
-    def test_orchestrator_has_active_skill_provider(self):
-        """Test that orchestrator includes ActiveSkillProvider."""
+    def test_orchestrator_excludes_active_skill_provider(self):
+        """Rust-authoritative mode should exclude ActiveSkillProvider."""
         from omni.core.context.orchestrator import create_omni_loop_context
         from omni.core.context.providers import ActiveSkillProvider
 
         orchestrator = create_omni_loop_context()
         provider_types = [type(p) for p in orchestrator._providers]
-        assert ActiveSkillProvider in provider_types
+        assert ActiveSkillProvider not in provider_types
+
+    def test_orchestrator_default_disables_python_injection(self):
+        """Default OmniLoop context should not include Python skill/memory providers."""
+        from omni.core.context.orchestrator import create_omni_loop_context
+        from omni.core.context.providers import ActiveSkillProvider, EpisodicMemoryProvider
+
+        orchestrator = create_omni_loop_context()
+        provider_types = [type(p) for p in orchestrator._providers]
+        assert ActiveSkillProvider not in provider_types
+        assert EpisodicMemoryProvider not in provider_types
 
     def test_providers_sorted_by_priority(self):
         """Test that providers are sorted by priority."""

@@ -6,18 +6,27 @@ use tree_sitter::{Language, Node, Parser, Query, QueryCursor, StreamingIterator}
 /// Tree-sitter based Python parser
 pub struct TreeSitterPythonParser {
     parser: Parser,
-    language: Language,
+    function_query: Option<Query>,
+}
+
+impl Default for TreeSitterPythonParser {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TreeSitterPythonParser {
     /// Create a new parser
+    #[must_use]
     pub fn new() -> Self {
         let language: Language = tree_sitter_python::LANGUAGE.into();
         let mut parser = Parser::new();
-        parser
-            .set_language(&language)
-            .expect("Failed to set Python language");
-        Self { parser, language }
+        let _ = parser.set_language(&language);
+        let function_query = Query::new(&language, "(function_definition) @func").ok();
+        Self {
+            parser,
+            function_query,
+        }
     }
 
     /// Find all decorated functions with a specific decorator name
@@ -26,37 +35,35 @@ impl TreeSitterPythonParser {
         code: &str,
         decorator_name: &str,
     ) -> Vec<DecoratedFunction> {
-        let tree = match self.parser.parse(code, None) {
-            Some(t) => t,
-            None => return Vec::new(),
+        let Some(tree) = self.parser.parse(code, None) else {
+            return Vec::new();
+        };
+        let Some(query) = self.function_query.as_ref() else {
+            return Vec::new();
         };
 
         let mut functions = Vec::new();
-
-        let query = match Query::new(&self.language, "(function_definition) @func") {
-            Ok(q) => q,
-            Err(_) => return Vec::new(),
-        };
 
         let root = tree.root_node();
         let mut cursor = QueryCursor::new();
 
         // QueryMatches implements StreamingIterator
         let capture_names = query.capture_names();
-        let mut matches = cursor.matches(&query, root, code.as_bytes());
+        let mut matches = cursor.matches(query, root, code.as_bytes());
         while let Some(m) = matches.next() {
             for capture in m.captures {
                 // Get capture name using index
-                if let Some(capture_name) = capture_names.get(capture.index as usize) {
-                    if *capture_name == "func" {
-                        let func_node = capture.node;
-                        if let Some(func) = self.parse_function(&func_node, code, decorator_name) {
-                            // Only include functions that have the specified decorator
-                            if func.decorator.is_some() {
-                                functions.push(func);
-                            }
-                        }
-                    }
+                if let Some(capture_name) = capture_names.get(capture.index as usize)
+                    && *capture_name == "func"
+                {
+                    let func_node = capture.node;
+                    let Some(func) =
+                        Self::parse_function_if_decorated(&func_node, code, decorator_name)
+                    else {
+                        continue;
+                    };
+                    // Only include functions that have the specified decorator
+                    functions.push(func);
                 }
             }
         }
@@ -70,36 +77,32 @@ impl TreeSitterPythonParser {
         code: &str,
         decorator_names: &[&str],
     ) -> Vec<DecoratedFunction> {
-        let tree = match self.parser.parse(code, None) {
-            Some(t) => t,
-            None => return Vec::new(),
+        let Some(tree) = self.parser.parse(code, None) else {
+            return Vec::new();
+        };
+        let Some(query) = self.function_query.as_ref() else {
+            return Vec::new();
         };
 
         let mut functions = Vec::new();
-
-        let query = match Query::new(&self.language, "(function_definition) @func") {
-            Ok(q) => q,
-            Err(_) => return Vec::new(),
-        };
 
         let root = tree.root_node();
         let mut cursor = QueryCursor::new();
 
         let capture_names = query.capture_names();
-        let mut matches = cursor.matches(&query, root, code.as_bytes());
+        let mut matches = cursor.matches(query, root, code.as_bytes());
         while let Some(m) = matches.next() {
             for capture in m.captures {
-                if let Some(capture_name) = capture_names.get(capture.index as usize) {
-                    if *capture_name == "func" {
-                        let func_node = capture.node;
-                        if let Some(func) =
-                            self.parse_function_any(&func_node, code, decorator_names)
-                        {
-                            if func.decorator.is_some() {
-                                functions.push(func);
-                            }
-                        }
-                    }
+                if let Some(capture_name) = capture_names.get(capture.index as usize)
+                    && *capture_name == "func"
+                {
+                    let func_node = capture.node;
+                    let Some(func) =
+                        Self::parse_function_any_if_decorated(&func_node, code, decorator_names)
+                    else {
+                        continue;
+                    };
+                    functions.push(func);
                 }
             }
         }
@@ -107,49 +110,47 @@ impl TreeSitterPythonParser {
         functions
     }
 
-    fn parse_function(
-        &self,
+    fn parse_function_if_decorated(
         node: &Node,
         code: &str,
         decorator_name: &str,
     ) -> Option<DecoratedFunction> {
-        let func_name = self.get_function_name(node, code);
-        let params = self.get_parameters(node, code);
-        let docstring = self.get_docstring(node, code);
+        let decorator = Self::find_decorator(node, code, decorator_name)?;
+        let func_name = Self::get_function_name(node, code);
+        let params = Self::get_parameters(node, code);
+        let docstring = Self::get_docstring(node, code);
         let text = node.utf8_text(code.as_bytes()).unwrap_or("").to_string();
-        let decorator = self.find_decorator(node, code, decorator_name);
 
         Some(DecoratedFunction {
             name: func_name,
             parameters: params,
             docstring,
             text,
-            decorator,
+            decorator: Some(decorator),
         })
     }
 
-    fn parse_function_any(
-        &self,
+    fn parse_function_any_if_decorated(
         node: &Node,
         code: &str,
         decorator_names: &[&str],
     ) -> Option<DecoratedFunction> {
-        let func_name = self.get_function_name(node, code);
-        let params = self.get_parameters(node, code);
-        let docstring = self.get_docstring(node, code);
+        let decorator = Self::find_decorator_any(node, code, decorator_names)?;
+        let func_name = Self::get_function_name(node, code);
+        let params = Self::get_parameters(node, code);
+        let docstring = Self::get_docstring(node, code);
         let text = node.utf8_text(code.as_bytes()).unwrap_or("").to_string();
-        let decorator = self.find_decorator_any(node, code, decorator_names);
 
         Some(DecoratedFunction {
             name: func_name,
             parameters: params,
             docstring,
             text,
-            decorator,
+            decorator: Some(decorator),
         })
     }
 
-    fn get_function_name(&self, node: &Node, code: &str) -> String {
+    fn get_function_name(node: &Node, code: &str) -> String {
         let mut cursor = node.walk();
         if cursor.goto_first_child() {
             loop {
@@ -165,7 +166,7 @@ impl TreeSitterPythonParser {
         String::new()
     }
 
-    fn get_parameters(&self, node: &Node, code: &str) -> Vec<ParameterInfo> {
+    fn get_parameters(node: &Node, code: &str) -> Vec<ParameterInfo> {
         let mut params = Vec::new();
         let mut cursor = node.walk();
 
@@ -173,7 +174,7 @@ impl TreeSitterPythonParser {
             loop {
                 let child = cursor.node();
                 if child.kind() == "parameters" {
-                    self.extract_params(&child, code, &mut params);
+                    Self::extract_params(&child, code, &mut params);
                 }
                 if !cursor.goto_next_sibling() {
                     break;
@@ -183,7 +184,7 @@ impl TreeSitterPythonParser {
         params
     }
 
-    fn extract_params(&self, node: &Node, code: &str, params: &mut Vec<ParameterInfo>) {
+    fn extract_params(node: &Node, code: &str, params: &mut Vec<ParameterInfo>) {
         let mut cursor = node.walk();
 
         // Walk through all children of the parameters node
@@ -205,7 +206,7 @@ impl TreeSitterPythonParser {
                             | "typed_default_parameter"
                             | "typed_optional_parameter"
                     ) {
-                        self.parse_single_parameter(param_text, params);
+                        Self::parse_single_parameter(param_text, params);
                     }
                 }
 
@@ -216,7 +217,7 @@ impl TreeSitterPythonParser {
         }
     }
 
-    fn parse_single_parameter(&self, param_text: &str, params: &mut Vec<ParameterInfo>) {
+    fn parse_single_parameter(param_text: &str, params: &mut Vec<ParameterInfo>) {
         // Parse the parameter text to extract name, type, and default
         // Format: "name: type = default" or "name = default" or "name: type"
 
@@ -275,7 +276,7 @@ impl TreeSitterPythonParser {
         });
     }
 
-    fn get_docstring(&self, node: &Node, code: &str) -> String {
+    fn get_docstring(node: &Node, code: &str) -> String {
         let mut cursor = node.walk();
 
         if cursor.goto_first_child() {
@@ -310,12 +311,7 @@ impl TreeSitterPythonParser {
         String::new()
     }
 
-    fn find_decorator(
-        &self,
-        func_node: &Node,
-        code: &str,
-        decorator_name: &str,
-    ) -> Option<DecoratorInfo> {
+    fn find_decorator(func_node: &Node, code: &str, decorator_name: &str) -> Option<DecoratorInfo> {
         if let Some(parent) = func_node.parent() {
             let children: Vec<Node> = parent.children(&mut parent.walk()).collect();
             let func_index = children.iter().position(|n| n.id() == func_node.id())?;
@@ -323,10 +319,9 @@ impl TreeSitterPythonParser {
             for i in (0..func_index).rev() {
                 let child = &children[i];
                 if child.kind() == "decorator" {
-                    if let Some(info) = self.parse_decorator(child, code) {
-                        if info.name == decorator_name {
-                            return Some(info);
-                        }
+                    let info = Self::parse_decorator(child, code);
+                    if info.name == decorator_name {
+                        return Some(info);
                     }
                 }
             }
@@ -336,7 +331,6 @@ impl TreeSitterPythonParser {
 
     /// Find a decorator with any of the specified names
     fn find_decorator_any(
-        &self,
         func_node: &Node,
         code: &str,
         decorator_names: &[&str],
@@ -348,10 +342,9 @@ impl TreeSitterPythonParser {
             for i in (0..func_index).rev() {
                 let child = &children[i];
                 if child.kind() == "decorator" {
-                    if let Some(info) = self.parse_decorator(child, code) {
-                        if decorator_names.iter().any(|name| info.name == *name) {
-                            return Some(info);
-                        }
+                    let info = Self::parse_decorator(child, code);
+                    if decorator_names.iter().any(|name| info.name == *name) {
+                        return Some(info);
                     }
                 }
             }
@@ -359,7 +352,7 @@ impl TreeSitterPythonParser {
         None
     }
 
-    fn parse_decorator(&self, node: &Node, code: &str) -> Option<DecoratorInfo> {
+    fn parse_decorator(node: &Node, code: &str) -> DecoratorInfo {
         let decorator_text = node
             .utf8_text(code.as_bytes())
             .unwrap_or("")
@@ -378,7 +371,7 @@ impl TreeSitterPythonParser {
                 .get("read_only")
                 .map(|v| v.trim().eq_ignore_ascii_case("True") || v.trim() == "true");
 
-            return Some(DecoratorInfo {
+            return DecoratorInfo {
                 name: name.to_string(),
                 arguments: DecoratorArguments {
                     name: args.get("name").cloned(),
@@ -388,13 +381,13 @@ impl TreeSitterPythonParser {
                     read_only,
                     resource_uri: args.get("resource_uri").cloned(),
                 },
-            });
+            };
         }
 
-        Some(DecoratorInfo {
+        DecoratorInfo {
             name: decorator_text.to_string(),
             arguments: DecoratorArguments::default(),
-        })
+        }
     }
 }
 
@@ -454,9 +447,7 @@ fn parse_decorator_args(args_text: &str) -> HashMap<String, String> {
                 }
                 '(' | '{' | '[' => depth += 1,
                 ')' | '}' | ']' => {
-                    if depth > 0 {
-                        depth -= 1;
-                    }
+                    depth = depth.saturating_sub(1);
                 }
                 _ => {
                     if depth == 0 {
@@ -495,9 +486,9 @@ fn parse_decorator_args(args_text: &str) -> HashMap<String, String> {
 
 fn extract_string_content(s: &str) -> String {
     let trimmed = s.trim();
-    if trimmed.starts_with("\"\"\"") && trimmed.ends_with("\"\"\"") {
-        trimmed[3..trimmed.len() - 3].trim().to_string()
-    } else if trimmed.starts_with("'''") && trimmed.ends_with("'''") {
+    if (trimmed.starts_with("\"\"\"") && trimmed.ends_with("\"\"\""))
+        || (trimmed.starts_with("'''") && trimmed.ends_with("'''"))
+    {
         trimmed[3..trimmed.len() - 3].trim().to_string()
     } else if (trimmed.starts_with('"') && trimmed.ends_with('"'))
         || (trimmed.starts_with('\'') && trimmed.ends_with('\''))

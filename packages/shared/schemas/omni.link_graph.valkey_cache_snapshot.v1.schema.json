@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.omni.dev/omni.link_graph.valkey_cache_snapshot.v1.schema.json",
+  "title": "omni.link_graph.valkey_cache_snapshot.v1",
+  "description": "Canonical Valkey cache snapshot payload for xiuxian-wendao LinkGraph index.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "schema_fingerprint",
+    "root",
+    "include_dirs",
+    "excluded_dirs",
+    "fingerprint",
+    "docs_by_id",
+    "sections_by_doc",
+    "alias_to_doc_id",
+    "outgoing",
+    "incoming",
+    "rank_by_id",
+    "edge_count"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "omni.link_graph.valkey_cache_snapshot.v1"
+    },
+    "schema_fingerprint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "include_dirs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "excluded_dirs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "fingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "docs_by_id": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/document" }
+    },
+    "sections_by_doc": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "$ref": "#/$defs/indexed_section" }
+      }
+    },
+    "alias_to_doc_id": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "outgoing": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "incoming": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "rank_by_id": {
+      "type": "object",
+      "additionalProperties": { "type": "number" }
+    },
+    "edge_count": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["note_count", "latest_modified_ts", "total_size_bytes"],
+      "properties": {
+        "note_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "latest_modified_ts": {
+          "type": ["integer", "null"]
+        },
+        "total_size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "id_lower",
+        "stem",
+        "stem_lower",
+        "path",
+        "path_lower",
+        "title",
+        "title_lower",
+        "tags",
+        "tags_lower",
+        "lead",
+        "word_count",
+        "search_text",
+        "search_text_lower",
+        "created_ts",
+        "modified_ts"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "id_lower": { "type": "string" },
+        "stem": { "type": "string", "minLength": 1 },
+        "stem_lower": { "type": "string" },
+        "path": { "type": "string", "minLength": 1 },
+        "path_lower": { "type": "string" },
+        "title": { "type": "string" },
+        "title_lower": { "type": "string" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "tags_lower": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "lead": { "type": "string" },
+        "word_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "search_text": { "type": "string" },
+        "search_text_lower": { "type": "string" },
+        "created_ts": { "type": ["integer", "null"] },
+        "modified_ts": { "type": ["integer", "null"] }
+      }
+    },
+    "indexed_section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "heading_path",
+        "heading_path_lower",
+        "heading_level",
+        "section_text",
+        "section_text_lower"
+      ],
+      "properties": {
+        "heading_path": { "type": "string" },
+        "heading_path_lower": { "type": "string" },
+        "heading_level": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "section_text": { "type": "string" },
+        "section_text_lower": { "type": "string" }
+      }
+    }
+  }
+}

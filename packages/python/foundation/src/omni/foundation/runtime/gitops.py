@@ -78,6 +78,28 @@ def get_project_root() -> Path:
     )
 
 
+def get_git_toplevel(cwd: Path | None = None) -> Path:
+    """Resolve git top-level directory from cwd, ignoring PRJ_ROOT."""
+    start = (cwd or Path.cwd()).resolve()
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(start), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (subprocess.TimeoutExpired, Exception) as e:
+        raise RuntimeError(f"CRITICAL: Failed to resolve git top-level from {start}: {e}") from e
+
+    if result.returncode == 0 and result.stdout.strip():
+        return Path(result.stdout.strip()).resolve()
+
+    stderr = (result.stderr or "").strip()
+    raise RuntimeError(
+        f"CRITICAL: Not in a git repository. Cannot resolve git top-level from {start}. {stderr}"
+    )
+
+
 def get_spec_dir() -> Path:
     """Get the directory containing feature specs."""
     return get_project_root() / "agent" / "specs"

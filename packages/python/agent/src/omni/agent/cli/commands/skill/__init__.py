@@ -31,6 +31,9 @@ from .base import skill_app
 
 def register_skill_command(app_instance: typer.Typer) -> None:
     """Register skill subcommand with the main app."""
+    from omni.agent.cli.load_requirements import register_requirements
+
+    register_requirements("skill", ollama=False, embedding_index=False)
     app_instance.add_typer(skill_app, name="skill")
 
 

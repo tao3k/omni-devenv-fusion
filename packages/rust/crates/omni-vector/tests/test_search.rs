@@ -266,6 +266,7 @@ async fn test_vector_distance_calculation() {
         routing_keywords: vec![],
         intents: vec![],
         category: "test".to_string(),
+        parameters: vec![],
     };
 
     let opposite = ToolSearchResult {
@@ -281,6 +282,7 @@ async fn test_vector_distance_calculation() {
         routing_keywords: vec![],
         intents: vec![],
         category: "test".to_string(),
+        parameters: vec![],
     };
 
     let orthogonal = ToolSearchResult {
@@ -296,6 +298,7 @@ async fn test_vector_distance_calculation() {
         routing_keywords: vec![],
         intents: vec![],
         category: "test".to_string(),
+        parameters: vec![],
     };
 
     // Verify results are ordered by score

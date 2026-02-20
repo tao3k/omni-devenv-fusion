@@ -208,7 +208,7 @@ class TestHeuristicExtract:
 
 
 class TestHarvesterClass:
-    """Tests for legacy Harvester class."""
+    """Tests for Harvester class."""
 
     @pytest.mark.asyncio
     async def test_harvester_init_without_llm(self):
@@ -226,3 +226,90 @@ class TestHarvesterClass:
         mock_llm = AsyncMock()
         harvester = Harvester(llm=mock_llm)
         assert harvester.llm is mock_llm
+
+    def test_harvester_init_with_engine(self):
+        """Test initializing harvester with engine (OmniLoop integration)."""
+        from omni.agent.core.evolution.harvester import Harvester
+
+        mock_engine = object()
+        harvester = Harvester(engine=mock_engine)
+        assert harvester._engine is mock_engine
+        assert harvester.llm is None
+
+
+class TestHarvesterInterface:
+    """Contract tests: Harvester must have methods expected by OmniLoop._trigger_harvester.
+
+    Prevents regression when Harvester API changes without updating loop integration.
+    """
+
+    def test_harvester_has_analyze_session(self):
+        """Harvester must have analyze_session method for OmniLoop evolution cycle."""
+        from omni.agent.core.evolution.harvester import Harvester
+
+        harvester = Harvester()
+        assert hasattr(harvester, "analyze_session")
+        assert callable(getattr(harvester, "analyze_session"))
+
+    def test_harvester_has_extract_lessons(self):
+        """Harvester must have extract_lessons method for OmniLoop evolution cycle."""
+        from omni.agent.core.evolution.harvester import Harvester
+
+        harvester = Harvester()
+        assert hasattr(harvester, "extract_lessons")
+        assert callable(getattr(harvester, "extract_lessons"))
+
+    @pytest.mark.asyncio
+    async def test_analyze_session_callable_with_history(self):
+        """analyze_session must accept list[dict] and return CandidateSkill | None."""
+        from omni.agent.core.evolution.harvester import Harvester
+
+        harvester = Harvester(llm=None)
+        result = await harvester.analyze_session([])
+        assert result is None
+
+        result = await harvester.analyze_session(
+            [
+                {"role": "user", "content": "test"},
+                {"role": "assistant", "content": "ok"},
+            ]
+        )
+        # No tool_calls in history -> returns None
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_analyze_session_with_tool_calls(self):
+        """analyze_session extracts commands from tool_calls and may return CandidateSkill."""
+        from omni.agent.core.evolution.harvester import Harvester
+
+        harvester = Harvester(llm=None)
+        history = [
+            {"role": "user", "content": "Rename all txt files to md"},
+            {
+                "role": "assistant",
+                "content": "I'll do that",
+                "tool_calls": [
+                    {"function": {"name": "skill.batch_rename", "arguments": "{}"}},
+                ],
+            },
+        ]
+        result = await harvester.analyze_session(history)
+        # With commands, heuristic may return CandidateSkill
+        assert result is None or isinstance(result, CandidateSkill)
+
+    @pytest.mark.asyncio
+    async def test_extract_lessons_callable_returns_none_or_lesson(self):
+        """extract_lessons must accept list[dict] and not raise."""
+        from omni.agent.core.evolution.harvester import Harvester
+
+        harvester = Harvester()
+        result = await harvester.extract_lessons([])
+        assert result is None
+
+        result = await harvester.extract_lessons(
+            [
+                {"role": "user", "content": "task"},
+                {"role": "assistant", "content": "done"},
+            ]
+        )
+        assert result is None  # Stub returns None

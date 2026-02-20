@@ -169,15 +169,28 @@ class RustLanceCheckpointSaver(BaseCheckpointSaver):
 
         # Call Rust store (blocking call wrapped in async)
         # Uses global connection pool - no performance penalty
+        from omni.foundation.api.checkpoint_schema import validate_checkpoint_write
+
+        payload = {
+            "checkpoint_id": checkpoint_id,
+            "thread_id": thread_id,
+            "timestamp": timestamp,
+            "content": content,
+            "parent_id": parent_id,
+            "embedding": None,
+            "metadata": metadata_json,
+        }
+        validate_checkpoint_write(self._table_name, payload)
+
         self._store.save_checkpoint(
             table_name=self._table_name,
-            checkpoint_id=checkpoint_id,
-            thread_id=thread_id,
-            content=content,
-            timestamp=timestamp,
-            parent_id=parent_id,
-            embedding=None,  # Checkpoints typically don't have embeddings
-            metadata=metadata_json,
+            checkpoint_id=payload["checkpoint_id"],
+            thread_id=payload["thread_id"],
+            content=payload["content"],
+            timestamp=payload["timestamp"],
+            parent_id=payload["parent_id"],
+            embedding=payload["embedding"],  # Checkpoints typically don't have embeddings
+            metadata=payload["metadata"],
         )
 
         logger.debug(

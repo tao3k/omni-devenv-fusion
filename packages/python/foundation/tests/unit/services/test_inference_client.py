@@ -85,6 +85,7 @@ class TestInferenceClientMessageFormat:
             mock_get.side_effect = lambda key, default=None: {
                 "inference.base_url": "https://api.anthropic.com",
                 "inference.model": "claude-sonnet-4-20250514",
+                "inference.provider": "anthropic",
                 "inference.timeout": 120,
                 "inference.max_tokens": 4096,
             }.get(key, default)

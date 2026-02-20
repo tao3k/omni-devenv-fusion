@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omni.agent.server_info.v1.schema.json",
+  "title": "Omni Agent server info (GET /sse, /mcp) v1",
+  "description": "Canonical shape for MCP server info returned on GET requests. Used by SSE transport for unified schema validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "version", "protocolVersion"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Server name (e.g. omni-agent)."
+    },
+    "version": {
+      "type": "string",
+      "description": "Server version (semver)."
+    },
+    "protocolVersion": {
+      "type": "string",
+      "description": "MCP protocol version (e.g. 2024-11-05)."
+    },
+    "message": {
+      "type": "string",
+      "description": "Optional hint (e.g. MCP uses POST; use /health for health checks)."
+    }
+  }
+}

@@ -7,25 +7,36 @@ Contains the async function decorated with @skill_command.
 Imports from modularized workflow, nodes, and state modules.
 """
 
-import uuid
+import asyncio
 import re
-import os
-import subprocess
 import shutil
+import subprocess
+import uuid
 from datetime import datetime
 from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
 
-from git.scripts.prepare import _get_cog_scopes, stage_and_scan
+from git.scripts.prepare import (
+    DIFF_SUMMARY_MAX_CHARS,
+    _get_cog_scopes,
+    run_pre_commit_hook,
+    stage_and_scan,
+)
 from git.scripts.rendering import render_commit_message, render_template
 
-from omni.foundation.checkpoint import load_workflow_state, save_workflow_state
-from omni.foundation.config.logging import get_logger
-from omni.langgraph.visualize import register_workflow
 from omni.foundation.api.decorators import skill_command
+from omni.foundation.api.response_payloads import build_status_message_response
+from omni.foundation.config.logging import get_logger
+from omni.foundation.context_delivery import (
+    ActionWorkflowEngine,
+    WorkflowStateStore,
+    prepare_for_summary,
+)
+from omni.foundation.runtime.gitops import get_git_toplevel
+from omni.langgraph.visualize import register_workflow
 
-from ._enums import SmartCommitAction, SmartCommitStatus, WorkflowRouting
+from ._enums import SmartCommitAction, SmartCommitStatus
 from .state import create_initial_state
 from .workflow import _get_diagram as _get_workflow_diagram
 
@@ -33,6 +44,47 @@ logger = get_logger("git.smart_commit")
 
 # Workflow type identifier for checkpoint table
 _WORKFLOW_TYPE = "smart_commit"
+_SMART_COMMIT_STORE = WorkflowStateStore(_WORKFLOW_TYPE)
+_SMART_COMMIT_ENGINE = ActionWorkflowEngine(
+    workflow_type=_WORKFLOW_TYPE,
+    allowed_actions={item.value for item in SmartCommitAction},
+)
+
+
+def _resolve_git_repo_root(project_root: str = "") -> str:
+    """Resolve git top-level for execution root.
+
+    Priority:
+    1. Explicit `project_root` argument (resolved to its git top-level)
+    2. Current working directory git top-level
+    3. "." as a final best-effort fallback
+    """
+    if project_root:
+        try:
+            return str(get_git_toplevel(Path(project_root)))
+        except RuntimeError:
+            return project_root
+
+    try:
+        return str(get_git_toplevel())
+    except RuntimeError:
+        return "."
+
+
+async def _run_subprocess(
+    args: list[str],
+    *,
+    cwd: str | Path,
+    text: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    """Run subprocess in a worker thread to avoid blocking the event loop."""
+    return await asyncio.to_thread(
+        subprocess.run,
+        args,
+        cwd=str(cwd),
+        capture_output=True,
+        text=text,
+    )
 
 
 def _handle_submodules_prepare(project_root: str) -> list[dict[str, str]]:
@@ -175,6 +227,108 @@ def _handle_submodules_prepare(project_root: str) -> list[dict[str, str]]:
     return submodule_commits
 
 
+def _render_start_result(result: dict[str, Any], *, project_root: str) -> str:
+    """Render start action response from persisted smart-commit state."""
+    wf_id = result.get("workflow_id", "unknown")
+    files = result.get("staged_files", [])
+    diff = result.get("diff_content", "")
+    status = result.get("status", "unknown")
+    scope_warning = result.get("scope_warning", "")
+    submodules_committed = result.get("submodules_committed", [])
+    valid_scopes = _get_cog_scopes(Path(project_root))
+
+    match status:
+        case SmartCommitStatus.EMPTY:
+            return "Nothing to commit - No staged files detected."
+        case SmartCommitStatus.LEFTHOOK_FAILED:
+            lefthook_output = result.get("error", "Unknown lefthook error")
+            return (
+                f"Lefthook Pre-commit Failed\n\n{lefthook_output}\n\n"
+                "Please fix the error above and try again."
+            )
+        case SmartCommitStatus.SECURITY_VIOLATION:
+            issues = result.get("security_issues", [])
+            return (
+                f"Security Issue Detected\n\nSensitive files detected:\n{', '.join(issues)}\n\n"
+                "Please resolve these issues before committing."
+            )
+        case _:
+            submodule_info = ""
+            if submodules_committed:
+                submodule_info = "\n\n**Submodules committed:**\n" + "\n".join(
+                    f"- `{s['path']}`: `{s['commit_hash']}`" for s in submodules_committed
+                )
+
+            return render_template(
+                "prepare_result.j2",
+                has_staged=bool(files),
+                staged_files=files,
+                staged_file_count=len(files),
+                scope_warning=scope_warning,
+                valid_scopes=valid_scopes,
+                lefthook_summary=result.get("lefthook_summary", ""),
+                lefthook_report="",
+                diff_content=diff,
+                diff_stat=result.get("diff_stat", ""),
+                wf_id=wf_id,
+                submodule_info=submodule_info,
+            )
+
+
+def _parse_commit_message(message: str) -> tuple[str, str, str, str]:
+    """Parse commit message into type/scope/subject/body parts."""
+    commit_type = "feat"
+    commit_scope = "general"
+    commit_body = ""
+
+    first_line = message.strip().split("\n")[0]
+    commit_match = re.match(r"^(\w+)(?:\(([^)]+)\))?:\s*(.+)$", first_line)
+    if commit_match:
+        commit_type = commit_match.group(1)
+        scope_part = commit_match.group(2)
+        if scope_part:
+            commit_scope = scope_part
+        commit_description = commit_match.group(3)
+    else:
+        commit_description = first_line
+
+    lines = message.strip().split("\n")
+    if len(lines) > 1:
+        commit_body = "\n".join(lines[1:]).strip()
+
+    return commit_type, commit_scope, commit_description, commit_body
+
+
+def _validate_commit_scope(*, commit_scope: str, project_root: str) -> dict[str, Any] | None:
+    """Validate scope against conform scopes; return structured error on mismatch."""
+    valid_scopes = _get_cog_scopes(Path(project_root))
+    if valid_scopes and commit_scope not in valid_scopes:
+        matches = get_close_matches(commit_scope, valid_scopes, n=1, cutoff=0.6)
+        return build_status_message_response(
+            status="error",
+            message=f"Invalid scope: '{commit_scope}'. Valid scopes: {valid_scopes}",
+            extra={
+                "suggestion": (
+                    f"Did you mean: {matches[0]}?" if matches else "Use a valid scope from the list"
+                )
+            },
+        )
+    return None
+
+
+def _render_status_result(workflow_id: str, status: dict[str, Any]) -> str:
+    """Render human-readable status output for one workflow id."""
+    submodules = status.get("submodules_committed", [])
+    submodule_info = f"\nSubmodules committed: {len(submodules)}" if submodules else ""
+
+    return (
+        f"Workflow Status (`{workflow_id}`)\n\n"
+        f"Status: {status.get('status', 'unknown')}\n"
+        f"Files: {len(status.get('staged_files', []))}"
+        f"{submodule_info}"
+    )
+
+
 @skill_command(
     name="smart_commit",
     category="workflow",
@@ -210,151 +364,96 @@ async def smart_commit(
     project_root: str = "",
 ) -> str:
     """Execute the Smart Commit workflow."""
-    if not project_root:
-        project_root = os.environ.get("PRJ_ROOT", ".")
+    project_root = _resolve_git_repo_root(project_root)
 
     try:
-        match action:
-            case SmartCommitAction.START:
-                result = await _start_smart_commit_async(project_root=project_root)
-                wf_id = result.get("workflow_id", "unknown")
-                files = result.get("staged_files", [])
-                diff = result.get("diff_content", "")
-                status = result.get("status", "unknown")
-                scope_warning = result.get("scope_warning", "")
-                submodules_committed = result.get("submodules_committed", [])
-                valid_scopes = _get_cog_scopes(Path(project_root))
 
-                match status:
-                    case SmartCommitStatus.EMPTY:
-                        return "Nothing to commit - No staged files detected."
-                    case SmartCommitStatus.LEFTHOOK_FAILED:
-                        lefthook_output = result.get("error", "Unknown lefthook error")
-                        return (
-                            f"Lefthook Pre-commit Failed\n\n{lefthook_output}\n\n"
-                            "Please fix the error above and try again."
-                        )
-                    case SmartCommitStatus.SECURITY_VIOLATION:
-                        issues = result.get("security_issues", [])
-                        return (
-                            f"Security Issue Detected\n\nSensitive files detected:\n{', '.join(issues)}\n\n"
-                            "Please resolve these issues before committing."
-                        )
-                    case _:
-                        submodule_info = ""
-                        if submodules_committed:
-                            submodule_info = f"\n\n**Submodules committed:**\n" + "\n".join(
-                                f"- `{s['path']}`: `{s['commit_hash']}`"
-                                for s in submodules_committed
-                            )
+        async def _handle_start(_workflow_id: str, _state: dict[str, Any] | None) -> str:
+            result = await _start_smart_commit_async(project_root=project_root)
+            return _render_start_result(result, project_root=project_root)
 
-                        return render_template(
-                            "prepare_result.j2",
-                            has_staged=bool(files),
-                            staged_files=files,
-                            staged_file_count=len(files),
-                            scope_warning=scope_warning,
-                            valid_scopes=valid_scopes,
-                            lefthook_summary=result.get("lefthook_summary", ""),
-                            lefthook_report="",
-                            diff_content=diff,
-                            wf_id=wf_id,
-                            submodule_info=submodule_info,
-                        )
+        async def _handle_approve(wid: str, state: dict[str, Any] | None) -> str | dict[str, Any]:
+            if not message:
+                return "message required for approve action"
 
-            case SmartCommitAction.APPROVE:
-                if not workflow_id:
-                    return "workflow_id required for approve action"
-                if not message:
-                    return "message required for approve action"
+            commit_type, commit_scope, commit_description, commit_body = _parse_commit_message(
+                message
+            )
+            scope_error = _validate_commit_scope(
+                commit_scope=commit_scope,
+                project_root=project_root,
+            )
+            if scope_error is not None:
+                return scope_error
 
-                commit_type = "feat"
-                commit_scope = "general"
-                commit_body = ""
+            result = await _approve_smart_commit_async(
+                workflow_id=wid,
+                message=message,
+                project_root=project_root,
+                workflow_state=state,
+            )
 
-                first_line = message.strip().split("\n")[0]
-                commit_match = re.match(r"^(\w+)(?:\(([^)]+)\))?:\s*(.+)$", first_line)
-                if commit_match:
-                    commit_type = commit_match.group(1)
-                    scope_part = commit_match.group(2)
-                    if scope_part:
-                        commit_scope = scope_part
-                    commit_description = commit_match.group(3)
-                else:
-                    commit_description = first_line
-
-                lines = message.strip().split("\n")
-                if len(lines) > 1:
-                    commit_body = "\n".join(lines[1:]).strip()
-
-                valid_scopes = _get_cog_scopes(Path(project_root))
-                if valid_scopes and commit_scope not in valid_scopes:
-                    matches = get_close_matches(commit_scope, valid_scopes, n=1, cutoff=0.6)
-                    return {
-                        "status": "error",
-                        "message": f"Invalid scope: '{commit_scope}'. Valid scopes: {valid_scopes}",
-                        "suggestion": f"Did you mean: {matches[0]}?"
-                        if matches
-                        else "Use a valid scope from the list",
-                    }
-
-                result = await _approve_smart_commit_async(
-                    workflow_id=workflow_id,
-                    message=message,
-                    project_root=project_root,
+            submodule_commits = result.get("submodule_commits", [])
+            submodule_section = ""
+            if submodule_commits:
+                submodule_section = "\n\n**Submodule commits:**\n" + "\n".join(
+                    f"- `{s['path']}`: `{s['commit_hash']}`" for s in submodule_commits
                 )
 
-                submodule_commits = result.get("submodule_commits", [])
-                submodule_section = ""
-                if submodule_commits:
-                    submodule_section = "\n\n**Submodule commits:**\n" + "\n".join(
-                        f"- `{s['path']}`: `{s['commit_hash']}`" for s in submodule_commits
-                    )
+            return render_commit_message(
+                subject=commit_description,
+                body=commit_body,
+                status=SmartCommitStatus.COMMITTED,
+                commit_hash=result.get("commit_hash", ""),
+                file_count=result.get("file_count", 0),
+                verified_by="omni Git Skill (cog)",
+                security_status=result.get("security_status", "No sensitive files detected"),
+                workflow_id=wid,
+                commit_type=commit_type,
+                commit_scope=commit_scope,
+                submodule_section=submodule_section,
+            )
 
-                return render_commit_message(
-                    subject=commit_description,
-                    body=commit_body,
-                    status=SmartCommitStatus.COMMITTED,
-                    commit_hash=result.get("commit_hash", ""),
-                    file_count=result.get("file_count", 0),
-                    verified_by="omni Git Skill (cog)",
-                    security_status=result.get("security_status", "No sensitive files detected"),
-                    workflow_id=workflow_id,
-                    commit_type=commit_type,
-                    commit_scope=commit_scope,
-                    submodule_section=submodule_section,
-                )
+        async def _handle_reject(wid: str, _state: dict[str, Any] | None) -> str:
+            return f"Commit Cancelled\n\nWorkflow `{wid}` has been cancelled."
 
-            case SmartCommitAction.REJECT:
-                if not workflow_id:
-                    return f"Commit Cancelled\n\nWorkflow `{workflow_id}` has been cancelled."
-                return f"Commit Cancelled\n\nWorkflow `{workflow_id}` has been cancelled."
+        async def _handle_status(wid: str, state: dict[str, Any] | None) -> str:
+            return _render_status_result(wid, state or {})
 
-            case SmartCommitAction.STATUS:
-                if not workflow_id:
-                    return "workflow_id required for status action"
-                status = await _get_workflow_status_async(workflow_id)
-                if not status:
-                    return f"Workflow `{workflow_id}` not found"
+        async def _handle_visualize(_workflow_id: str, _state: dict[str, Any] | None) -> str:
+            from omni.langgraph.visualize import visualize_workflow
 
-                submodules = status.get("submodules_committed", [])
-                submodule_info = f"\nSubmodules committed: {len(submodules)}" if submodules else ""
+            diagram = visualize_workflow("smart_commit")
+            return f"Smart Commit Workflow\n\n{diagram}"
 
-                return (
-                    f"Workflow Status (`{workflow_id}`)\n\n"
-                    f"Status: {status.get('status', 'unknown')}\n"
-                    f"Files: {len(status.get('staged_files', []))}"
-                    f"{submodule_info}"
-                )
+        dispatched = await _SMART_COMMIT_ENGINE.dispatch(
+            action=action,
+            workflow_id=workflow_id,
+            handlers={
+                SmartCommitAction.START.value: _handle_start,
+                SmartCommitAction.APPROVE.value: _handle_approve,
+                SmartCommitAction.REJECT.value: _handle_reject,
+                SmartCommitAction.STATUS.value: _handle_status,
+                SmartCommitAction.VISUALIZE.value: _handle_visualize,
+            },
+            require_workflow_id_for={
+                SmartCommitAction.APPROVE.value,
+                SmartCommitAction.REJECT.value,
+                SmartCommitAction.STATUS.value,
+            },
+            require_state_for={
+                SmartCommitAction.APPROVE.value,
+                SmartCommitAction.STATUS.value,
+            },
+            missing_workflow_id_template="workflow_id required for action={action}",
+            missing_state_template="Workflow `{workflow_id}` not found",
+            load_state=_SMART_COMMIT_STORE.load,
+        )
 
-            case SmartCommitAction.VISUALIZE:
-                from omni.langgraph.visualize import visualize_workflow
+        if isinstance(dispatched, dict) and dispatched.get("error_source") == "action_workflow":
+            return str(dispatched.get("message", "invalid action"))
 
-                diagram = visualize_workflow("smart_commit")
-                return f"Smart Commit Workflow\n\n{diagram}"
-
-            case _:
-                return f"Unknown action: {action}"
+        return dispatched
 
     except Exception as e:
         import traceback
@@ -366,53 +465,56 @@ async def _start_smart_commit_async(
     project_root: str = "",
 ) -> dict[str, Any]:
     """Start smart commit workflow - stage and scan files."""
-    wf_id = str(uuid.uuid4())[:8]
-    root = Path(project_root) if project_root else Path(".")
+    project_root = _resolve_git_repo_root(project_root)
 
-    result_data = stage_and_scan(project_root)
+    wf_id = str(uuid.uuid4())[:8]
+
+    result_data = await asyncio.to_thread(stage_and_scan, project_root)
 
     staged_files = result_data.get("staged_files", [])
-    diff = result_data.get("diff", "")
+    diff = result_data.get("diff", "")  # Already prepare_for_summary in prepare.py
+    diff_stat = result_data.get("diff_stat", "")
     security_issues = result_data.get("security_issues", [])
     lefthook_error = result_data.get("lefthook_error", "")
     lefthook_summary = result_data.get("lefthook_summary", "")
 
     # Handle submodules first
-    submodule_commits = _handle_submodules_prepare(project_root)
+    submodule_commits = await asyncio.to_thread(_handle_submodules_prepare, project_root)
     if submodule_commits:
         logger.info(f"Committed {len(submodule_commits)} submodules")
 
     # Re-stage after submodule commits (may have modified parent repo)
     if submodule_commits:
         try:
-            subprocess.run(
+            await _run_subprocess(
                 ["git", "add", "-A"],
                 cwd=project_root,
-                capture_output=True,
             )
             # Re-get staged files
-            proc = subprocess.run(
+            proc = await _run_subprocess(
                 ["git", "diff", "--cached", "--name-only"],
                 cwd=project_root,
-                capture_output=True,
-                text=True,
             )
             staged_files = [f for f in proc.stdout.strip().split("\n") if f]
-            diff = subprocess.run(
-                ["git", "diff", "--cached"],
+            proc_diff = await _run_subprocess(
+                ["git", "diff", "--cached", "-U2"],
                 cwd=project_root,
-                capture_output=True,
-                text=True,
-            ).stdout
+            )
+            diff = prepare_for_summary(proc_diff.stdout, max_chars=DIFF_SUMMARY_MAX_CHARS)
+            proc_stat = await _run_subprocess(
+                ["git", "diff", "--cached", "--stat"],
+                cwd=project_root,
+            )
+            diff_stat = proc_stat.stdout
         except Exception as e:
             logger.warning(f"Failed to re-stage after submodules: {e}")
 
-    valid_scopes = _get_cog_scopes(root)
     scope_warning = ""
 
     initial_state = create_initial_state(project_root=project_root, workflow_id=wf_id)
     initial_state["staged_files"] = staged_files
     initial_state["diff_content"] = diff
+    initial_state["diff_stat"] = diff_stat
     initial_state["security_issues"] = security_issues
 
     if lefthook_error:
@@ -432,7 +534,7 @@ async def _start_smart_commit_async(
     state_dict["workflow_id"] = wf_id
     state_dict["submodules_committed"] = submodule_commits
 
-    save_workflow_state(_WORKFLOW_TYPE, wf_id, state_dict)
+    _SMART_COMMIT_STORE.save(wf_id, state_dict)
 
     return state_dict
 
@@ -441,51 +543,45 @@ async def _approve_smart_commit_async(
     message: str,
     workflow_id: str,
     project_root: str = "",
+    workflow_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Approve and execute commit with the given message."""
-    if not project_root:
-        project_root = os.environ.get("PRJ_ROOT", ".")
+    project_root = _resolve_git_repo_root(project_root)
 
     # Get already-committed submodule info from workflow state
-    workflow_state = load_workflow_state(_WORKFLOW_TYPE, workflow_id)
-    submodule_commits = workflow_state.get("submodules_committed", []) if workflow_state else []
+    loaded_state = (
+        workflow_state
+        if isinstance(workflow_state, dict)
+        else _SMART_COMMIT_STORE.load(workflow_id)
+    )
+    submodule_commits = loaded_state.get("submodules_committed", []) if loaded_state else []
 
     # Run lefthook pre-commit
     try:
-        if shutil.which("lefthook"):
-            subprocess.run(
-                ["git", "hook", "run", "pre-commit"],
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-            )
+        if shutil.which("lefthook") or (Path(project_root) / "lefthook.yml").exists():
+            await asyncio.to_thread(run_pre_commit_hook, Path(project_root))
             logger.info("Ran lefthook pre-commit")
     except Exception as e:
         logger.warning(f"Failed to run lefthook pre-commit: {e}")
 
     # Re-stage modified files
     try:
-        proc = subprocess.run(
+        proc = await _run_subprocess(
             ["git", "diff", "--name-only"],
             cwd=project_root,
-            capture_output=True,
-            text=True,
         )
         all_modified = [f for f in proc.stdout.strip().split("\n") if f]
 
-        proc = subprocess.run(
+        proc = await _run_subprocess(
             ["git", "ls-files", "--others", "--exclude-standard"],
             cwd=project_root,
-            capture_output=True,
-            text=True,
         )
         untracked = [f for f in proc.stdout.strip().split("\n") if f]
 
         if all_modified or untracked:
-            subprocess.run(
+            await _run_subprocess(
                 ["git", "add", "-A"],
                 cwd=project_root,
-                capture_output=True,
             )
             logger.info(f"Re-staged {len(all_modified)} modified + {len(untracked)} new files")
     except Exception as e:
@@ -493,11 +589,9 @@ async def _approve_smart_commit_async(
 
     # Get final staged files count
     try:
-        proc = subprocess.run(
+        proc = await _run_subprocess(
             ["git", "diff", "--cached", "--name-only"],
             cwd=project_root,
-            capture_output=True,
-            text=True,
         )
         staged_files = [f for f in proc.stdout.strip().split("\n") if f]
         file_count = len(staged_files)
@@ -505,8 +599,7 @@ async def _approve_smart_commit_async(
         file_count = 0
 
     # Save approved state
-    save_workflow_state(
-        _WORKFLOW_TYPE,
+    _SMART_COMMIT_STORE.save(
         workflow_id,
         {
             "status": SmartCommitStatus.APPROVED,
@@ -517,20 +610,16 @@ async def _approve_smart_commit_async(
     )
 
     # Execute commit
-    result = subprocess.run(
+    result = await _run_subprocess(
         ["git", "commit", "-m", message],
         cwd=project_root,
-        capture_output=True,
-        text=True,
     )
 
     commit_hash = ""
     if result.returncode == 0:
-        proc = subprocess.run(
+        proc = await _run_subprocess(
             ["git", "rev-parse", "HEAD"],
             cwd=project_root,
-            capture_output=True,
-            text=True,
         )
         if proc.returncode == 0:
             commit_hash = proc.stdout.strip()[:8]
@@ -551,7 +640,7 @@ async def _approve_smart_commit_async(
 
 async def _get_workflow_status_async(workflow_id: str) -> dict[str, Any] | None:
     """Get workflow status from unified checkpoint store."""
-    return load_workflow_state(_WORKFLOW_TYPE, workflow_id)
+    return _SMART_COMMIT_STORE.load(workflow_id)
 
 
 # Register workflow diagram

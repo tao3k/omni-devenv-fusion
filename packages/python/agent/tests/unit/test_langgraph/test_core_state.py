@@ -7,6 +7,8 @@ Tests for:
 - State utilities
 """
 
+import sys
+import types
 import uuid
 
 import pytest
@@ -113,6 +115,13 @@ class TestStateCheckpointer:
         assert len(retrieved["messages"]) == 1
         assert retrieved["messages"][0]["content"] == "Test"
 
+    def test_init_fails_fast_when_rust_bindings_missing(self, monkeypatch) -> None:
+        """Rust-only contract: StateCheckpointer should not silently fallback."""
+        monkeypatch.setitem(sys.modules, "omni_core_rs", types.ModuleType("omni_core_rs"))
+
+        with pytest.raises(RuntimeError, match="omni_core_rs"):
+            StateCheckpointer(table_name=f"test_checkpoints_{uuid.uuid4().hex[:8]}")
+
     def test_get_nonexistent(self, temp_checkpointer):
         """Should return None for nonexistent thread."""
         result = temp_checkpointer.get("nonexistent")
@@ -125,7 +134,7 @@ class TestStateCheckpointer:
         temp_checkpointer.put("thread-1", state)
 
         deleted = temp_checkpointer.delete_thread("thread-1")
-        assert deleted >= 0  # May be 0 if Rust store not available
+        assert deleted >= 0
 
         # Verify deletion
         assert temp_checkpointer.get("thread-1") is None

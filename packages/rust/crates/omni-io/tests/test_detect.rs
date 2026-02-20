@@ -10,9 +10,10 @@ fn test_binary_detection() {
 }
 
 #[test]
-fn test_decode_text() {
-    let result = decode_buffer(b"Hello, world!".to_vec());
-    assert_eq!(result.unwrap(), "Hello, world!");
+fn test_decode_text() -> Result<(), Box<dyn std::error::Error>> {
+    let result = decode_buffer(b"Hello, world!".to_vec())?;
+    assert_eq!(result, "Hello, world!");
+    Ok(())
 }
 
 #[test]

@@ -31,13 +31,10 @@ impl SocketClient {
     ///
     /// # Returns
     /// JoinHandle for the reader thread
-    pub fn connect(
-        socket_path: &str,
-        tx: Sender<SocketEvent>,
-    ) -> Result<thread::JoinHandle<()>, anyhow::Error> {
+    pub fn connect(socket_path: &str, tx: Sender<SocketEvent>) -> thread::JoinHandle<()> {
         let path = socket_path.to_string();
 
-        let handle = thread::spawn(move || {
+        thread::spawn(move || {
             // Try to connect with retries
             let max_retries = 50;
             let retry_delay = Duration::from_millis(100);
@@ -45,7 +42,6 @@ impl SocketClient {
             for i in 0..max_retries {
                 match UnixStream::connect(&path) {
                     Ok(stream) => {
-                        let _stream_clone = stream.try_clone().unwrap();
                         let tx_clone = tx.clone();
 
                         info!("Connected to Python socket at {}", path);
@@ -68,7 +64,7 @@ impl SocketClient {
                                             }
                                         }
                                     }
-                                    Ok(_) => continue,
+                                    Ok(_) => {}
                                     Err(_) => break,
                                 }
                             }
@@ -80,7 +76,7 @@ impl SocketClient {
                             std::thread::sleep(Duration::from_secs(1));
                         }
                     }
-                    Err(e) if i < max_retries - 1 => {
+                    Err(_) if i < max_retries - 1 => {
                         // Not ready yet, retry
                         std::thread::sleep(retry_delay);
                     }
@@ -90,9 +86,7 @@ impl SocketClient {
                     }
                 }
             }
-        });
-
-        Ok(handle)
+        })
     }
 }
 
@@ -121,7 +115,7 @@ impl fmt::Debug for SocketServer {
         f.debug_struct("SocketServer")
             .field("socket_path", &self.socket_path)
             .field("running", &self.running.load(Ordering::SeqCst))
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -137,8 +131,14 @@ impl SocketServer {
 
     /// Set callback for received events
     pub fn set_event_callback(&self, callback: EventCallback) {
-        let mut cb = self.event_callback.lock().unwrap();
-        *cb = Some(callback);
+        match self.event_callback.lock() {
+            Ok(mut cb) => {
+                *cb = Some(callback);
+            }
+            Err(err) => {
+                error!("Failed to set event callback due to poisoned lock: {}", err);
+            }
+        }
     }
 
     /// Start the server in a background thread
@@ -208,9 +208,15 @@ impl SocketServer {
                         if !line.is_empty() {
                             if let Ok(event) = serde_json::from_str::<SocketEvent>(line) {
                                 info!("Received event: {} from {}", event.topic, event.source);
-                                let cb = callback.lock().unwrap();
-                                if let Some(ref callback) = *cb {
-                                    callback(event.clone());
+                                match callback.lock() {
+                                    Ok(cb) => {
+                                        if let Some(ref callback) = *cb {
+                                            callback(event.clone());
+                                        }
+                                    }
+                                    Err(err) => {
+                                        error!("Failed to acquire event callback lock: {}", err);
+                                    }
                                 }
                             } else {
                                 warn!("Failed to parse event: {}", line);

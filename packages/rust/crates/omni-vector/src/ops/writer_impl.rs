@@ -1,7 +1,7 @@
 use lance::dataset::WriteParams;
 use lance::deps::arrow_array::types::Int32Type;
 
-/// Write params for new tables and appends: V2_1 storage for better encoding/compression.
+/// Write params for new tables and appends: `V2_1` storage for better encoding/compression.
 fn default_write_params() -> WriteParams {
     WriteParams {
         data_storage_version: Some(lance_file::version::LanceFileVersion::V2_1),
@@ -9,7 +9,8 @@ fn default_write_params() -> WriteParams {
     }
 }
 
-/// Build dictionary-encoded columns for low-cardinality SKILL_NAME and CATEGORY.
+/// Build dictionary-encoded columns for low-cardinality `SKILL_NAME` and `CATEGORY`.
+#[allow(clippy::expect_used, clippy::missing_panics_doc)]
 fn build_dictionary_columns(
     skill_names: &[String],
     categories: &[String],
@@ -23,7 +24,7 @@ fn build_dictionary_columns(
     let mut map_skill: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
     for s in skill_names {
         if !map_skill.contains_key(s) {
-            let idx = uniq_skill.len() as i32;
+            let idx = i32::try_from(uniq_skill.len()).unwrap_or(i32::MAX);
             map_skill.insert(s.clone(), idx);
             uniq_skill.push(s.clone());
         }
@@ -43,7 +44,7 @@ fn build_dictionary_columns(
     let mut map_cat: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
     for c in categories {
         if !map_cat.contains_key(c) {
-            let idx = uniq_cat.len() as i32;
+            let idx = i32::try_from(uniq_cat.len()).unwrap_or(i32::MAX);
             map_cat.insert(c.clone(), idx);
             uniq_cat.push(c.clone());
         }
@@ -62,7 +63,8 @@ fn build_dictionary_columns(
     (skill_name_array, category_array)
 }
 
-/// Build a single dictionary-encoded column from string values (e.g. TOOL_NAME).
+/// Build a single dictionary-encoded column from string values (e.g. `TOOL_NAME`).
+#[allow(clippy::expect_used, clippy::missing_panics_doc)]
 fn build_string_dictionary(
     values: &[String],
 ) -> lance::deps::arrow_array::DictionaryArray<Int32Type> {
@@ -72,7 +74,7 @@ fn build_string_dictionary(
     let mut map: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
     for s in values {
         if !map.contains_key(s) {
-            let idx = uniq.len() as i32;
+            let idx = i32::try_from(uniq.len()).unwrap_or(i32::MAX);
             map.insert(s.clone(), idx);
             uniq.push(s.clone());
         }
@@ -83,7 +85,7 @@ fn build_string_dictionary(
         .expect("dictionary tool_name")
 }
 
-/// Parse JSON with simd-json when possible; fallback to serde_json to preserve behavior.
+/// Parse JSON with `simd-json` when possible; fallback to `serde_json` to preserve behavior.
 #[inline]
 fn parse_metadata_extract(s: &str) -> MetadataExtract {
     let mut bytes = s.as_bytes().to_vec();
@@ -91,7 +93,7 @@ fn parse_metadata_extract(s: &str) -> MetadataExtract {
         .unwrap_or_else(|_| serde_json::from_str(s).unwrap_or_default())
 }
 
-/// Parse JSON to Value with simd-json when possible; fallback to serde_json.
+/// Parse JSON to Value with `simd-json` when possible; fallback to `serde_json`.
 #[inline]
 fn parse_metadata_value(s: &str) -> Option<serde_json::Value> {
     let mut bytes = s.as_bytes().to_vec();
@@ -119,15 +121,18 @@ struct MetadataExtract {
     intents: Vec<String>,
 }
 
+fn has_lance_data(path: &std::path::Path) -> bool {
+    if !path.exists() {
+        return false;
+    }
+    path.join("_versions").exists() || path.join("data").exists()
+}
+
+#[allow(clippy::missing_errors_doc, clippy::doc_markdown)]
 impl VectorStore {
     fn derive_routing_keywords(tool: &OmniToolRecord) -> Vec<String> {
         let skill_token = tool.skill_name.trim();
-        let tool_token = tool
-            .tool_name
-            .split('.')
-            .next_back()
-            .map(str::trim)
-            .unwrap_or("");
+        let tool_token = tool.tool_name.split('.').next_back().map_or("", str::trim);
         let full_tool = tool.tool_name.trim();
         let mut out = Vec::new();
         let mut seen = std::collections::HashSet::new();
@@ -150,13 +155,11 @@ impl VectorStore {
         let skill_name = meta
             .get("skill_name")
             .and_then(|s| s.as_str())
-            .map(str::trim)
-            .unwrap_or("");
+            .map_or("", str::trim);
         let tool_name = meta
             .get("tool_name")
             .and_then(|s| s.as_str())
-            .map(str::trim)
-            .unwrap_or("");
+            .map_or("", str::trim);
         if crate::skill::is_routable_tool_name(tool_name) && tool_name.contains('.') {
             return Some(tool_name.to_string());
         }
@@ -170,8 +173,7 @@ impl VectorStore {
         let command = meta
             .get("command")
             .and_then(|s| s.as_str())
-            .map(str::trim)
-            .unwrap_or("");
+            .map_or("", str::trim);
 
         if !skill_name.is_empty() && !command.is_empty() {
             let candidate = format!("{skill_name}.{command}");
@@ -186,6 +188,7 @@ impl VectorStore {
         None
     }
 
+    #[allow(clippy::too_many_lines, clippy::needless_pass_by_value)]
     fn build_document_batch(
         &self,
         ids: Vec<String>,
@@ -313,6 +316,7 @@ impl VectorStore {
     }
 
     /// Add tool records to the vector store.
+    #[allow(clippy::needless_pass_by_value)]
     pub async fn add(
         &self,
         table_name: &str,
@@ -345,14 +349,14 @@ impl VectorStore {
                         routing_keywords: t.keywords.clone(),
                         intents: t.intents.clone(),
                         category: t.category.clone(),
+                        parameters: t.parameters.clone(),
                     }
                 })
                 .collect();
             if let Err(e) = kw_index.index_batch(&search_results) {
                 log::error!(
-                    "Keyword index batch failed for {} tools: {}",
-                    search_results.len(),
-                    e
+                    "Keyword index batch failed for {} tools: {e}",
+                    search_results.len()
                 );
             } else {
                 log::info!("Keyword index: indexed {} tools", search_results.len());
@@ -565,6 +569,8 @@ impl VectorStore {
 
     /// Replace all documents in a table with the provided batch atomically
     /// from the caller perspective (drop then write fresh snapshot).
+    ///
+    /// Robustness: Never drop when batch is empty; avoids leaving table empty on caller error.
     pub async fn replace_documents(
         &mut self,
         table_name: &str,
@@ -573,10 +579,16 @@ impl VectorStore {
         contents: Vec<String>,
         metadatas: Vec<String>,
     ) -> Result<(), VectorStoreError> {
+        if ids.is_empty() {
+            log::warn!(
+                "replace_documents: empty batch for {table_name}; skipping to avoid empty table"
+            );
+            return Ok(());
+        }
         self.drop_table(table_name).await?;
         // Re-enable keyword index after drop_table cleared it
         if let Err(e) = self.enable_keyword_index() {
-            log::warn!("Could not re-enable keyword index after drop: {}", e);
+            log::warn!("Could not re-enable keyword index after drop: {e}");
         }
         self.add_documents(table_name, ids, vectors, contents, metadatas)
             .await
@@ -636,6 +648,11 @@ impl VectorStore {
     /// Get or create a dataset. When `initial` is `Some((schema, batch))` and the table is
     /// created, that batch is written (full 10-column schema). Returns `(dataset, created)` so
     /// callers can skip appending when `created` is true.
+    #[allow(
+        clippy::too_many_lines,
+        clippy::collapsible_if,
+        clippy::missing_panics_doc
+    )]
     pub async fn get_or_create_dataset(
         &self,
         table_name: &str,
@@ -650,12 +667,14 @@ impl VectorStore {
         let table_path = self.table_path(table_name);
         let is_memory_mode = self.base_path.as_os_str() == ":memory:";
         let write_uri = if is_memory_mode {
-            let id = self
-                .memory_mode_id
-                .expect("memory_mode_id set when base_path is :memory:");
+            let Some(id) = self.memory_mode_id else {
+                return Err(VectorStoreError::General(
+                    "memory_mode_id missing while in :memory: mode".to_string(),
+                ));
+            };
             std::env::temp_dir()
                 .join("omni_lance")
-                .join(format!("{:016x}", id))
+                .join(format!("{id:016x}"))
                 .join(table_name)
                 .to_string_lossy()
                 .into_owned()
@@ -675,13 +694,6 @@ impl VectorStore {
             }
         }
 
-        fn has_lance_data(path: &std::path::Path) -> bool {
-            if !path.exists() {
-                return false;
-            }
-            path.join("_versions").exists() || path.join("data").exists()
-        }
-
         let (dataset, created) = if has_lance_data(write_path) && !force_create {
             (self.open_dataset_at_uri(&write_uri).await?, false)
         } else {
@@ -691,16 +703,15 @@ impl VectorStore {
                 if write_path == self.base_path.as_path() {
                     Self::remove_lance_artifacts(write_path)?;
                 } else {
-                    std::fs::remove_dir_all(write_path)?;
+                    std::fs::remove_dir_all(write_path).map_err(VectorStoreError::from)?;
                 }
             }
-            let (schema, batches) = match initial {
-                Some((s, batch)) => (s, vec![Ok(batch)]),
-                None => {
-                    let schema = self.create_schema();
-                    let empty = lance::deps::arrow_array::RecordBatch::new_empty(schema.clone());
-                    (schema, vec![Ok(empty)])
-                }
+            let (schema, batches) = if let Some((s, batch)) = initial {
+                (s, vec![Ok(batch)])
+            } else {
+                let schema = self.create_schema();
+                let empty = lance::deps::arrow_array::RecordBatch::new_empty(schema.clone());
+                (schema, vec![Ok(empty)])
             };
             log::info!(
                 "Creating new LanceDB dataset at {} with dimension {}",

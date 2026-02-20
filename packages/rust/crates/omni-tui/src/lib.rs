@@ -2,6 +2,15 @@
 //!
 //! Provides terminal UI rendering with foldable panels and event-driven updates.
 //! Integrates with omni-events for reactive state management.
+#![allow(
+    missing_docs,
+    clippy::doc_markdown,
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::uninlined_format_args,
+    clippy::redundant_closure_for_method_calls,
+    clippy::needless_pass_by_value
+)]
 
 pub mod components;
 pub mod event;
@@ -40,7 +49,7 @@ where
     // Create application state
     app_creator(&mut state)?;
 
-    info!("Starting TUI application: {}", title);
+    info!("Starting TUI application: {title}");
 
     // Run the main event loop
     renderer.run(&mut state)

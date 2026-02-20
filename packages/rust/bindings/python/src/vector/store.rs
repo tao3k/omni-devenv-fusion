@@ -8,12 +8,99 @@ use omni_vector::{
 };
 use pyo3::prelude::*;
 use serde::Deserialize;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::path::Path;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct StoreCacheKey {
+    path: String,
+    dimension: usize,
+    enable_kw: bool,
+    index_cache_size_bytes: Option<usize>,
+    max_cached_tables: Option<usize>,
+}
+
+thread_local! {
+    static STORE_CACHE: RefCell<HashMap<StoreCacheKey, VectorStore>> = RefCell::new(HashMap::new());
+}
 
 pub(crate) fn cache_config_from_max(
     max_cached_tables: Option<usize>,
 ) -> Option<DatasetCacheConfig> {
     max_cached_tables.map(|n| DatasetCacheConfig {
         max_cached_tables: Some(n),
+    })
+}
+
+fn should_cache_store(path: &str) -> bool {
+    // Knowledge DB is evicted after each MCP tool (query-release lifecycle),
+    // so keep that path uncached here to preserve memory-release behavior.
+    if path == ":memory:" {
+        return false;
+    }
+    Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name != "knowledge.lance")
+        .unwrap_or(true)
+}
+
+pub(crate) async fn get_or_create_store(
+    path: &str,
+    dimension: usize,
+    enable_kw: bool,
+    index_cache_size_bytes: Option<usize>,
+    max_cached_tables: Option<usize>,
+) -> PyResult<VectorStore> {
+    let key = StoreCacheKey {
+        path: path.to_string(),
+        dimension,
+        enable_kw,
+        index_cache_size_bytes,
+        max_cached_tables,
+    };
+
+    if should_cache_store(path)
+        && let Some(store) = STORE_CACHE.with(|cache| cache.borrow().get(&key).cloned())
+    {
+        return Ok(store);
+    }
+
+    let store = VectorStore::new_with_keyword_index(
+        path,
+        Some(dimension),
+        enable_kw,
+        index_cache_size_bytes,
+        cache_config_from_max(max_cached_tables),
+    )
+    .await
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+    if should_cache_store(path) {
+        STORE_CACHE.with(|cache| {
+            cache.borrow_mut().insert(key, store.clone());
+        });
+    }
+
+    Ok(store)
+}
+
+pub(crate) fn evict_store_cache(path: Option<&str>) -> usize {
+    STORE_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        match path {
+            Some(target) => {
+                let before = cache.len();
+                cache.retain(|key, _| key.path != target);
+                before.saturating_sub(cache.len())
+            }
+            None => {
+                let count = cache.len();
+                cache.clear();
+                count
+            }
+        }
     })
 }
 
@@ -33,15 +120,15 @@ pub fn create_vector_store(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        VectorStore::new_with_keyword_index(
+        get_or_create_store(
             &path,
-            Some(dimension),
+            dimension,
             enable_keyword_index,
             index_cache_size_bytes,
-            cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
         .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        .map(|_| ())
     })?;
 
     Ok(super::PyVectorStore {
@@ -83,15 +170,14 @@ pub(crate) fn store_count(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(
+        let store = get_or_create_store(
             path,
-            Some(dimension),
+            dimension,
             enable_kw,
             index_cache_size_bytes,
-            cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        .await?;
         store
             .count(&table_name)
             .await
@@ -113,15 +199,14 @@ pub(crate) fn store_drop_table(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let mut store = VectorStore::new_with_keyword_index(
+        let mut store = get_or_create_store(
             path,
-            Some(dimension),
+            dimension,
             enable_kw,
             index_cache_size_bytes,
-            cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        .await?;
         store
             .drop_table(&table_name)
             .await
@@ -143,15 +228,14 @@ pub(crate) fn store_get_table_info(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(
+        let store = get_or_create_store(
             path,
-            Some(dimension),
+            dimension,
             enable_kw,
             index_cache_size_bytes,
-            cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        .await?;
         let info = store
             .get_table_info(&table_name)
             .await
@@ -175,15 +259,14 @@ pub(crate) fn store_list_versions(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(
+        let store = get_or_create_store(
             path,
-            Some(dimension),
+            dimension,
             enable_kw,
             index_cache_size_bytes,
-            cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        .await?;
         let versions = store
             .list_versions(&table_name)
             .await
@@ -207,15 +290,14 @@ pub(crate) fn store_get_fragment_stats(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(
+        let store = get_or_create_store(
             path,
-            Some(dimension),
+            dimension,
             enable_kw,
             index_cache_size_bytes,
-            cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        .await?;
         let stats = store
             .get_fragment_stats(&table_name)
             .await

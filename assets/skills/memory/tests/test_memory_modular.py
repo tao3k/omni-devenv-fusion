@@ -26,7 +26,7 @@ class TestMemoryModular:
             "memory", "save_memory", content="Modular test memory", metadata={"source": "test"}
         )
         assert result.success
-        assert "Saved memory" in result.output
+        assert "Saved memory" in result.text
         mock_store.add.assert_called_once()
 
     async def test_search_memory(self, skill_tester, mock_store):
@@ -37,18 +37,18 @@ class TestMemoryModular:
 
         result = await skill_tester.run("memory", "search_memory", query="search item")
         assert result.success
-        assert "Found 1 matches" in result.output
-        assert "Matched content" in result.output
+        assert "Found 1 matches" in result.text
+        assert "Matched content" in result.text
 
     async def test_get_memory_stats(self, skill_tester, mock_store):
         """Test get_memory_stats execution."""
         result = await skill_tester.run("memory", "get_memory_stats")
         assert result.success
-        assert "Stored memories: 42" in result.output
+        assert "Stored memories: 42" in result.text
 
     async def test_index_memory(self, skill_tester, mock_store):
         """Test index_memory execution."""
         result = await skill_tester.run("memory", "index_memory")
         assert result.success
-        assert "Search performance improved" in result.output
+        assert "Search performance improved" in result.text
         mock_store.create_index.assert_called_once()

@@ -32,117 +32,65 @@ class TestSkillList:
         return CliRunner()
 
     def test_list_shows_skills(self, runner, tmp_path: Path):
-        """Test that list command shows installed skills."""
+        """Test that list command shows installed skills (light path: LanceDB list_all_tools)."""
         skills_dir = tmp_path / "assets" / "skills"
         skills_dir.mkdir(parents=True)
 
-        skill_dir = skills_dir / "test_skill"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("""
----
-name: test_skill
-version: 1.0.0
-description: A test skill
----
-""")
-
-        mock_ctx = MagicMock()
-        mock_ctx.list_skills.return_value = ["test_skill"]
-        mock_ctx.get_skill.return_value = MagicMock(list_commands=lambda: ["cmd1", "cmd2"])
-
-        mock_kernel = MagicMock()
-        mock_kernel.skill_context = mock_ctx
+        mock_tools = [
+            {"skill_name": "test_skill", "tool_name": "cmd1", "description": "Command 1"},
+            {"skill_name": "test_skill", "tool_name": "cmd2", "description": "Command 2"},
+        ]
 
         with patch("omni.foundation.config.skills.SKILLS_DIR", return_value=skills_dir):
-            with patch("omni.core.kernel.get_kernel", return_value=mock_kernel):
+            with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store_cls:
+                mock_store = MagicMock()
+                mock_store.list_all_tools.return_value = mock_tools
+                mock_store_cls.return_value = mock_store
                 result = runner.invoke(app, ["skill", "list"])
 
         assert result.exit_code == 0
         assert "test_skill" in result.output
 
     def test_list_handles_empty_skills_dir(self, runner, tmp_path: Path):
-        """Test list with no skills installed."""
+        """Test list with no skills installed (light path: LanceDB list_all_tools)."""
         skills_dir = tmp_path / "assets" / "skills"
         skills_dir.mkdir(parents=True)
 
-        mock_ctx = MagicMock()
-        mock_ctx.list_skills.return_value = []
-
-        mock_kernel = MagicMock()
-        mock_kernel.skill_context = mock_ctx
-
         with patch("omni.foundation.config.skills.SKILLS_DIR", return_value=skills_dir):
-            with patch("omni.core.kernel.get_kernel", return_value=mock_kernel):
+            with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store_cls:
+                mock_store = MagicMock()
+                mock_store.list_all_tools.return_value = []
+                mock_store_cls.return_value = mock_store
                 result = runner.invoke(app, ["skill", "list"])
 
         assert result.exit_code == 0
 
     def test_list_json_output(self, runner, tmp_path: Path):
-        """Test list --json outputs skills from Rust DB as JSON with full metadata."""
-        # Create mock skill index data (what get_skill_index returns)
-        mock_skills = [
+        """Test list --json outputs skills from LanceDB as JSON (grouped by skill_name)."""
+        mock_tools = [
             {
-                "name": "git",
-                "path": "assets/skills/git",
-                "description": "Git operations",
-                "version": "1.0.0",
-                "repository": "https://github.com/example/git-skill",
-                "routing_keywords": ["git", "version control"],
-                "intents": ["commit changes", "check status"],
-                "authors": ["omni-dev-fusion"],
-                "permissions": ["filesystem:*", "terminal:run_command"],
-                "require_refs": [{"path": "docs/git-guide.md"}],
-                "oss_compliant": ["apache-2.0"],
-                "compliance_details": ["License verified"],
-                "sniffing_rules": [{"type": "file_match", "pattern": "**/.git/**"}],
-                "docs_available": {"skill_md": True, "readme": True, "tests": False},
-                "tools": [
-                    {
-                        "name": "git.status",
-                        "description": "Show working tree status",
-                        "category": "query",
-                        "input_schema": '{"type": "object", "properties": {}}',
-                        "file_hash": "abc123",
-                    },
-                    {
-                        "name": "git.commit",
-                        "description": "Commit changes",
-                        "category": "write",
-                        "input_schema": '{"type": "object", "properties": {"message": {"type": "string"}},"required": ["message"]}',
-                        "file_hash": "def456",
-                    },
-                ],
+                "skill_name": "filesystem",
+                "tool_name": "read",
+                "description": "Read file",
+                "category": "read",
             },
             {
-                "name": "filesystem",
-                "path": "assets/skills/filesystem",
-                "description": "File operations",
-                "version": "1.0.0",
-                "repository": "",
-                "routing_keywords": ["file", "io"],
-                "intents": ["read file", "write file"],
-                "authors": ["omni-dev-fusion"],
-                "permissions": ["filesystem:read"],
-                "require_refs": [],
-                "oss_compliant": [],
-                "compliance_details": [],
-                "sniffing_rules": [],
-                "docs_available": {"skill_md": True, "readme": False, "tests": False},
-                "tools": [
-                    {
-                        "name": "filesystem.read",
-                        "description": "Read file",
-                        "category": "read",
-                        "input_schema": '{"type": "object", "properties": {"path": {"type": "string"}}}',
-                        "file_hash": "ghi789",
-                    },
-                ],
+                "skill_name": "git",
+                "tool_name": "status",
+                "description": "Show working tree status",
+                "category": "query",
+            },
+            {
+                "skill_name": "git",
+                "tool_name": "commit",
+                "description": "Commit changes",
+                "category": "write",
             },
         ]
 
         with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
             mock_store_instance = MagicMock()
-            mock_store_instance.get_skill_index_sync.return_value = mock_skills
+            mock_store_instance.list_all_tools.return_value = mock_tools
             mock_store.return_value = mock_store_instance
             with patch(
                 "omni.foundation.config.skills.SKILLS_DIR",
@@ -151,50 +99,23 @@ description: A test skill
                 result = runner.invoke(app, ["skill", "list", "--json"])
 
         assert result.exit_code == 0
-        # Parse JSON output
         output_data = json.loads(result.output)
         assert isinstance(output_data, list)
-        assert len(output_data) == 2
+        assert len(output_data) == 2  # filesystem, git
 
-        # Verify skill 1 has full metadata
-        assert output_data[0]["name"] == "git"
-        assert output_data[0]["path"] == "assets/skills/git"
-        assert output_data[0]["docs_path"] == "assets/skills/git/SKILL.md"
-        assert output_data[0]["description"] == "Git operations"
-        assert output_data[0]["version"] == "1.0.0"
-        assert output_data[0]["repository"] == "https://github.com/example/git-skill"
-        assert output_data[0]["routing_keywords"] == ["git", "version control"]
-        assert output_data[0]["intents"] == ["commit changes", "check status"]
-        assert output_data[0]["authors"] == ["omni-dev-fusion"]
-        assert output_data[0]["permissions"] == ["filesystem:*", "terminal:run_command"]
-        assert output_data[0]["require_refs"] == ["docs/git-guide.md"]
-        assert output_data[0]["oss_compliant"] == ["apache-2.0"]
-        assert output_data[0]["compliance_details"] == ["License verified"]
-        assert output_data[0]["sniffing_rules"] == [{"type": "file_match", "pattern": "**/.git/**"}]
-        assert output_data[0]["docs_available"]["skill_md"] is True
-        assert output_data[0]["docs_available"]["readme"] is True
-        assert output_data[0]["docs_available"]["tests"] is False
-        assert output_data[0]["has_extensions"] is True
-        assert len(output_data[0]["tools"]) == 2
-
-        # Verify tool has all fields
-        tool = output_data[0]["tools"][1]
-        assert tool["name"] == "git.commit"
-        assert tool["category"] == "write"
-        assert "input_schema" in tool
-        assert "message" in tool["input_schema"]
-        assert tool["file_hash"] == "def456"
-
-        # Verify skill 2
-        assert output_data[1]["name"] == "filesystem"
-        assert output_data[1]["permissions"] == ["filesystem:read"]
-        assert output_data[1]["has_extensions"] is True
+        # Verify skill order (sorted by name: filesystem, git)
+        assert output_data[0]["name"] == "filesystem"
+        assert output_data[1]["name"] == "git"
+        assert len(output_data[0]["tools"]) == 1
+        assert len(output_data[1]["tools"]) == 2
+        assert output_data[1]["tools"][1]["name"] == "git.commit"
+        assert output_data[1]["tools"][1]["category"] == "write"
 
     def test_list_json_empty_skills(self, runner, tmp_path: Path):
-        """Test list --json with no skills in Rust DB."""
+        """Test list --json with no skills in LanceDB."""
         with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
             mock_store_instance = MagicMock()
-            mock_store_instance.get_skill_index_sync.return_value = []
+            mock_store_instance.list_all_tools.return_value = []
             mock_store.return_value = mock_store_instance
             with patch(
                 "omni.foundation.config.skills.SKILLS_DIR",
@@ -207,32 +128,26 @@ description: A test skill
         assert isinstance(output_data, list)
         assert len(output_data) == 0
 
-    def test_list_json_preserves_full_metadata(self, runner, tmp_path: Path):
-        """Test that --json preserves all skill metadata from Rust scanner."""
-        mock_skills = [
+    def test_list_json_preserves_tool_metadata(self, runner, tmp_path: Path):
+        """Test that --json preserves name, description, category from list_all_tools."""
+        mock_tools = [
             {
-                "name": "test_skill",
-                "path": "assets/skills/test_skill",
-                "description": "Test skill description",
-                "version": "2.0.0",
-                "routing_keywords": ["test", "example"],
-                "intents": ["run tests", "verify code"],
-                "authors": ["Test Author"],
-                "permissions": ["network:http"],
-                "tools": [
-                    {"name": "test_skill.run", "description": "Run tests", "category": "test"},
-                    {
-                        "name": "test_skill.verify",
-                        "description": "Verify code",
-                        "category": "check",
-                    },
-                ],
+                "skill_name": "test_skill",
+                "tool_name": "run",
+                "description": "Run tests",
+                "category": "test",
+            },
+            {
+                "skill_name": "test_skill",
+                "tool_name": "verify",
+                "description": "Verify code",
+                "category": "check",
             },
         ]
 
         with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
             mock_store_instance = MagicMock()
-            mock_store_instance.get_skill_index_sync.return_value = mock_skills
+            mock_store_instance.list_all_tools.return_value = mock_tools
             mock_store.return_value = mock_store_instance
             with patch(
                 "omni.foundation.config.skills.SKILLS_DIR",
@@ -243,19 +158,57 @@ description: A test skill
         assert result.exit_code == 0
         output_data = json.loads(result.output)
         skill_data = output_data[0]
-
         assert skill_data["name"] == "test_skill"
-        assert skill_data["path"] == "assets/skills/test_skill"
-        assert skill_data["description"] == "Test skill description"
-        assert skill_data["version"] == "2.0.0"
-        assert skill_data["routing_keywords"] == ["test", "example"]
-        assert skill_data["intents"] == ["run tests", "verify code"]
-        assert skill_data["authors"] == ["Test Author"]
-        assert skill_data["permissions"] == ["network:http"]
-        assert skill_data["has_extensions"] is True
         assert len(skill_data["tools"]) == 2
         assert skill_data["tools"][0]["name"] == "test_skill.run"
         assert skill_data["tools"][0]["category"] == "test"
+        assert skill_data["tools"][1]["name"] == "test_skill.verify"
+        assert skill_data["tools"][1]["category"] == "check"
+
+    def test_list_filters_invalid_and_private_records(self, runner, tmp_path: Path):
+        """List should only show valid public commands from normalized command index rows."""
+        mock_tools = [
+            {
+                "skill_name": "knowledge",
+                "tool_name": "knowledge.recall",
+                "description": "Recall docs",
+                "category": "search",
+            },
+            {
+                "skill_name": "_template",
+                "tool_name": "_template.example",
+                "description": "Template helper",
+                "category": "internal",
+            },
+            {
+                "skill_name": "/Users/guangtao/ghq/github",
+                "tool_name": "/Users/guangtao/ghq/github.com/acme/skill.py:_helper",
+                "description": "Invalid path-like entry",
+                "category": "internal",
+            },
+            {
+                "skill_name": "knowledge",
+                "tool_name": "knowledge",
+                "description": "Skill node (not a command)",
+                "category": "internal",
+            },
+        ]
+
+        with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
+            mock_store_instance = MagicMock()
+            mock_store_instance.list_all_tools.return_value = mock_tools
+            mock_store.return_value = mock_store_instance
+            with patch(
+                "omni.foundation.config.skills.SKILLS_DIR",
+                return_value=tmp_path / "assets" / "skills",
+            ):
+                result = runner.invoke(app, ["skill", "list"])
+
+        assert result.exit_code == 0
+        assert "knowledge" in result.output
+        assert "recall" in result.output
+        assert "_template" not in result.output
+        assert "/Users/guangtao" not in result.output
 
 
 class TestSkillInfo:
@@ -266,7 +219,7 @@ class TestSkillInfo:
         return CliRunner()
 
     def test_info_shows_skill_details(self, runner, tmp_path: Path):
-        """Test that info command shows skill details."""
+        """Test that info command shows skill details (commands from list_all_tools)."""
         skills_dir = tmp_path / "assets" / "skills"
         skills_dir.mkdir(parents=True)
 
@@ -285,14 +238,12 @@ metadata:
 This is a test skill.
 """)
 
-        mock_ctx = MagicMock()
-        mock_ctx.get_skill.return_value = MagicMock(list_commands=lambda: ["cmd1"])
-
-        mock_kernel = MagicMock()
-        mock_kernel.skill_context = mock_ctx
-
+        mock_tools = [{"skill_name": "test_skill", "tool_name": "cmd1", "description": "Command 1"}]
         with patch("omni.foundation.config.skills.SKILLS_DIR", return_value=skills_dir):
-            with patch("omni.core.kernel.get_kernel", return_value=mock_kernel):
+            with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store_cls:
+                mock_store = MagicMock()
+                mock_store.list_all_tools.return_value = mock_tools
+                mock_store_cls.return_value = mock_store
                 result = runner.invoke(app, ["skill", "info", "test_skill"])
 
         assert result.exit_code == 0

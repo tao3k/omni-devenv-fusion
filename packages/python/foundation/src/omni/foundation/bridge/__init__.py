@@ -75,6 +75,19 @@ def __getattr__(name: str):
             else (get_vector_store if name == "get_vector_store" else RUST_AVAILABLE)
         )
 
+    if name in ("ToolRecordValidationError", "validate_tool_record", "validate_tool_records"):
+        from .tool_record_validation import (
+            ToolRecordValidationError,
+            validate_tool_record,
+            validate_tool_records,
+        )
+
+        return (
+            ToolRecordValidationError
+            if name == "ToolRecordValidationError"
+            else (validate_tool_record if name == "validate_tool_record" else validate_tool_records)
+        )
+
     if name in (
         "RustCodeAnalyzer",
         "get_code_analyzer",
@@ -121,6 +134,10 @@ def __getattr__(name: str):
 def __dir__():
     """List available attributes for autocomplete."""
     return [
+        # Validation
+        "ToolRecordValidationError",
+        "validate_tool_record",
+        "validate_tool_records",
         # Types
         "SearchResult",
         "FileContent",

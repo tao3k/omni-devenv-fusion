@@ -36,8 +36,10 @@ omni-vector = { path = "../../crates/omni-vector" }
 omni-scanner = { path = "../../crates/omni-scanner" }
 omni-executor = { path = "../../crates/omni-executor" }
 omni-tui = { path = "../../crates/omni-tui" }
-omni-knowledge = { path = "../../crates/omni-knowledge" }
+xiuxian-wendao = { path = "../../crates/xiuxian-wendao" }
 omni-sandbox = { path = "../../crates/omni-sandbox" }
+omni-memory = { path = "../../crates/omni-memory", features = ["pybindings"] }
+omni-window = { path = "../../crates/omni-window", features = ["pybindings"] }
 
 # Arrow IPC: analytics TableHealthReport → RecordBatch → bytes for Python pyarrow
 arrow = { workspace = true }
@@ -46,10 +48,13 @@ arrow-ipc = { workspace = true }
 # Workspace dependencies (inherited)
 serde = { workspace = true }
 serde_json = { workspace = true }
+jsonschema = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
 uuid = { workspace = true }
 chrono = { workspace = true }
+sha2 = "0.10"
+hex = "0.4"
 which = "6.0"
 
 [dev-dependencies]

@@ -1,10 +1,10 @@
-//! omni-io - Safe and efficient file I/O for Omni DevEnv
+//! omni-io - Safe and efficient file I/O for Omni `DevEnv`
 //!
 //! A high-performance file reading library with safety features.
 //!
 //! # Features
 //!
-//! - **Dual API**: Sync (std::fs) for Python bindings, Async (tokio::fs) for Rust core
+//! - **Dual API**: Sync (`std::fs`) for Python bindings, Async (`tokio::fs`) for Rust core
 //! - **Safety**: Binary detection & Size limits
 //! - **Lightweight**: Zero-dependency UTF-8 fallback
 //! - **Context Assembly**: Parallel I/O + Templating + Token Counting (optional)

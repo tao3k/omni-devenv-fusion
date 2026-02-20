@@ -30,7 +30,8 @@
       "routing_keywords": ["find", "files", "directory"],
       "intents": ["Locate files"],
       "category": "search",
-      "input_schema": { "type": "object" }
+      "input_schema": { "type": "object" },
+      "parameters": []
     }
   }
 }

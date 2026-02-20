@@ -39,6 +39,9 @@ class RouteResult(BaseModel):
         command_name: Name of the matched command
         score: Similarity score (0.0-1.0)
         confidence: Confidence level (high/medium/low)
+        final_score: Calibrated score used by governance thresholding.
+        ranking_reason: Short human-readable summary of ranking evidence.
+        input_schema_digest: Stable digest of the matched tool input schema.
     """
 
     model_config = ConfigDict(frozen=True)  # Immutable for safety
@@ -47,6 +50,20 @@ class RouteResult(BaseModel):
     command_name: str = Field(..., description="Name of the matched command")
     score: float = Field(..., ge=0.0, le=1.0, description="Similarity score (0.0-1.0)")
     confidence: RouteConfidence = Field(..., description="Confidence level")
+    final_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Calibrated score after confidence/rerank adjustments",
+    )
+    ranking_reason: str | None = Field(
+        default=None,
+        description="Ranking attribution summary",
+    )
+    input_schema_digest: str | None = Field(
+        default=None,
+        description="Stable digest of the selected command input schema",
+    )
 
 
 class SemanticRouter:

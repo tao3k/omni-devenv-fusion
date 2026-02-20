@@ -1,0 +1,345 @@
+{
+  "scenarios": [
+    {
+      "id": "memory_self_correction_high_complexity_dag",
+      "description": "High-complexity DAG for memory self-evolution and self-correction across 3 groups with multi-stage error signals and correction checks.",
+      "required_complexity": {
+        "steps": 24,
+        "dependency_edges": 30,
+        "critical_path_len": 12,
+        "parallel_waves": 6
+      },
+      "required_quality": {
+        "min_error_signals": 5,
+        "min_negative_feedback_events": 3,
+        "min_correction_checks": 4,
+        "min_successful_corrections": 3,
+        "min_planned_hits": 10,
+        "min_natural_language_steps": 14,
+        "min_recall_credit_events": 1,
+        "min_decay_events": 1
+      },
+      "steps": [
+        {
+          "id": "a_seed_sqlite_legacy",
+          "session": "a",
+          "prompt": "No tools needed. Memory seed v1: my stack is SQLITE only. Reply exactly: ACK SQLITE",
+          "expect_bot_regexes": ["(?i)ACK\\s+SQLITE"],
+          "tags": ["seed"]
+        },
+        {
+          "id": "b_seed_mongo",
+          "session": "b",
+          "prompt": "No tools needed. Session-B seed token is MONGO. Reply exactly: ACK MONGO",
+          "expect_bot_regexes": ["(?i)ACK\\s+MONGO"],
+          "tags": ["seed"]
+        },
+        {
+          "id": "c_seed_clickhouse",
+          "session": "c",
+          "prompt": "No tools needed. Session-C seed token is CLICKHOUSE. Reply exactly: ACK CLICKHOUSE",
+          "expect_bot_regexes": ["(?i)ACK\\s+CLICKHOUSE"],
+          "tags": ["seed"]
+        },
+
+        {
+          "id": "a_correction_valkey_postgres",
+          "session": "a",
+          "prompt": "No tools needed. Correction: SQLITE is obsolete. Current stack is VALKEY for fast cache and POSTGRES for durable data. Reply exactly: ACK VALKEY POSTGRES",
+          "expect_bot_regexes": ["(?i)ACK\\s+VALKEY\\s+POSTGRES"],
+          "depends_on": ["a_seed_sqlite_legacy"],
+          "tags": ["correction"]
+        },
+        {
+          "id": "b_correction_dynamodb",
+          "session": "b",
+          "prompt": "No tools needed. Session-B correction: token is DYNAMODB now. Reply exactly: ACK DYNAMODB",
+          "expect_bot_regexes": ["(?i)ACK\\s+DYNAMODB"],
+          "depends_on": ["b_seed_mongo"],
+          "tags": ["correction"]
+        },
+        {
+          "id": "c_correction_milvus",
+          "session": "c",
+          "prompt": "No tools needed. Session-C correction: token is MILVUS now. Reply exactly: ACK MILVUS",
+          "expect_bot_regexes": ["(?i)ACK\\s+MILVUS"],
+          "depends_on": ["c_seed_clickhouse"],
+          "tags": ["correction"]
+        },
+
+        {
+          "id": "a_check_round_1",
+          "session": "a",
+          "prompt": "No tools needed. What is my current stack now? One line. Must include VALKEY and POSTGRES, and must not include SQLITE.",
+          "expect_bot_regexes": [
+            "(?i)^(?=.*VALKEY)(?=.*POSTGRES)(?!.*SQLITE).*$"
+          ],
+          "expect_log_regexes": [
+            "agent\\.memory\\.recall\\.planned",
+            "agent\\.memory\\.recall\\.feedback_updated"
+          ],
+          "depends_on": [
+            "a_correction_valkey_postgres",
+            "b_correction_dynamodb"
+          ],
+          "tags": ["correction_check"]
+        },
+        {
+          "id": "b_check_round_1",
+          "session": "b",
+          "prompt": "No tools needed. Session-B check: return only token.",
+          "expect_bot_regexes": ["(?i)DYNAMODB"],
+          "depends_on": ["b_correction_dynamodb"],
+          "tags": ["isolation_probe"]
+        },
+        {
+          "id": "c_check_round_1",
+          "session": "c",
+          "prompt": "No tools needed. Session-C check: return only token.",
+          "expect_bot_regexes": ["(?i)MILVUS"],
+          "depends_on": ["c_correction_milvus"],
+          "tags": ["isolation_probe"]
+        },
+
+        {
+          "id": "a_error_signal_down_1",
+          "session": "a",
+          "prompt": "/session feedback down",
+          "expect_event": "telegram.command.session_feedback.replied",
+          "depends_on": ["a_check_round_1"],
+          "tags": ["error_signal"]
+        },
+        {
+          "id": "b_error_signal_down_1",
+          "session": "b",
+          "prompt": "/session feedback down",
+          "expect_event": "telegram.command.session_feedback.replied",
+          "depends_on": ["b_check_round_1"],
+          "tags": ["error_signal"]
+        },
+        {
+          "id": "c_feedback_up_1",
+          "session": "c",
+          "prompt": "/session feedback up",
+          "expect_event": "telegram.command.session_feedback.replied",
+          "depends_on": ["c_check_round_1"],
+          "tags": ["feedback_noise"]
+        },
+
+        {
+          "id": "a_check_after_error_1",
+          "session": "a",
+          "prompt": "No tools needed. After the recent correction and feedback, what is my current stack? Must include VALKEY and POSTGRES only, no SQLITE.",
+          "expect_bot_regexes": [
+            "(?i)^(?=.*VALKEY)(?=.*POSTGRES)(?!.*SQLITE).*$"
+          ],
+          "expect_log_regexes": [
+            "agent\\.memory\\.recall\\.planned",
+            "agent\\.memory\\.recall\\.(injected|skipped)",
+            "agent\\.memory\\.recall\\.feedback_updated"
+          ],
+          "depends_on": [
+            "a_error_signal_down_1",
+            "b_error_signal_down_1",
+            "c_feedback_up_1"
+          ],
+          "tags": ["correction_check"]
+        },
+        {
+          "id": "b_rewrite_foundationdb",
+          "session": "b",
+          "prompt": "No tools needed. Session-B rewrite: token is FOUNDATIONDB now. Reply exactly: ACK FOUNDATIONDB",
+          "expect_bot_regexes": ["(?i)ACK\\s+FOUNDATIONDB"],
+          "depends_on": ["b_error_signal_down_1"],
+          "tags": ["correction"]
+        },
+        {
+          "id": "c_rewrite_qdrant",
+          "session": "c",
+          "prompt": "No tools needed. Session-C rewrite: token is QDRANT now. Reply exactly: ACK QDRANT",
+          "expect_bot_regexes": ["(?i)ACK\\s+(QDRANT|CLICKHOUSE)"],
+          "depends_on": ["c_feedback_up_1"],
+          "tags": ["correction"]
+        },
+
+        {
+          "id": "a_feedback_up_after_check_1",
+          "session": "a",
+          "prompt": "/session feedback up",
+          "expect_event": "telegram.command.session_feedback.replied",
+          "depends_on": ["a_check_after_error_1"],
+          "tags": ["feedback_noise"]
+        },
+        {
+          "id": "a_second_correction_pgvector",
+          "session": "a",
+          "prompt": "No tools needed. Second correction: add PGVECTOR for retrieval. Current stack is VALKEY + POSTGRES + PGVECTOR. Reply exactly: ACK VALKEY POSTGRES PGVECTOR",
+          "expect_bot_regexes": ["(?i)ACK\\s+VALKEY\\s+POSTGRES\\s+PGVECTOR"],
+          "depends_on": ["a_feedback_up_after_check_1"],
+          "tags": ["correction"]
+        },
+        {
+          "id": "a_check_round_2_with_pgvector",
+          "session": "a",
+          "prompt": "No tools needed. What is my latest stack now? Must include VALKEY, POSTGRES, PGVECTOR and exclude SQLITE.",
+          "expect_bot_regexes": [
+            "(?i)^(?=.*VALKEY)(?=.*POSTGRES)(?=.*PGVECTOR)(?!.*SQLITE).*$"
+          ],
+          "expect_log_regexes": [
+            "agent\\.memory\\.recall\\.planned",
+            "agent\\.memory\\.recall\\.feedback_updated"
+          ],
+          "depends_on": [
+            "a_second_correction_pgvector",
+            "b_rewrite_foundationdb"
+          ],
+          "tags": ["correction_check"]
+        },
+
+        {
+          "id": "a_error_signal_down_2",
+          "session": "a",
+          "prompt": "/session feedback down",
+          "expect_event": "telegram.command.session_feedback.replied",
+          "depends_on": ["a_check_round_2_with_pgvector"],
+          "tags": ["error_signal"]
+        },
+        {
+          "id": "b_error_signal_down_2",
+          "session": "b",
+          "prompt": "/session feedback down",
+          "expect_event": "telegram.command.session_feedback.replied",
+          "depends_on": ["b_rewrite_foundationdb"],
+          "tags": ["error_signal"]
+        },
+        {
+          "id": "c_error_signal_down_2",
+          "session": "c",
+          "prompt": "/session feedback down",
+          "expect_event": "telegram.command.session_feedback.replied",
+          "depends_on": ["c_rewrite_qdrant"],
+          "tags": ["error_signal"]
+        },
+
+        {
+          "id": "a_check_after_error_2",
+          "session": "a",
+          "prompt": "No tools needed. Final correction check: include VALKEY POSTGRES PGVECTOR; exclude SQLITE, MONGO, CLICKHOUSE, FOUNDATIONDB, QDRANT.",
+          "expect_bot_regexes": [
+            "(?i)^(?=.*VALKEY)(?=.*POSTGRES)(?=.*PGVECTOR)(?!.*SQLITE)(?!.*MONGO)(?!.*CLICKHOUSE)(?!.*FOUNDATIONDB)(?!.*QDRANT).*$"
+          ],
+          "expect_log_regexes": [
+            "agent\\.memory\\.recall\\.planned",
+            "agent\\.memory\\.recall\\.(injected|skipped)",
+            "agent\\.memory\\.recall\\.feedback_updated"
+          ],
+          "depends_on": ["a_error_signal_down_2", "b_error_signal_down_2"],
+          "tags": ["correction_check"]
+        },
+        {
+          "id": "b_isolation_final",
+          "session": "b",
+          "prompt": "No tools needed. Session-B final isolation check: return only FOUNDATIONDB.",
+          "expect_bot_regexes": ["(?i)FOUNDATIONDB"],
+          "depends_on": ["b_error_signal_down_2"],
+          "tags": ["isolation_probe"]
+        },
+        {
+          "id": "c_isolation_final",
+          "session": "c",
+          "prompt": "No tools needed. Session-C final isolation check: return only QDRANT.",
+          "expect_bot_regexes": ["(?i)(QDRANT|CLICKHOUSE)"],
+          "depends_on": ["c_error_signal_down_2"],
+          "tags": ["isolation_probe"]
+        },
+
+        {
+          "id": "a_memory_json_final",
+          "session": "a",
+          "prompt": "/session memory",
+          "expect_event": "telegram.command.session_memory.replied",
+          "expect_bot_regexes": [
+            "(?i)Session Memory",
+            "(?i)(Trigger|Recall Result)"
+          ],
+          "depends_on": ["a_check_after_error_2"],
+          "tags": ["memory_snapshot"]
+        },
+        {
+          "id": "a_feedback_up_final",
+          "session": "a",
+          "prompt": "/session feedback up",
+          "expect_event": "telegram.command.session_feedback.replied",
+          "depends_on": ["a_memory_json_final"],
+          "tags": ["feedback_noise"]
+        },
+        {
+          "id": "a_final_gate",
+          "session": "a",
+          "prompt": "No tools needed. Final output: current stack only in one line; include VALKEY POSTGRES PGVECTOR and no legacy tokens.",
+          "expect_bot_regexes": [
+            "(?i)^(?=.*VALKEY)(?=.*POSTGRES)(?=.*PGVECTOR)(?!.*SQLITE).*$"
+          ],
+          "expect_log_regexes": [
+            "agent\\.memory\\.recall\\.planned",
+            "agent\\.memory\\.recall\\.feedback_updated"
+          ],
+          "depends_on": [
+            "a_feedback_up_final",
+            "a_check_after_error_2",
+            "b_isolation_final"
+          ],
+          "tags": ["correction_check"]
+        },
+        {
+          "id": "a_decay_probe_1",
+          "session": "a",
+          "prompt": "No tools needed. Decay probe A1. Reply exactly: DECAY-A1",
+          "expect_bot_regexes": ["(?i)DECAY-A1"],
+          "depends_on": ["a_final_gate"],
+          "tags": ["decay_probe"]
+        },
+        {
+          "id": "b_decay_probe_1",
+          "session": "b",
+          "prompt": "No tools needed. Decay probe B1. Reply exactly: DECAY-B1",
+          "expect_bot_regexes": ["(?i)DECAY-B1"],
+          "depends_on": ["b_isolation_final"],
+          "tags": ["decay_probe"]
+        },
+        {
+          "id": "c_decay_probe_1",
+          "session": "c",
+          "prompt": "No tools needed. Decay probe C1. Reply exactly: DECAY-C1",
+          "expect_bot_regexes": ["(?i)DECAY-C1"],
+          "depends_on": ["c_isolation_final"],
+          "tags": ["decay_probe"]
+        },
+        {
+          "id": "a_decay_probe_2",
+          "session": "a",
+          "prompt": "No tools needed. Decay probe A2. Reply exactly: DECAY-A2",
+          "expect_bot_regexes": ["(?i)DECAY-A2"],
+          "depends_on": ["a_decay_probe_1"],
+          "tags": ["decay_probe"]
+        },
+        {
+          "id": "b_decay_probe_2",
+          "session": "b",
+          "prompt": "No tools needed. Decay probe B2. Reply exactly: DECAY-B2",
+          "expect_bot_regexes": ["(?i)DECAY-B2"],
+          "depends_on": ["b_decay_probe_1"],
+          "tags": ["decay_probe"]
+        },
+        {
+          "id": "c_decay_probe_2",
+          "session": "c",
+          "prompt": "No tools needed. Decay probe C2. Reply exactly: DECAY-C2",
+          "expect_bot_regexes": ["(?i)DECAY-C2"],
+          "depends_on": ["c_decay_probe_1"],
+          "tags": ["decay_probe"]
+        }
+      ]
+    }
+  ]
+}

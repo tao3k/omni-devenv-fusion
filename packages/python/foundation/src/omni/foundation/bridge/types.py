@@ -22,10 +22,8 @@ class SearchResult(BaseModel):
     @field_validator("score")
     @classmethod
     def validate_score(cls, v: float) -> float:
-        """Validate score is in valid range."""
-        if not 0.0 <= v <= 1.0:
-            raise ValueError(f"Score must be between 0.0 and 1.0, got {v}")
-        return v
+        """Clamp score to [0, 1]. Fusion/RRF can produce values slightly above 1.0."""
+        return max(0.0, min(1.0, float(v)))
 
 
 class FileContent(BaseModel):

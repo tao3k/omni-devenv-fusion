@@ -8,7 +8,8 @@ use omni_lance::{
 
 #[test]
 fn test_default_schema() {
-    let schema = VectorRecordBatchReader::default_schema(1536);
+    let schema =
+        VectorRecordBatchReader::default_schema(1536).expect("default schema should build");
     let fields = schema.fields();
 
     assert_eq!(fields.len(), 4);

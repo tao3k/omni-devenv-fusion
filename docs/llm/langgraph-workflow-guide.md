@@ -169,6 +169,21 @@ async def my_workflow(request: str = "") -> str:
 __all__ = ["my_workflow", "MyWorkflowState"]
 ```
 
+## Long content and chunked processing
+
+When the workflow handles **very long content** (repos, papers, logs) or the LLM/tool runs risk **timeouts** or **context overflow**, use the shared chunked library so the model can drive **one step per MCP call**:
+
+- **`omni.langgraph.chunked`**: normalizes chunks (split oversized, cap total, merge tiny), runs step-by-step (start → shard → synthesize) with persistence, and provides LangGraph node helpers. When `action=start` and `auto_complete=True` (default), runs the full workflow in one call to avoid burning agent rounds.
+
+See `packages/python/agent/src/omni/langgraph/chunked/README.md` for:
+
+- `normalize_chunks(items, config)` — bounded chunk list
+- `run_chunked_step(..., auto_complete=True)` — when action=start: runs full workflow in one call (default)
+- `run_chunked_auto_complete(...)` — one-shot full run (start → step×N → synthesize)
+- `make_process_chunk_node(process_one, queue_key=...)` / `make_synthesize_node(synthesize)` — plug into a StateGraph
+
+Skills like **researcher** (sharded repo analysis) and **knowledge** (chunked recall) can use this so other tools can embed the same stable, high-performance split/merge and step runner without reimplementing it.
+
 ## Key Components
 
 ### 1. Logger

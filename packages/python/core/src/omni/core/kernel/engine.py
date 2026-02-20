@@ -17,10 +17,12 @@ Logging: Uses Foundation layer (omni.foundation.config.logging)
 from __future__ import annotations
 
 import asyncio
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from omni.foundation.config.logging import configure_logging, get_logger
+from omni.foundation.config.settings import get_setting
 from omni.foundation.config.skills import SKILLS_DIR
 
 from .lifecycle import LifecycleManager, LifecycleState
@@ -269,12 +271,32 @@ class Kernel:
         if not target_skill:
             raise ValueError(f"Target skill '{target_skill_name}' not found.")
 
-        # 4. Execute
+        # 4. Execute (with timing for all skill tools)
         if not hasattr(target_skill, "execute"):
             raise ValueError(f"Skill '{target_skill_name}' is not executable.")
 
         logger.debug(f"🔐 Executing {tool_name} (Caller: {caller or 'ROOT'})")
+        _start = time.perf_counter()
+
         result = await target_skill.execute(command_name, **args)
+
+        # Query-release lifecycle: evict knowledge vector store after each tool run
+        # so the long-lived MCP process does not retain LanceDB memory. See
+        # docs/reference/lancedb-query-release-lifecycle.md.
+        try:
+            from omni.foundation.services.vector import evict_knowledge_store_after_use
+
+            evict_knowledge_store_after_use()
+        except Exception as e:
+            logger.debug("evict_knowledge_store_after_use: %s", e)
+
+        _elapsed_ms = (time.perf_counter() - _start) * 1000
+        logger.info(
+            "skill_tool_duration",
+            tool=tool_name,
+            duration_ms=round(_elapsed_ms, 2),
+            caller=caller or "root",
+        )
 
         # 5. Proactive Cognitive Management
         # If successfully executed but skills are overloaded, inject a subtle warning
@@ -481,7 +503,7 @@ class Kernel:
     async def load_sniffer_rules(self) -> int:
         """Load declarative sniffing rules from LanceDB.
 
-        This bridges the Rust Scanner (Producer) and Python Sniffer (Consumer).
+        Bridges the Rust Scanner (Producer) and Python Sniffer (Consumer).
         Returns the number of rules loaded.
         """
         count = await self.sniffer.load_rules_from_lancedb()
@@ -495,22 +517,17 @@ class Kernel:
         """
         from omni.core.router import SkillIndexer
 
-        indexer = SkillIndexer()
-        # Pass kernel reference for keyword routing access to skill_context
-        indexer._kernel = self
-
         self._router = self.router
+        indexer = SkillIndexer()
+        indexer._kernel = self
         self._router._semantic._indexer = indexer
 
-        # Collect skill metadata for indexing
         skills_data = []
         if self._skill_context is not None:
             for skill in self._skill_context._skills.values():
-                # Get command names and create command entries
                 cmd_names = skill.list_commands() if hasattr(skill, "list_commands") else []
                 commands = []
                 for cmd_name in cmd_names:
-                    # Fetch actual command handler to get metadata
                     handler = skill.get_command(cmd_name)
                     cmd_keywords = []
                     cmd_desc = ""

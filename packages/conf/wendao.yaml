@@ -1,0 +1,53 @@
+# =============================================================================
+# Wendao (LinkGraph Engine) Configuration
+# =============================================================================
+link_graph:
+  # Primary graph backend (Wendao Rust engine).
+  backend: "wendao"
+  # Default backend config location relative to notebook root.
+  # Always used by LinkGraph config resolver (can be relative or absolute).
+  config_relative_path: ".wendao/config.toml"
+  # Optional explicit watch roots for Live-Wire markdown refresh.
+  # When non-empty, watcher uses only these project-relative directories.
+  watch_dirs: []
+  # File patterns watched for LinkGraph refresh triggers.
+  watch_patterns:
+    - "**/*.md"
+    - "**/*.markdown"
+    - "**/*.mdx"
+    - "**/SKILL.md"
+  # Optional relative whitelist. If non-empty, only these paths are indexed.
+  # Example:
+  # include_dirs: ["assets/knowledge", "docs", ".data/harvested"]
+  include_dirs: []
+  # When include_dirs is empty, auto-select existing directories from
+  # include_dirs_auto_candidates.
+  include_dirs_auto: true
+  include_dirs_auto_candidates:
+    - "assets/knowledge"
+    - "docs"
+    - ".data/harvested"
+  # Additional directory excludes (non-hidden). Hidden/runtime dirs are always
+  # excluded by built-in policy; entries starting with "." are ignored here.
+  exclude_dirs:
+    - "target"
+    - "node_modules"
+  # Cross-process stats cache TTL (seconds) for fast repeated CLI runs.
+  stats_persistent_cache_ttl_sec: 120.0
+  # Valkey-backed Rust index snapshot cache (db-first).
+  # URL resolution is unified and config-first:
+  # 1) link_graph.cache.valkey_url (this file / user wendao.yaml)
+  # 2) VALKEY_URL (environment fallback)
+  cache:
+    valkey_url: "redis://127.0.0.1:6379/0"
+    key_prefix: "xiuxian_wendao:link_graph:index"
+    ttl_seconds: 300
+  # Response-time stats probe budget (seconds) for search(mode=link_graph|hybrid).
+  # Keeps graph_stats useful without blocking long on cold miss.
+  stats_response_probe_timeout_sec: 0.05
+  # Background refresh timeout (seconds) for async stats refresh on cache miss.
+  stats_response_refresh_timeout_sec: 5.0
+  index:
+    delta:
+      # Switch to full rebuild when a single delta batch reaches this size.
+      full_rebuild_threshold: 256

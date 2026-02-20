@@ -24,6 +24,8 @@ The `omni` CLI provides unified access to all Omni-Dev-Fusion Fusion capabilitie
 | `omni db partition-suggest <table>` | Suggest partition column for large tables (Phase 4)         |
 | `omni db query-metrics <table>`     | Per-table query metrics (in-process from agentic_search)    |
 | `omni mcp`                          | Start MCP server                                            |
+| `omni agent`                        | Interactive chat (Python loop); use `--rust` for Rust agent |
+| `omni gateway`                      | Stdio and/or HTTP webhook; use `--rust` for Rust agent      |
 | `omni skill run <cmd>`              | Execute skill command                                       |
 | `omni skill list`                   | List installed skills                                       |
 | `omni skill analyze`                | Analyze tool statistics (Arrow-native)                      |
@@ -39,10 +41,16 @@ Global options apply to all subcommands:
 - `--conf, -c`: set active configuration directory.
 - `--verbose, -v`: enable debug logging.
 
-Configuration is resolved as a merged view:
+Configuration is resolved from two layers (user overrides system):
 
 1. `<git-root>/packages/conf/settings.yaml` (system defaults)
 2. `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` (user override layer)
+
+For LinkGraph/Wendao-specific settings, a dedicated config file is merged with
+the same priority model:
+
+1. `<git-root>/packages/conf/wendao.yaml` (system defaults)
+2. `$PRJ_CONFIG_HOME/omni-dev-fusion/wendao.yaml` (user override layer)
 
 By default, `PRJ_CONFIG_HOME=.config`. You can switch it per run:
 
@@ -410,7 +418,7 @@ How to read output:
 - `Confidence`: mapped band (`high` / `medium` / `low`) from configured thresholds.
 - Use `--debug` to inspect additional scoring details for troubleshooting.
 
-Router confidence mapping is configurable in `settings.yaml` under
+Router confidence mapping is configurable in settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) under
 `router.search.profiles.<profile_name>` and selected with
 `router.search.active_profile`.
 
@@ -458,7 +466,7 @@ router:
 Apply profile via override config:
 
 ```bash
-# Use override config directory (loads <dir>/omni-dev-fusion/settings.yaml)
+# Use override config directory (loads <dir>/omni-dev-fusion/settings.yaml as user layer)
 omni --conf ./.config.dev route test "git commit" --debug
 ```
 
@@ -538,7 +546,7 @@ omni sync
 
 # Targeted sync
 omni sync skills
-omni sync router
+omni sync route
 omni sync knowledge
 omni sync memory
 omni sync symbols
@@ -554,7 +562,7 @@ Subcommands:
 
 - `knowledge`
 - `skills`
-- `router`
+- `route` — Initialize router DB (scores table). Required for `omni route test`.
 - `memory`
 - `symbols`
 
@@ -586,7 +594,7 @@ Embedding/index compatibility:
 
 - Omni persists an embedding signature at `<vector-db>/.embedding_signature.json`.
 - On CLI startup, if `embedding.model` or `embedding.dimension` changed, Omni auto-rebuilds `skills` and `router` indexes.
-- This behavior is controlled by `embedding.auto_reindex_on_change` in `settings.yaml` (default: `true`).
+- This behavior is controlled by `embedding.auto_reindex_on_change` in settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml; default: `true`).
 - Use `--conf <dir>` to apply this policy from an override config directory.
 
 Common options:

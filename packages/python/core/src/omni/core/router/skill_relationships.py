@@ -156,10 +156,7 @@ def get_relationship_graph_path(storage_path: str | None) -> Path | None:
     if not storage_path or storage_path == ":memory:":
         return None
     p = Path(storage_path)
-    if p.suffix == ".lance":
-        base = p.parent
-    else:
-        base = p
+    base = p.parent if p.suffix == ".lance" else p
     return base / "skill_relationships.json"
 
 
@@ -210,7 +207,7 @@ def build_graph_from_store(
     build_graph_from_entries(entries) with the result of list_all.
 
     After building the base graph from skill metadata, enriches it with
-    ZK entity connections (Core 1 → Core 2 bridge).
+    LinkGraph entity connections (Core 1 → Core 2 bridge).
     """
     try:
         entries = store.list_all(table_name)
@@ -218,23 +215,23 @@ def build_graph_from_store(
         logger.debug("list_all failed for relationship graph: %s", e)
         return {}
     graph = build_graph_from_entries(entries)
-    return _enrich_with_zk_graph(graph)
+    return _enrich_with_link_graph(graph)
 
 
-def _enrich_with_zk_graph(
+def _enrich_with_link_graph(
     graph: dict[str, list[tuple[str, float]]],
 ) -> dict[str, list[tuple[str, float]]]:
-    """Enrich skill relationship graph with ZK entity connections.
+    """Enrich skill relationship graph with LinkGraph entity connections.
 
-    This is Bridge 3: ZK Entity Graph → Router. Non-blocking: if ZK graph
+    This is Bridge 3: LinkGraph Entity Graph → Router. Non-blocking: if graph
     is unavailable, returns the original graph unchanged.
     """
     try:
-        from omni.rag.dual_core import enrich_skill_graph_from_zk
+        from omni.rag.dual_core import enrich_skill_graph_from_link_graph
 
-        return enrich_skill_graph_from_zk(graph)
+        return enrich_skill_graph_from_link_graph(graph)
     except Exception as e:
-        logger.debug("ZK enrichment skipped: %s", e)
+        logger.debug("LinkGraph enrichment skipped: %s", e)
         return graph
 
 

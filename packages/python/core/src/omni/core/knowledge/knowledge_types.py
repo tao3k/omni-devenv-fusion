@@ -1,6 +1,6 @@
-"""Knowledge Types - Type definitions from Rust omni-knowledge bindings.
+"""Knowledge Types - Type definitions from Rust xiuxian-wendao bindings.
 
-This module provides Python type aliases for the Rust omni-knowledge crate,
+This module provides Python type aliases for the Rust xiuxian-wendao crate,
 with fallback enums when Rust bindings are not available.
 
 Usage:
@@ -35,7 +35,7 @@ class _FallbackKnowledgeCategory(str, Enum):
 
 # Try to import from Rust bindings, fallback to fallback enum for type hints
 try:
-    from omni_knowledge import (
+    from xiuxian_wendao import (
         KnowledgeCategory as _KnowledgeCategory,
         KnowledgeEntry as _KnowledgeEntry,
         KnowledgeSearchQuery as _KnowledgeSearchQuery,

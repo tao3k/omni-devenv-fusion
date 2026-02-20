@@ -122,6 +122,22 @@ class TestGetProjectRootGitOpsBehavior:
             monkeypatch.delenv("PRJ_ROOT", raising=False)
 
 
+class TestGetGitTopLevel:
+    """Tests for git-top-level API that ignores PRJ_ROOT."""
+
+    def test_get_git_toplevel_ignores_prj_root(self, monkeypatch, tmp_path):
+        """get_git_toplevel() should resolve from cwd git repo, not PRJ_ROOT."""
+        monkeypatch.setenv("PRJ_ROOT", str(tmp_path))
+        try:
+            from omni.foundation.runtime.gitops import get_git_toplevel
+
+            top = get_git_toplevel()
+            assert (top / ".git").exists()
+            assert top != tmp_path.resolve()
+        finally:
+            monkeypatch.delenv("PRJ_ROOT", raising=False)
+
+
 class TestClearProjectRootCache:
     """clear_project_root_cache() behavior."""
 

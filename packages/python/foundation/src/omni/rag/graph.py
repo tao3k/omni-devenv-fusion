@@ -27,6 +27,17 @@ from omni.rag.entities import Entity, Relation, ExtractedChunk
 
 logger = structlog.get_logger(__name__)
 
+
+def _entity_extraction_max_chars() -> int:
+    """Max characters per chunk sent to LLM (smaller = faster; default 4000)."""
+    try:
+        from omni.foundation.config.settings import get_setting
+
+        return int(get_setting("knowledge.entity_extraction_max_chars", 4000))
+    except Exception:
+        return 4000
+
+
 # =============================================================================
 # Bilingual Entity Extraction Prompts (中英文双语实体提取提示)
 # =============================================================================
@@ -248,6 +259,7 @@ class KnowledgeGraphExtractor:
         text: str,
         source: str = "",
         max_entities: int | None = None,
+        timeout: int | None = None,
     ) -> tuple[list[Entity], list[Relation]]:
         """Extract entities and relations from text.
 
@@ -255,6 +267,8 @@ class KnowledgeGraphExtractor:
             text: Text to analyze.
             source: Source document/path.
             max_entities: Maximum entities to extract (default from config).
+            timeout: Optional request timeout in seconds; passed to LLM so the
+                HTTP request aborts instead of hanging when asyncio cancels.
 
         Returns:
             Tuple of (entities, relations) lists.
@@ -272,15 +286,24 @@ class KnowledgeGraphExtractor:
         max_ents = max_entities or get_rag_config().knowledge_graph.max_entities_per_doc
 
         try:
-            # Build prompt with entity types
-            prompt = EXTRACT_ENTITIES_PROMPT.format(text=text[:15000])  # Limit text size
+            # Build prompt with entity types (cap text size for speed; config: knowledge.entity_extraction_max_chars)
+            max_chars = _entity_extraction_max_chars()
+            prompt = EXTRACT_ENTITIES_PROMPT.format(text=text[:max_chars])
 
             # Add entity type guidance
             type_list = ", ".join(self.entity_types)
             prompt = f"Focus on extracting: {type_list}\n\n" + prompt
 
-            # Call LLM for extraction
-            response = self.llm_complete(prompt)
+            # Call LLM for extraction; pass timeout and optional model override.
+            llm_kwargs: dict[str, Any] = {}
+            if timeout is not None:
+                llm_kwargs["timeout"] = timeout
+            model_override = getattr(self, "_entity_extraction_model", None)
+            if model_override:
+                llm_kwargs["model"] = model_override
+            response = (
+                self.llm_complete(prompt, **llm_kwargs) if llm_kwargs else self.llm_complete(prompt)
+            )
             # Handle async functions if needed
             if asyncio.iscoroutine(response):
                 response = await response
@@ -455,14 +478,26 @@ class KnowledgeGraphExtractor:
             return
 
         try:
-            # Convert to dict format for Rust
+            from omni_core_rs import PyEntity, PyRelation
+
             for entity in entities:
-                entity_dict = entity.to_dict() if hasattr(entity, "to_dict") else entity
-                self.rust_backend.add_entity(entity_dict)
+                d = entity.to_dict() if hasattr(entity, "to_dict") else entity
+                name = (d.get("name") or "").strip() or "unknown"
+                etype = (d.get("entity_type") or "CONCEPT").strip() or "CONCEPT"
+                desc = (d.get("description") or "").strip() or ""
+                self.rust_backend.add_entity(
+                    PyEntity(name=name, entity_type=etype, description=desc)
+                )
 
             for relation in relations:
-                relation_dict = relation.to_dict() if hasattr(relation, "to_dict") else relation
-                self.rust_backend.add_relation(relation_dict)
+                d = relation.to_dict() if hasattr(relation, "to_dict") else relation
+                source = (d.get("source") or "").strip() or "unknown"
+                target = (d.get("target") or "").strip() or "unknown"
+                rtype = (d.get("relation_type") or "RELATED_TO").strip() or "RELATED_TO"
+                desc = (d.get("description") or "").strip() or ""
+                self.rust_backend.add_relation(
+                    PyRelation(source=source, target=target, relation_type=rtype, description=desc)
+                )
 
             logger.debug(
                 "Stored entities in Rust backend",
@@ -525,12 +560,20 @@ class KnowledgeGraphStore:
             return False
 
         try:
-            # Convert Entity to dict if needed
             if hasattr(entity, "to_dict"):
                 entity_dict: dict[str, Any] = entity.to_dict()
             else:
                 entity_dict = entity  # type: ignore[assignment]
-            self._backend.add_entity(entity_dict)
+            # Rust PyKnowledgeGraph expects PyEntity, not dict
+            try:
+                from omni_core_rs import PyEntity
+
+                name = (entity_dict.get("name") or "").strip() or "unknown"
+                etype = (entity_dict.get("entity_type") or "CONCEPT").strip() or "CONCEPT"
+                desc = (entity_dict.get("description") or "").strip() or ""
+                self._backend.add_entity(PyEntity(name=name, entity_type=etype, description=desc))
+            except ImportError:
+                self._backend.add_entity(entity_dict)
             return True
         except Exception as e:
             logger.error("Failed to add entity", error=str(e))
@@ -550,12 +593,28 @@ class KnowledgeGraphStore:
             return False
 
         try:
-            # Convert Relation to dict if needed
             if hasattr(relation, "to_dict"):
                 relation_dict: dict[str, Any] = relation.to_dict()
             else:
                 relation_dict = relation  # type: ignore[assignment]
-            self._backend.add_relation(relation_dict)
+            # Rust PyKnowledgeGraph expects PyRelation, not dict
+            try:
+                from omni_core_rs import PyRelation
+
+                source = (relation_dict.get("source") or "").strip() or "unknown"
+                target = (relation_dict.get("target") or "").strip() or "unknown"
+                rtype = (relation_dict.get("relation_type") or "RELATED_TO").strip() or "RELATED_TO"
+                desc = (relation_dict.get("description") or "").strip() or ""
+                self._backend.add_relation(
+                    PyRelation(
+                        source=source,
+                        target=target,
+                        relation_type=rtype,
+                        description=desc,
+                    )
+                )
+            except ImportError:
+                self._backend.add_relation(relation_dict)
             return True
         except Exception as e:
             logger.error("Failed to add relation", error=str(e))

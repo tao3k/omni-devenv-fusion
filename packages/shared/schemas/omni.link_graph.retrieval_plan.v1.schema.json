@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.omni.dev/omni.link_graph.retrieval_plan.v1.schema.json",
+  "title": "Omni LinkGraph Retrieval Plan v1",
+  "description": "Canonical policy plan contract for graph-first retrieval routing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "requested_mode",
+    "selected_mode",
+    "reason",
+    "backend_name",
+    "graph_hit_count",
+    "source_hint_count",
+    "graph_confidence_score",
+    "graph_confidence_level",
+    "budget"
+  ],
+  "properties": {
+    "schema": {
+      "const": "omni.link_graph.retrieval_plan.v1"
+    },
+    "requested_mode": {
+      "type": "string",
+      "enum": ["graph_only", "hybrid", "vector_only"]
+    },
+    "selected_mode": {
+      "type": "string",
+      "enum": ["graph_only", "hybrid", "vector_only"]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "backend_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "graph_hit_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "source_hint_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "graph_confidence_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "graph_confidence_level": {
+      "type": "string",
+      "enum": ["none", "low", "medium", "high"]
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_limit", "max_sources", "rows_per_source"],
+      "properties": {
+        "candidate_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_sources": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rows_per_source": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

@@ -3,7 +3,7 @@
 Inference Client - Unified LLM API client via LiteLLM
 
 Modularized for testability.
-Configuration-driven from settings.yaml (inference section).
+Configuration-driven from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml; inference section).
 Supports 100+ LLM providers (Anthropic, OpenAI, MiniMax, etc.) via litellm.
 """
 
@@ -35,7 +35,7 @@ class InferenceClient:
     ):
         """Initialize InferenceClient via LiteLLM.
 
-        Configuration is read from settings.yaml (inference section).
+        Configuration is read from settings (system + user layer, inference section).
 
         Args:
             api_key: API key (defaults to configured env var)
@@ -81,11 +81,19 @@ class InferenceClient:
         tools: list[dict] = None,
     ) -> dict[str, Any]:
         """Make a non-streaming LLM call via LiteLLM."""
+        import time
+
+        _start = time.time()
+
         actual_model = model or self.model
         actual_max_tokens = max_tokens or self.max_tokens
         actual_timeout = timeout or self.timeout
 
         message_list = messages or [{"role": "user", "content": user_query}]
+
+        log.info(
+            f"[LLM] Starting inference with {actual_model}...",
+        )
 
         log.debug(
             "inference.request",
@@ -122,8 +130,8 @@ class InferenceClient:
             if self.provider != "minimax" and self.base_url:
                 litellm_kwargs["api_base"] = self.base_url
 
-            # Add tools if provided
-            if tools:
+            # Add tools if provided (skip for MiniMax - doesn't support tools properly)
+            if tools and self.provider != "minimax":
                 litellm_kwargs["tools"] = tools
 
             # Make the call via litellm
@@ -193,6 +201,11 @@ class InferenceClient:
                     "input_tokens": getattr(response.usage, "prompt_tokens", 0),
                     "output_tokens": getattr(response.usage, "completion_tokens", 0),
                 }
+
+            _elapsed = time.time() - _start
+            log.info(
+                f"[LLM] Inference complete in {_elapsed:.1f}s, content_length={len(content)}",
+            )
 
             return {
                 "success": True,

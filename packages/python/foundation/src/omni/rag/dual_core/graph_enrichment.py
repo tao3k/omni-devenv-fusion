@@ -1,24 +1,27 @@
-"""Bridge 3: ZK Entity Graph → Router Skill Relationships.
+"""Bridge 3: LinkGraph Entity Graph → Router Skill Relationships.
 
-Enriches the router's skill relationship graph with ZK entity connections.
+Enriches the router's skill relationship graph with LinkGraph entity connections.
 Also includes Bridge 4: Shared Entity Registry (omni sync hook).
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from contextlib import suppress
+from typing import TYPE_CHECKING, Any
 
-from ._config import ZK_ENTITY_GRAPH_BOOST, _load_kg, _save_kg, logger
+from ._config import LINK_GRAPH_ENTITY_BOOST, _load_kg, _save_kg, logger
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
-def enrich_skill_graph_from_zk(
+def enrich_skill_graph_from_link_graph(
     skill_graph: dict[str, list[tuple[str, float]]],
     *,
     lance_dir: str | Path | None = None,
-    entity_boost: float = ZK_ENTITY_GRAPH_BOOST,
+    entity_boost: float = LINK_GRAPH_ENTITY_BOOST,
 ) -> dict[str, list[tuple[str, float]]]:
-    """Enrich the router's skill relationship graph with ZK entity connections.
+    """Enrich the router's skill relationship graph with LinkGraph entity connections.
 
     Loads the persisted KnowledgeGraph and finds additional connections between
     tools based on shared entities (DOCUMENTED_IN, USES, etc.).
@@ -29,7 +32,7 @@ def enrich_skill_graph_from_zk(
     Args:
         skill_graph: Router's existing {tool_id: [(related_tool, weight)]}.
         lance_dir: Path to knowledge.lance directory.
-        entity_boost: Weight for new ZK-derived connections.
+        entity_boost: Weight for new graph-derived connections.
 
     Returns:
         The enriched skill_graph (mutated in place and returned).
@@ -81,17 +84,15 @@ def enrich_skill_graph_from_zk(
                     if t1 not in existing_t2:
                         skill_graph.setdefault(t2, []).append((t1, entity_boost))
 
-        # Persist graph after enrichment
-        try:
+        # Persist graph after enrichment.
+        with suppress(Exception):
             _save_kg(kg, lance_dir=lance_dir)
-        except Exception:
-            pass
 
     except Exception as e:
-        logger.debug("ZK enrichment failed: %s", e)
+        logger.debug("LinkGraph enrichment failed: %s", e)
 
     logger.info(
-        "ZK entity graph enrichment complete: %d tools in skill_graph",
+        "LinkGraph entity graph enrichment complete: %d tools in skill_graph",
         len(skill_graph),
     )
     return skill_graph

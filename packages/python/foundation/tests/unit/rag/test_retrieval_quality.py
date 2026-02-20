@@ -10,20 +10,82 @@ Test scenarios are based on actual project skills and tools.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+import hashlib
+import math
 
 import pytest
 import structlog
 
+from omni.foundation.services.vector import get_vector_store
 from omni.rag.retrieval import (
-    LanceRetrievalBackend,
     HybridRetrievalBackend,
+    LanceRetrievalBackend,
     RetrievalConfig,
 )
-from omni.foundation.services.vector import get_vector_store
-from omni.foundation.services.embedding import get_embedding_service
 
 logger = structlog.get_logger("test.retrieval.quality")
+
+
+def _deterministic_vector(text: str, dim: int = 1024) -> list[float]:
+    """Build a deterministic normalized vector without external embedding services."""
+    seed = hashlib.sha256(text.encode("utf-8")).digest()
+    values: list[float] = []
+    while len(values) < dim:
+        for byte in seed:
+            values.append((byte / 255.0) * 2.0 - 1.0)
+            if len(values) >= dim:
+                break
+        seed = hashlib.sha256(seed).digest()
+    norm = math.sqrt(sum(v * v for v in values)) or 1.0
+    return [v / norm for v in values]
+
+
+class _OfflineEmbeddingService:
+    """Deterministic in-process embedding service for stable retrieval tests."""
+
+    backend = "offline"
+    dimension = 1024
+    is_loaded = True
+
+    def initialize(self) -> None:  # pragma: no cover - interface compatibility
+        return None
+
+    def embed(self, text: str) -> list[list[float]]:
+        return [_deterministic_vector(text, dim=self.dimension)]
+
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        return [_deterministic_vector(text, dim=self.dimension) for text in texts]
+
+
+@pytest.fixture(autouse=True)
+def _offline_embedding_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force deterministic, offline embedding paths for this test module."""
+    import omni.agent.cli.mcp_embed as mcp_embed_module
+    import omni.foundation.services.embedding as embedding_module
+    import omni.foundation.services.vector.crud as vector_crud_module
+    import omni.foundation.services.vector.search as vector_search_module
+
+    offline_service = _OfflineEmbeddingService()
+
+    monkeypatch.setattr(embedding_module, "get_embedding_service", lambda: offline_service)
+    monkeypatch.setattr(vector_crud_module, "get_embedding_service", lambda: offline_service)
+
+    async def _embed_via_mcp(
+        texts: list[str],
+        port: int,
+        path: str = "/message",
+        request_timeout_s: float = 30.0,
+    ) -> list[list[float]]:
+        del port, path, request_timeout_s
+        return offline_service.embed_batch(texts)
+
+    monkeypatch.setattr(mcp_embed_module, "embed_via_mcp", _embed_via_mcp)
+
+    # Clear process-level negative caches/backoff to avoid cross-test contamination.
+    vector_search_module._MCP_EMBED_FAILURE_UNTIL.clear()
+    vector_search_module._HTTP_EMBED_FAILURE_UNTIL.clear()
+    vector_search_module._QUERY_EMBED_CACHE.clear()
+    vector_search_module._LAST_SUCCESSFUL_MCP_EMBED_ENDPOINT = None
 
 
 # =============================================================================
@@ -42,14 +104,14 @@ SKILL_BASED_SCENARIOS = [
         "related_skills": ["git", "knowledge"],
     },
     {
-        "scenario": "knowledge_zk_reasoning_search",
+        "scenario": "knowledge_link_graph_reasoning_search",
         "query": (
-            "Search for project architecture decisions using Zettelkasten "
+            "Search for project architecture decisions using LinkGraph "
             "bidirectional links and reasoning-based search to find related notes "
             "through multiple hops of link traversal"
         ),
-        "description": "ZK-based reasoning search with bidirectional links",
-        "related_skills": ["knowledge", "zk"],
+        "description": "Link-graph reasoning search with bidirectional links",
+        "related_skills": ["knowledge", "link_graph"],
     },
     {
         "scenario": "memory_experience_recall",
@@ -139,12 +201,12 @@ SKILL_DOCUMENTS = [
         "metadata": {"skill": "git", "category": "workflow"},
     },
     {
-        "id": "doc_knowledge_zk_search",
+        "id": "doc_knowledge_link_graph_search",
         "content": (
-            "Knowledge ZK search uses bidirectional links and reasoning-based traversal. "
-            "The zk_search command performs high-precision search with max_iterations=3, "
-            "traversing linked notes to find related content. Related commands: zk_toc(), "
-            "zk_links(), zk_hybrid_search(), zk_find_related(max_distance=2)"
+            "Knowledge link graph search uses bidirectional links and reasoning-based traversal. "
+            "The search command (mode=link_graph) performs high-precision graph search with reasoning, "
+            "traversing linked notes to find related content. Related commands: link_graph_toc(), "
+            "link_graph_links(), link_graph_hybrid_search(), link_graph_find_related(max_distance=2)"
         ),
         "metadata": {"skill": "knowledge", "category": "search"},
     },
@@ -238,17 +300,8 @@ SKILL_DOCUMENTS = [
 
 @pytest.fixture
 def embedding_status():
-    """Initialize embedding service for tests."""
-    service = get_embedding_service()
-    service.initialize()
-    # Wait for model load if needed
-    if not service.is_loaded:
-        import time
-
-        for _ in range(30):
-            time.sleep(0.5)
-            if service.is_loaded:
-                break
+    """Expose deterministic embedding runtime status used in this module."""
+    service = _OfflineEmbeddingService()
     return {
         "backend": service.backend,
         "dimension": service.dimension,
@@ -430,9 +483,9 @@ class TestRetrievalQualityMetrics:
         """Hybrid backend should reject non-native composite backends."""
         from omni.rag.retrieval import (
             HybridRetrievalBackend,
-            RetrievalResult,
-            RetrievalConfig,
             HybridRetrievalUnavailableError,
+            RetrievalConfig,
+            RetrievalResult,
         )
 
         log = structlog.get_logger("test.metrics.rrf")

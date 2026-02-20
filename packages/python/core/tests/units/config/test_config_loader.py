@@ -85,7 +85,7 @@ class TestLoadCommandOverrides:
             assert config.commands == {}
 
     def test_loads_from_settings(self):
-        """Test loading overrides from settings.yaml."""
+        """Test loading overrides from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml)."""
         from omni.core.config.loader import load_command_overrides, reset_config
 
         reset_config()

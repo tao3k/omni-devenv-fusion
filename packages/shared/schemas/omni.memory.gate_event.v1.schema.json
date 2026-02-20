@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.omni.dev/omni.memory.gate_event.v1.schema.json",
+  "title": "Omni Memory Gate Event v1",
+  "description": "3-in-1 memory gate decision event for retain/obsolete/promote lifecycle transitions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session_id",
+    "turn_id",
+    "memory_id",
+    "state_before",
+    "state_after",
+    "ttl_score",
+    "decision"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "turn_id": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "memory_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "state_before": {
+      "type": "string",
+      "enum": [
+        "open",
+        "active",
+        "cooling",
+        "revalidate_pending",
+        "purged",
+        "promoted"
+      ]
+    },
+    "state_after": {
+      "type": "string",
+      "enum": [
+        "open",
+        "active",
+        "cooling",
+        "revalidate_pending",
+        "purged",
+        "promoted"
+      ]
+    },
+    "ttl_score": {
+      "type": "number"
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict", "confidence", "reason", "next_action"],
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": ["retain", "obsolete", "promote"]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "react_evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "graph_evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "omega_factors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "next_action": {
+          "type": "string",
+          "enum": ["retain", "obsolete", "promote"]
+        }
+      }
+    }
+  }
+}

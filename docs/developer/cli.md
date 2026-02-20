@@ -116,6 +116,12 @@ Configuration resolution follows the CLI `--conf` option:
 1. `<git-root>/packages/conf/settings.yaml` (system defaults)
 2. `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` (user override layer)
 
+For LinkGraph/Wendao settings, a dedicated config is merged with the same
+priority order:
+
+1. `<git-root>/packages/conf/wendao.yaml` (system defaults)
+2. `$PRJ_CONFIG_HOME/omni-dev-fusion/wendao.yaml` (user override layer)
+
 Route defaults and confidence profile settings live under `router.search.*`, including:
 
 - `router.search.default_limit`
@@ -125,3 +131,60 @@ Route defaults and confidence profile settings live under `router.search.*`, inc
 - `router.search.profiles.<name>`
 
 See [CLI Reference](../reference/cli.md) for user-facing command usage.
+
+---
+
+## Declarative Load Requirements
+
+Each command group declares what bootstrap services it needs. The entry point uses this registry to load only what's required, keeping light commands (e.g. `omni skill list`) fast.
+
+### Module: `omni.agent.cli.load_requirements`
+
+| Function                                   | Description                                   |
+| ------------------------------------------ | --------------------------------------------- |
+| `register_requirements(command, **kwargs)` | Declare load requirements for a command group |
+| `get_requirements(command)`                | Get requirements (used by entry_point)        |
+| `LoadRequirements`                         | Dataclass: `ollama`, `embedding_index`        |
+
+### Usage (in `register_*_command`)
+
+```python
+from omni.agent.cli.load_requirements import register_requirements
+
+def register_skill_command(app_instance: typer.Typer) -> None:
+    register_requirements("skill", ollama=False, embedding_index=False)
+    app_instance.add_typer(skill_app, name="skill")
+```
+
+### Requirements
+
+| Field             | Default | Description                                               |
+| ----------------- | ------- | --------------------------------------------------------- |
+| `ollama`          | `True`  | Ensure Ollama is running for embedding                    |
+| `embedding_index` | `True`  | Run `ensure_embedding_index_compatibility` (auto-reindex) |
+
+### Command requirements (audit)
+
+| Command     | ollama | embedding_index | Notes                        |
+| ----------- | ------ | --------------- | ---------------------------- |
+| version     | False  | False           | Version info only            |
+| completions | False  | False           | Shell completion script      |
+| commands    | False  | False           | List CLI commands            |
+| dashboard   | False  | False           | Session metrics from file    |
+| skill       | False  | False           | LanceDB list_all_tools only  |
+| route       | False  | True            | Route test uses embedding    |
+| reindex     | False  | False           | Handles own reindex          |
+| db          | True   | True            | Query/search need embedding  |
+| knowledge   | True   | True            | Ingest/recall need embedding |
+| sync        | True   | True            | Syncs skills, router         |
+| mcp         | True   | True            | MCP server, knowledge.recall |
+| run         | True   | True            | CCA loop                     |
+| gateway     | True   | True            | Agent loop                   |
+| agent       | True   | True            | Agent loop                   |
+
+### When adding a new command
+
+1. Call `register_requirements(name, ...)` in your `register_*_command` **before** `add_typer`.
+2. Set `ollama=False` if the command does not need embedding (e.g. light list/info).
+3. Set `embedding_index=False` if the command handles its own reindex or needs no vector store.
+4. Omit fields to keep defaults (full bootstrap).

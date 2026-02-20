@@ -1,4 +1,4 @@
-//! Script parsing utilities for @skill_command decorator extraction.
+//! Script parsing utilities for @`skill_command` decorator extraction.
 //!
 //! Provides functions to parse Python scripts and extract:
 //! - Decorator positions and arguments
@@ -7,10 +7,11 @@
 
 use crate::skills::metadata::DecoratorArgs;
 
-/// Find all @skill_command decorator positions in Python code.
+/// Find all @`skill_command` decorator positions in Python code.
 ///
 /// Uses simple string matching (not regex) to find decorators.
-/// Returns Vec of (start_pos, end_pos, full_decorator_text).
+/// Returns `Vec` of (`start_pos`, `end_pos`, `full_decorator_text`).
+#[must_use]
 pub fn find_skill_command_decorators(content: &str) -> Vec<(usize, usize, String)> {
     let mut decorators = Vec::new();
     let prefix = "@skill_command";
@@ -57,16 +58,15 @@ pub fn find_skill_command_decorators(content: &str) -> Vec<(usize, usize, String
                     }
                 } else {
                     // Check for triple quotes
-                    if i + 2 < chars.len() {
-                        if (chars[i] == '"' && chars[i + 1] == '"' && chars[i + 2] == '"')
-                            || (chars[i] == '\'' && chars[i + 1] == '\'' && chars[i + 2] == '\'')
-                        {
-                            in_triple_quote = true;
-                            quote_char = chars[i];
-                            i += 2;
-                            i += 1;
-                            continue;
-                        }
+                    if i + 2 < chars.len()
+                        && ((chars[i] == '"' && chars[i + 1] == '"' && chars[i + 2] == '"')
+                            || (chars[i] == '\'' && chars[i + 1] == '\'' && chars[i + 2] == '\''))
+                    {
+                        in_triple_quote = true;
+                        quote_char = chars[i];
+                        i += 2;
+                        i += 1;
+                        continue;
                     }
 
                     if c == '"' || c == '\'' {
@@ -103,6 +103,7 @@ pub fn find_skill_command_decorators(content: &str) -> Vec<(usize, usize, String
 }
 
 /// Parse decorator arguments from decorator text handling triple-quoted strings.
+#[must_use]
 pub fn parse_decorator_args(decorator_text: &str) -> DecoratorArgs {
     let mut args = DecoratorArgs::default();
 
@@ -259,13 +260,13 @@ fn split_args_respecting_strings(arg_text: &str) -> Vec<&str> {
 /// Extract value from a string literal (handles triple-quoted strings).
 fn extract_string_value(value: &str) -> &str {
     // Check for triple-quoted strings
-    if value.starts_with("\"\"\"") {
-        if let Some(end) = value[3..].find("\"\"\"") {
-            return &value[3..3 + end];
+    if let Some(stripped) = value.strip_prefix("\"\"\"") {
+        if let Some(end) = stripped.find("\"\"\"") {
+            return &stripped[..end];
         }
-    } else if value.starts_with("'''") {
-        if let Some(end) = value[3..].find("'''") {
-            return &value[3..3 + end];
+    } else if let Some(stripped) = value.strip_prefix("'''") {
+        if let Some(end) = stripped.find("'''") {
+            return &stripped[..end];
         }
     } else if (value.starts_with('"') && value.ends_with('"'))
         || (value.starts_with('\'') && value.ends_with('\''))
@@ -278,23 +279,25 @@ fn extract_string_value(value: &str) -> &str {
 }
 
 /// Extract docstring from matched function text.
+#[must_use]
 pub fn extract_docstring_from_text(text: &str) -> String {
-    if let Some(start) = text.find("\"\"\"") {
-        if let Some(end) = text[start + 3..].find("\"\"\"") {
-            let doc = &text[start + 3..start + 3 + end];
-            return doc.trim().to_string();
-        }
+    if let Some(start) = text.find("\"\"\"")
+        && let Some(end) = text[start + 3..].find("\"\"\"")
+    {
+        let doc = &text[start + 3..start + 3 + end];
+        return doc.trim().to_string();
     }
-    if let Some(start) = text.find("'''") {
-        if let Some(end) = text[start + 3..].find("'''") {
-            let doc = &text[start + 3..start + 3 + end];
-            return doc.trim().to_string();
-        }
+    if let Some(start) = text.find("'''")
+        && let Some(end) = text[start + 3..].find("'''")
+    {
+        let doc = &text[start + 3..start + 3 + end];
+        return doc.trim().to_string();
     }
     String::new()
 }
 
 /// Parse parameter names from function signature string.
+#[must_use]
 pub fn parse_parameters(params_text: &str) -> Vec<String> {
     split_parameters(params_text)
         .iter()
@@ -335,17 +338,13 @@ fn split_parameters(params_text: &str) -> Vec<String> {
             depth += 1;
             current.push(c);
         } else if c == ')' {
-            if depth > 0 {
-                depth -= 1;
-            }
+            depth = depth.saturating_sub(1);
             current.push(c);
         } else if c == '[' {
             depth += 1;
             current.push(c);
         } else if c == ']' {
-            if depth > 0 {
-                depth -= 1;
-            }
+            depth = depth.saturating_sub(1);
             current.push(c);
         } else if c == ',' && depth == 0 {
             // Only split on comma if not inside brackets
@@ -383,11 +382,13 @@ pub struct ParsedParameter {
 
 impl ParsedParameter {
     /// Check if this parameter is optional (has a default value).
+    #[must_use]
     pub fn is_optional(&self) -> bool {
         self.has_default
     }
 
     /// Infer JSON Schema type from Python type annotation.
+    #[must_use]
     pub fn infer_json_type(&self) -> serde_json::Value {
         let Some(ref type_str) = self.type_annotation else {
             return serde_json::json!("string");
@@ -402,23 +403,22 @@ impl ParsedParameter {
         }
 
         // Handle Literal types for enums
-        if type_str.starts_with("Literal") {
-            if let Some(start) = type_str.find('[') {
-                if let Some(end) = type_str.rfind(']') {
-                    let values_str = &type_str[start + 1..end];
-                    let values: Vec<serde_json::Value> = values_str
-                        .split(',')
-                        .map(|v| {
-                            let v = v.trim().trim_matches(|c| c == '"' || c == '\'');
-                            serde_json::json!(v)
-                        })
-                        .collect();
-                    return serde_json::json!({
-                        "type": "string",
-                        "enum": values
-                    });
-                }
-            }
+        if type_str.starts_with("Literal")
+            && let Some(start) = type_str.find('[')
+            && let Some(end) = type_str.rfind(']')
+        {
+            let values_str = &type_str[start + 1..end];
+            let values: Vec<serde_json::Value> = values_str
+                .split(',')
+                .map(|v| {
+                    let v = v.trim().trim_matches(|c| c == '"' || c == '\'');
+                    serde_json::json!(v)
+                })
+                .collect();
+            return serde_json::json!({
+                "type": "string",
+                "enum": values
+            });
         }
 
         self.infer_base_json_type()
@@ -426,11 +426,7 @@ impl ParsedParameter {
 
     /// Infer JSON Schema type for base types (without Optional/Union wrapper).
     fn infer_base_json_type(&self) -> serde_json::Value {
-        let type_str = self
-            .type_annotation
-            .as_ref()
-            .map(|s| s.as_str())
-            .unwrap_or("");
+        let type_str = self.type_annotation.as_deref().unwrap_or("");
 
         // Handle generic types like list[str], dict[str, int], etc.
         if type_str.starts_with("list[") || type_str.starts_with("List[") {
@@ -445,7 +441,6 @@ impl ParsedParameter {
             };
 
             let inner_type = match inner.trim() {
-                "str" | "string" => "string",
                 "int" | "integer" => "integer",
                 "float" | "number" => "number",
                 "bool" | "boolean" => "boolean",
@@ -469,7 +464,6 @@ impl ParsedParameter {
         // Handle basic types
         let normalized = type_str.to_lowercase();
         match normalized.as_str() {
-            "str" | "string" => serde_json::json!("string"),
             "int" | "integer" => serde_json::json!("integer"),
             "float" | "number" => serde_json::json!("number"),
             "bool" | "boolean" => serde_json::json!("boolean"),
@@ -478,6 +472,7 @@ impl ParsedParameter {
     }
 
     /// Generate JSON Schema property for this parameter.
+    #[must_use]
     pub fn to_json_schema_property(&self) -> serde_json::Value {
         let mut schema = serde_json::Map::new();
 
@@ -501,6 +496,7 @@ impl ParsedParameter {
 }
 
 /// Extract parameter names from full function signature text.
+#[must_use]
 pub fn extract_parameters_from_text(func_text: &str) -> Vec<String> {
     // Find the parameter list between parentheses, handling nested parentheses
     if let Some(open_paren) = func_text.find('(') {
@@ -530,7 +526,8 @@ pub fn extract_parameters_from_text(func_text: &str) -> Vec<String> {
 
 /// Extract detailed parameter information from function signature text.
 ///
-/// Returns a vector of ParsedParameter with name, type, default info.
+/// Returns a vector of `ParsedParameter` with name, type, default info.
+#[must_use]
 pub fn extract_parsed_parameters(func_text: &str) -> Vec<ParsedParameter> {
     // Find the parameter list between parentheses, handling nested parentheses
     if let Some(open_paren) = func_text.find('(') {
@@ -568,7 +565,7 @@ fn parse_detailed_parameters(params_text: &str) -> Vec<ParsedParameter> {
             // Parse "param: Type = default" format
 
             // Check for *args and **kwargs
-            if s.starts_with("*") && s != "*" {
+            if s.starts_with('*') && s != "*" {
                 return None;
             }
 
@@ -594,7 +591,7 @@ fn parse_detailed_parameters(params_text: &str) -> Vec<ParsedParameter> {
                 None
             } else {
                 Some(ParsedParameter {
-                    name: name.to_string(),
+                    name,
                     type_annotation: type_str,
                     has_default,
                     default_value: default_str,
@@ -621,17 +618,17 @@ fn parse_detailed_parameters(params_text: &str) -> Vec<ParsedParameter> {
 /// """
 /// ```
 ///
-/// Returns a HashMap mapping parameter name to its description.
+/// Returns a `HashMap` mapping parameter name to its description.
+#[must_use]
 pub fn extract_param_descriptions(description: &str) -> std::collections::HashMap<String, String> {
     let mut result = std::collections::HashMap::new();
 
     // Find the Args section
-    let args_start = description.find("Args:");
-    if args_start.is_none() {
+    let Some(args_start) = description.find("Args:") else {
         return result;
-    }
+    };
 
-    let args_section = &description[args_start.unwrap()..];
+    let args_section = &description[args_start..];
 
     // Parse each parameter line: "- param_name: type - description"
     // or "- param_name: description"
@@ -643,12 +640,8 @@ pub fn extract_param_descriptions(description: &str) -> std::collections::HashMa
             continue;
         }
 
-        // Remove bullet point
-        let content = if trimmed.starts_with("- ") {
-            &trimmed[2..]
-        } else {
-            &trimmed[2..]
-        };
+        // Remove bullet point prefix ("- " or "• ")
+        let content = &trimmed[2..];
 
         // Find the first colon to separate param name from description
         if let Some(colon_pos) = content.find(':') {
@@ -657,10 +650,7 @@ pub fn extract_param_descriptions(description: &str) -> std::collections::HashMa
             // Skip if param_name looks like a type (starts with capital or contains space)
             if param_name.is_empty()
                 || param_name.contains(' ')
-                || param_name
-                    .chars()
-                    .next()
-                    .map_or(false, |c| c.is_uppercase())
+                || param_name.chars().next().is_some_and(char::is_uppercase)
             {
                 continue;
             }
@@ -669,14 +659,13 @@ pub fn extract_param_descriptions(description: &str) -> std::collections::HashMa
             let after_colon = &content[colon_pos + 1..].trim();
 
             // Extract description after type and separator (- or —)
-            let description =
-                if let Some(sep_pos) = after_colon.find(|c| c == '-' || c == '—' || c == '–') {
-                    let desc = &after_colon[sep_pos + 1..].trim();
-                    // Clean up trailing newlines and whitespace
-                    desc.trim().to_string()
-                } else {
-                    after_colon.to_string()
-                };
+            let description = if let Some(sep_pos) = after_colon.find(['-', '—', '–']) {
+                let desc = &after_colon[sep_pos + 1..].trim();
+                // Clean up trailing newlines and whitespace
+                desc.trim().to_string()
+            } else {
+                after_colon.to_string()
+            };
 
             if !description.is_empty() {
                 result.insert(param_name.to_string(), description);

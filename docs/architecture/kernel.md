@@ -217,7 +217,7 @@ Kernel.discover_skills()
 SkillDiscoveryService.discover_all()
         │
         ▼
-Rust Scanner (skills-scanner crate)
+Rust Scanner (omni-scanner crate)
         │
         ▼
 skill_index.json (generated)

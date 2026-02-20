@@ -281,18 +281,22 @@ class Librarian:
     # Core Ingestion
     # =========================================================================
 
-    def ingest(self, clean: bool = False) -> dict[str, int]:
+    def ingest(self, clean: bool = False, verbose: bool = False) -> dict[str, int]:
         """Ingest the project into the knowledge base."""
-        return run_async_blocking(self._ingest_async(clean=clean))
+        return run_async_blocking(self._ingest_async(clean=clean, verbose=verbose))
 
-    async def _ingest_async(self, clean: bool = False) -> dict[str, int]:
-        """Async implementation with Rust SyncEngine."""
+    async def _ingest_async(self, clean: bool = False, verbose: bool = False) -> dict[str, int]:
+        """Async implementation with Rust SyncEngine.
+
+        Robustness: For clean=True, defer drop until we have records to write.
+        Dropping before discover would leave empty table if discover fails or returns nothing.
+        """
         if clean:
-            self.storage.drop_table()
-            self.storage._ensure_table()
             self.manifest = {}
             self.sync_engine.save_manifest("{}")
-            logger.info("Clean ingestion: dropped table and cleared manifest")
+            logger.info(
+                "Clean ingestion: cleared manifest (table drop deferred until records ready)"
+            )
         else:
             # Ensure table exists before any operations
             self.storage._ensure_table()
@@ -317,20 +321,23 @@ class Librarian:
         )
 
         if files:
-            logger.info(f"Discovered {len(files)} files to scan:")
-            dirs: dict[str, list[Path]] = {}
-            for f in files:
-                parent = f.parent.relative_to(self.root)
-                parent_str = str(parent) if parent != Path(".") else "."
-                if parent_str not in dirs:
-                    dirs[parent_str] = []
-                dirs[parent_str].append(f)
+            if verbose:
+                logger.info(f"Discovered {len(files)} files to scan:")
+                dirs: dict[str, list[Path]] = {}
+                for f in files:
+                    parent = f.parent.relative_to(self.root)
+                    parent_str = str(parent) if parent != Path(".") else "."
+                    if parent_str not in dirs:
+                        dirs[parent_str] = []
+                    dirs[parent_str].append(f)
 
-            for dir_path, dir_files in sorted(dirs.items()):
-                dir_display = f"./{dir_path}" if dir_path != "." else "."
-                logger.info(f"  [{dir_display}]")
-                for f in sorted(dir_files):
-                    logger.info(f"  |-- {f.name}")
+                for dir_path, dir_files in sorted(dirs.items()):
+                    dir_display = f"./{dir_path}" if dir_path != "." else "."
+                    logger.info(f"  [{dir_display}]")
+                    for f in sorted(dir_files):
+                        logger.info(f"  |-- {f.name}")
+            else:
+                logger.info(f"Discovered {len(files)} files to scan")
         else:
             logger.info("No files discovered for scanning")
 
@@ -363,7 +370,11 @@ class Librarian:
             logger.info(f"Cleanup complete: {len(deleted_list)} files removed")
 
         if not to_process:
-            if deleted:
+            if clean:
+                self.storage.drop_table()
+                self.storage._ensure_table()
+                logger.info("Clean mode: no files to process, dropped table")
+            elif deleted:
                 logger.info("Cleanup complete. Deleted files removed from index.")
             else:
                 logger.info("Knowledge base is up-to-date. No changes detected.")
@@ -386,12 +397,22 @@ class Librarian:
         self._save_manifest()
 
         if not records:
+            if clean:
+                self.storage.drop_table()
+                self.storage._ensure_table()
+                logger.info("Clean mode: no records to ingest, dropped table")
             return {
                 "files_processed": len(to_process),
                 "chunks_indexed": 0,
                 "errors": 0,
                 "updated": len(to_process),
             }
+
+        # For clean mode: drop only now that we have records (avoids empty table on discover failure)
+        if clean:
+            self.storage.drop_table()
+            self.storage._ensure_table()
+            logger.info("Clean ingestion: dropped table before writing records")
 
         # Process in batches
         total_chunks = 0

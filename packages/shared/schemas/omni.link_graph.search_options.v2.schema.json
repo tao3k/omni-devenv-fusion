@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.omni.dev/omni.link_graph.search_options.v2.schema.json",
+  "title": "Omni LinkGraph Search Options v2",
+  "description": "Canonical schema-first search options contract for Wendao LinkGraph search calls.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "match_strategy",
+    "case_sensitive",
+    "sort_terms",
+    "filters"
+  ],
+  "properties": {
+    "schema": {
+      "const": "omni.link_graph.search_options.v2"
+    },
+    "match_strategy": {
+      "type": "string",
+      "enum": ["fts", "path_fuzzy", "exact", "re"]
+    },
+    "case_sensitive": {
+      "type": "boolean"
+    },
+    "sort_terms": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "order"],
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "score",
+              "path",
+              "title",
+              "stem",
+              "created",
+              "modified",
+              "random",
+              "word_count"
+            ]
+          },
+          "order": {
+            "type": "string",
+            "enum": ["asc", "desc"]
+          }
+        }
+      }
+    },
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include_paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "exclude_paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "tags": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "all": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "any": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "not": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "link_to": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["seeds"],
+          "properties": {
+            "seeds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "negate": {
+              "type": "boolean"
+            },
+            "recursive": {
+              "type": "boolean"
+            },
+            "max_distance": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "linked_by": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["seeds"],
+          "properties": {
+            "seeds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "negate": {
+              "type": "boolean"
+            },
+            "recursive": {
+              "type": "boolean"
+            },
+            "max_distance": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "related": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["seeds"],
+          "properties": {
+            "seeds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "max_distance": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "ppr": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "alpha": {
+                  "type": "number",
+                  "minimum": 0.0,
+                  "maximum": 1.0
+                },
+                "max_iter": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "tol": {
+                  "type": "number",
+                  "exclusiveMinimum": 0.0
+                },
+                "subgraph_mode": {
+                  "type": "string",
+                  "enum": ["auto", "disabled", "force"]
+                }
+              }
+            }
+          }
+        },
+        "mentions_of": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "mentioned_by_notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "orphan": {
+          "type": "boolean"
+        },
+        "tagless": {
+          "type": "boolean"
+        },
+        "missing_backlink": {
+          "type": "boolean"
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["doc_only", "section_only", "mixed"]
+        },
+        "max_heading_level": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "max_tree_hops": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "collapse_to_doc": {
+          "type": "boolean"
+        },
+        "edge_types": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["structural", "semantic", "provisional", "verified"]
+          }
+        },
+        "per_doc_section_cap": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "min_section_words": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "created_after": {
+      "type": "integer"
+    },
+    "created_before": {
+      "type": "integer"
+    },
+    "modified_after": {
+      "type": "integer"
+    },
+    "modified_before": {
+      "type": "integer"
+    }
+  }
+}

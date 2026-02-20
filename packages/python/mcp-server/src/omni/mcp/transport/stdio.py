@@ -148,6 +148,11 @@ class StdioTransport(MCPTransport):
             else:
                 response_dict = cast(dict[str, Any], response)
 
+            # Normalize list result to canonical tools/call shape (content + isError) for MCP clients
+            if isinstance(response_dict.get("result"), list):
+                response_dict = dict(response_dict)
+                response_dict["result"] = {"content": response_dict["result"], "isError": False}
+
             # Debug log response structure (truncated for safety)
             logger.debug(
                 f"_write_response: id={response_dict.get('id')}, has_result={'result' in response_dict}, has_error={response_dict.get('error') is not None}"
@@ -175,19 +180,21 @@ class StdioTransport(MCPTransport):
                 # This is correct JSON-RPC 2.0 behavior - notifications don't get responses
                 return
 
-            # Build JSON-RPC 2.0 compliant response
-            # Start with response_dict to preserve all original fields
-            payload: dict[str, Any] = dict(response_dict)
-
-            # JSON-RPC 2.0: response MUST contain either "result" OR "error", never both
+            # Build JSON-RPC 2.0 compliant response: only "result" OR "error", never both (Cursor/Zod strict)
             if response_dict.get("error") is not None:
-                # Remove result if present (shouldn't happen, but be defensive)
-                payload.pop("result", None)
+                payload = {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "error": response_dict["error"],
+                }
             elif "result" in response_dict:
-                payload["result"] = response_dict["result"]  # Copy explicitly
+                payload = {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "result": response_dict["result"],
+                }
             else:
-                # Neither result nor error - add result as null (valid JSON-RPC)
-                payload["result"] = None
+                payload = {"jsonrpc": "2.0", "id": msg_id, "result": None}
 
             # orjson.dumps returns bytes
             json_bytes = orjson.dumps(payload, option=orjson.OPT_APPEND_NEWLINE)

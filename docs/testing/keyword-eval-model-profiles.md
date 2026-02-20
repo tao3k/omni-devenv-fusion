@@ -29,7 +29,7 @@ For experiment scripts, select another built-in profile with `--model-profile`.
 
 Note:
 
-- This is separate from router confidence profiles (`router.search.*` in `settings.yaml`),
+- This is separate from router confidence profiles (`router.search.*` in settings: system packages/conf/settings.yaml, user $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml),
   which are used by `omni route test`.
 
 ## CLI Usage

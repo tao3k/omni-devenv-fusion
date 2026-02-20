@@ -15,16 +15,18 @@ T = TypeVar("T")
 def run_async_blocking(coro: Coroutine[Any, Any, T]) -> T:
     """Run a coroutine from sync code and return its result.
 
-    If already inside an event loop, execute the coroutine in an isolated
-    worker thread to avoid nested-loop hacks.
+    Always runs the coroutine in a dedicated worker thread with its own event loop.
+    This avoids "event loop is already running" and nested-loop issues when callers
+    (e.g. route test) or libraries have already set up a loop.
     """
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-
     with ThreadPoolExecutor(max_workers=1) as executor:
-        return executor.submit(lambda: asyncio.run(coro)).result()
+        future = executor.submit(_run_coro_in_thread, coro)
+        return future.result()
+
+
+def _run_coro_in_thread(coro: Coroutine[Any, Any, T]) -> T:
+    """Run a coroutine in this thread with a new event loop. Used by run_async_blocking."""
+    return asyncio.run(coro)
 
 
 __all__ = [

@@ -5,6 +5,7 @@
 //! - v2: TOOL_NAME Dictionary; SKILL_NAME/CATEGORY already Dictionary
 //! - v3 (planned): routing_keywords/intents as List<Utf8>
 //! - v4 (planned): metadata as Struct
+#![allow(clippy::doc_markdown)]
 
 use futures::TryStreamExt;
 use lance::dataset::WriteParams;
@@ -22,12 +23,13 @@ use crate::{
 };
 use crate::{CONTENT_COLUMN, INTENTS_COLUMN, ROUTING_KEYWORDS_COLUMN};
 
+#[allow(clippy::expect_used, clippy::missing_panics_doc)]
 fn build_string_dictionary(values: &[String]) -> DictionaryArray<Int32Type> {
     let mut uniq: Vec<String> = Vec::new();
     let mut map: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
     for s in values {
         if !map.contains_key(s) {
-            let idx = uniq.len() as i32;
+            let idx = i32::try_from(uniq.len()).unwrap_or(i32::MAX);
             map.insert(s.clone(), idx);
             uniq.push(s.clone());
         }
@@ -62,6 +64,7 @@ pub struct MigrateResult {
 }
 
 /// Infer schema version from a dataset's schema (by inspecting TOOL_NAME column type).
+#[must_use]
 pub fn schema_version_from_schema(schema: &lance::deps::arrow_schema::Schema) -> u32 {
     let Ok(field) = schema.field_with_name(TOOL_NAME_COLUMN) else {
         return 1;
@@ -117,6 +120,11 @@ fn migrate_batch_v1_to_v2(
     let routing_keywords_array = Arc::new(rk_builder.finish());
     let intents_array = Arc::new(in_builder.finish());
 
+    // v1 tables have no metadata column; add empty metadata for v2 schema (10 columns).
+    let n = batch.num_rows();
+    let metadata_empty: Arc<dyn lance::deps::arrow_array::Array> =
+        Arc::new(lance::deps::arrow_array::StringArray::from(vec![""; n]));
+
     let columns: Vec<Arc<dyn lance::deps::arrow_array::Array>> = vec![
         batch
             .column_by_name(ID_COLUMN)
@@ -145,11 +153,13 @@ fn migrate_batch_v1_to_v2(
             .clone(),
         routing_keywords_array,
         intents_array,
+        metadata_empty,
     ];
 
     RecordBatch::try_new(schema_v2.clone(), columns).map_err(VectorStoreError::Arrow)
 }
 
+#[allow(clippy::missing_errors_doc)]
 impl crate::VectorStore {
     /// List pending migrations for a table (based on current schema version vs OMNI_SCHEMA_VERSION).
     pub async fn check_migrations(
@@ -222,24 +232,20 @@ impl crate::VectorStore {
         scanner.project(&v1_columns)?;
         let mut stream = scanner.try_into_stream().await?;
 
-        let first_batch = match stream.try_next().await? {
-            Some(b) => b,
-            None => {
-                return Ok(MigrateResult {
-                    applied: vec![],
-                    rows_processed: 0,
-                });
-            }
+        let Some(first_batch) = stream.try_next().await? else {
+            return Ok(MigrateResult {
+                applied: vec![],
+                rows_processed: 0,
+            });
         };
         let mut rows_processed = first_batch.num_rows() as u64;
         let first_v2 = migrate_batch_v1_to_v2(&first_batch, &schema_v2)?;
 
+        // Robustness note: drop-then-write. If append fails midway, table may be partial.
+        // Migration is one-shot; caller should ensure table is backed up for critical data.
         self.drop_table(table_name).await?;
         if let Err(e) = self.enable_keyword_index() {
-            log::warn!(
-                "Could not re-enable keyword index after migrate drop: {}",
-                e
-            );
+            log::warn!("Could not re-enable keyword index after migrate drop: {e}");
         }
 
         let (mut dataset, created) = self

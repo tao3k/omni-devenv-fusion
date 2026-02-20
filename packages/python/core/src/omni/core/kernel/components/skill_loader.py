@@ -10,10 +10,12 @@ from __future__ import annotations
 import importlib.util
 import sys
 import types
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from omni.foundation.config.logging import get_logger
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -30,33 +32,66 @@ def _ensure_skill_package(skill_name: str, scripts_dir: Path) -> str:
     if str(skills_parent) not in sys.path:
         sys.path.insert(0, str(skills_parent))
 
-    for parent in ("omni", "omni.skills"):
-        if parent not in sys.modules:
-            try:
-                sys.modules[parent] = types.ModuleType(parent)
-            except Exception:
-                pass
-
-    if scripts_pkg_name not in sys.modules:
-        scripts_init = scripts_dir / "__init__.py"
-        if scripts_init.exists():
-            spec = importlib.util.spec_from_file_location(scripts_pkg_name, scripts_init)
-            if spec:
-                pkg = types.ModuleType(scripts_pkg_name)
-                pkg.__path__ = [str(scripts_dir)]
-                sys.modules[scripts_pkg_name] = pkg
+    namespace_packages: list[tuple[str, Path | None]] = [
+        ("omni", None),
+        ("omni.skills", None),
+        (pkg_name, scripts_dir.parent),
+        (scripts_pkg_name, scripts_dir),
+    ]
+    for module_name, module_path in namespace_packages:
+        mod = sys.modules.get(module_name)
+        if mod is None:
+            mod = types.ModuleType(module_name)
+            sys.modules[module_name] = mod
+        if module_path is not None and not hasattr(mod, "__path__"):
+            mod.__path__ = [str(module_path)]
 
     return scripts_pkg_name
 
 
-def _load_modules(scripts_dir: Path, scripts_pkg_name: str):
-    """Yield loaded modules from scripts directory."""
-    for script_path in scripts_dir.glob("*.py"):
+def _iter_script_paths(scripts_dir: Path) -> list[Path]:
+    """Return all skill script files in deterministic order (recursive)."""
+    candidates = []
+    for script_path in scripts_dir.rglob("*.py"):
+        if "__pycache__" in script_path.parts:
+            continue
         if script_path.name == "__init__.py":
             continue
+        candidates.append(script_path)
+    return sorted(candidates, key=lambda p: (len(p.relative_to(scripts_dir).parts), str(p)))
 
-        module_full_name = f"{scripts_pkg_name}.{script_path.stem}"
 
+def _ensure_nested_package_namespaces(
+    scripts_dir: Path,
+    scripts_pkg_name: str,
+    script_path: Path,
+) -> None:
+    """Create namespace package chain for nested script modules."""
+    rel_parts = script_path.relative_to(scripts_dir).parts[:-1]
+    package_name = scripts_pkg_name
+    package_path = scripts_dir
+    for part in rel_parts:
+        package_name = f"{package_name}.{part}"
+        package_path = package_path / part
+        mod = sys.modules.get(package_name)
+        if mod is None:
+            mod = types.ModuleType(package_name)
+            sys.modules[package_name] = mod
+        if not hasattr(mod, "__path__"):
+            mod.__path__ = [str(package_path)]
+
+
+def _module_name_for_script(scripts_dir: Path, scripts_pkg_name: str, script_path: Path) -> str:
+    rel_module_path = script_path.relative_to(scripts_dir).with_suffix("")
+    return f"{scripts_pkg_name}.{'.'.join(rel_module_path.parts)}"
+
+
+def _load_modules(scripts_dir: Path, scripts_pkg_name: str):
+    """Yield loaded modules from scripts directory (recursive)."""
+    for script_path in _iter_script_paths(scripts_dir):
+        module_full_name = _module_name_for_script(scripts_dir, scripts_pkg_name, script_path)
+        _ensure_nested_package_namespaces(scripts_dir, scripts_pkg_name, script_path)
+        module_package = module_full_name.rpartition(".")[0]
         try:
             if module_full_name in sys.modules:
                 yield sys.modules[module_full_name]
@@ -64,7 +99,7 @@ def _load_modules(scripts_dir: Path, scripts_pkg_name: str):
                 spec = importlib.util.spec_from_file_location(module_full_name, script_path)
                 if spec and spec.loader:
                     module = types.ModuleType(module_full_name)
-                    module.__package__ = scripts_pkg_name
+                    module.__package__ = module_package
                     module.__file__ = str(script_path)
                     sys.modules[module_full_name] = module
                     try:

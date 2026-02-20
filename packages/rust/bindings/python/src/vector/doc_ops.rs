@@ -247,3 +247,34 @@ pub(crate) fn delete_by_file_path_async(
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     })
 }
+
+pub(crate) fn delete_by_metadata_source_async(
+    path: &str,
+    dimension: usize,
+    enable_kw: bool,
+    index_cache_size_bytes: Option<usize>,
+    max_cached_tables: Option<usize>,
+    table_name: &str,
+    source: &str,
+) -> PyResult<u32> {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+    rt.block_on(async {
+        let store = VectorStore::new_with_keyword_index(
+            path,
+            Some(dimension),
+            enable_kw,
+            index_cache_size_bytes,
+            super::store::cache_config_from_max(max_cached_tables),
+        )
+        .await
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        store
+            .delete_by_metadata_source(table_name, source)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    })
+}

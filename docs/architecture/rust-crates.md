@@ -1,7 +1,7 @@
 # Rust Crates - Omni-Dev-Fusion
 
 > High-performance Rust crates for Omni-Dev-Fusion
-> Last Updated: 2026-02-01
+> Last Updated: 2026-02-15
 
 ---
 
@@ -20,7 +20,8 @@
    - [omni-tokenizer](#omni-tokenizer)
    - [omni-types](#omni-types)
    - [omni-vector](#omni-vector)
-   - [skills-scanner](#skills-scanner)
+   - [omni-scanner](#omni-scanner)
+   - _Other crates:_ xiuxian-wendao, omni-memory, omni-events, omni-executor, omni-sandbox, omni-macros, omni-tui (see [packages-storage](packages-storage.md) for full list)
 4. [Python Bindings](#python-bindings)
 5. [Build Commands](#build-commands)
 6. [Related Documentation](#related-documentation)
@@ -43,7 +44,7 @@ The Rust crates provide high-performance implementations for performance-critica
 | `omni-tokenizer` | Token counting         | tiktoken-rs          |
 | `omni-types`     | Common types + Schemas | serde, schemars      |
 | `omni-vector`    | Vector database        | lance, dashmap       |
-| `skills-scanner` | Skill scanning         | omni-ast             |
+| `omni-scanner`   | Skill scanning         | omni-ast             |
 
 ---
 
@@ -53,15 +54,22 @@ The Rust crates provide high-performance implementations for performance-critica
 packages/rust/crates/
 ├── omni-ast/              # Unified AST utilities using ast-grep
 ├── omni-edit/             # Structural refactoring (The Surgeon)
+├── omni-events/           # Event topics
+├── omni-executor/         # Nushell/OmniCell
 ├── omni-io/               # File I/O utilities with encoding detection
+├── xiuxian-wendao/        # Knowledge graph, LinkGraph
 ├── omni-lance/            # LanceDB RecordBatch utilities
+├── omni-macros/           # Procedural macros
+├── omni-memory/           # Episode store, Q-table
+├── omni-sandbox/          # Nickel sandbox
+├── omni-scanner/          # Skill directory scanning
 ├── omni-security/         # High-performance secret scanning
 ├── omni-sniffer/          # Environment sniffer (Git + scratchpad)
 ├── omni-tags/             # Code symbol extraction (The Cartographer)
 ├── omni-tokenizer/        # Token counting (tiktoken)
+├── omni-tui/              # TUI support
 ├── omni-types/            # Common type definitions
-├── omni-vector/           # High-Performance Vector Database (LanceDB)
-└── skills-scanner/        # Modular skill directory scanning
+└── omni-vector/           # High-Performance Vector Database (LanceDB)
 ```
 
 ---
@@ -890,14 +898,14 @@ omni-vector/
 
 ---
 
-### skills-scanner
+### omni-scanner
 
 **Purpose**: Modular skill directory scanning for Omni-Dev-Fusion
 
-**Location**: `packages/rust/crates/skills-scanner/`
+**Location**: `packages/rust/crates/omni-scanner/`
 
 ```
-skills-scanner/
+omni-scanner/
 ├── Cargo.toml
 ├── src/
 │   ├── lib.rs             # Main module and exports
@@ -933,22 +941,21 @@ pub use reference_path::ReferencePath;
 
 ## Python Bindings
 
-**Location**: `packages/rust/bindings/python/`
+**Location**: `packages/rust/bindings/python/` (package name: `omni-core-rs`, Python module: `omni_core_rs`)
 
 ```
 packages/rust/bindings/python/
 ├── Cargo.toml
 ├── src/
 │   ├── lib.rs             # PyO3 module entry point
-│   ├── lib.rs             # Python module definition
-│   ├── scanner.rs         # Scanner bindings
-│   ├── vector.rs          # Vector store bindings
+│   ├── scanner.rs         # Scanner bindings (omni-scanner)
+│   ├── vector/             # Vector store bindings (omni-vector)
 │   ├── sniffer.rs         # Sniffer bindings
 │   ├── editor.rs          # Editor bindings
 │   ├── navigation.rs      # Navigation bindings
 │   ├── tags.rs            # Tags bindings
 │   └── ...
-└── pyproject.toml         # Python package config
+└── (no pyproject.toml; installed via uv sync --reinstall-package omni-core-rs)
 ```
 
 **Build**:
@@ -957,8 +964,8 @@ packages/rust/bindings/python/
 # Development build (fast)
 just build-rust-dev
 
-# Release build
-cargo build --release -p omni-python-bindings
+# Reinstall Python bindings after Rust changes
+uv sync --reinstall-package omni-core-rs
 ```
 
 ---

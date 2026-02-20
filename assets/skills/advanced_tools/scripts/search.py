@@ -196,7 +196,7 @@ def smart_search(
 
     Common Use Cases:
     - "Find all python files (*.py) in the project" -> pattern='.', extension='py'
-    - "Locate the 'settings.yaml' file" -> pattern='settings.yaml'
+    - "Locate the config file" -> pattern='settings.yaml' (e.g. packages/conf/settings.yaml)
     - "Find all test files excluding node_modules" -> pattern='test', exclude='node_modules'
     - "Find all files containing 'TODO'" -> pattern='TODO', search_mode='content'
 

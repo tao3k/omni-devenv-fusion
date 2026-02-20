@@ -5,6 +5,7 @@ use lance_index::scalar::FullTextSearchQuery;
 use omni_types::VectorSearchResult;
 use serde::Deserialize;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::io::Cursor;
 
 fn normalize_string_vec(v: Vec<String>) -> Vec<String> {
@@ -22,7 +23,18 @@ fn normalize_string_vec(v: Vec<String>) -> Vec<String> {
     out
 }
 
-/// Metadata fields needed for FTS result rows. Parsed once per row instead of full Value + .get().
+fn parse_metadata_cell(raw: &str) -> Value {
+    match serde_json::from_str::<Value>(raw) {
+        Ok(Value::String(inner)) => {
+            serde_json::from_str::<Value>(&inner).unwrap_or(Value::String(inner))
+        }
+        Ok(value) => value,
+        Err(_err) => Value::Null,
+    }
+}
+
+/// Metadata fields needed for FTS result rows.
+/// Parsed once per row instead of full `Value` + `get()`.
 #[derive(Deserialize, Default)]
 struct FtsMetadataRow {
     #[serde(default)]
@@ -39,12 +51,160 @@ struct FtsMetadataRow {
     routing_keywords: Vec<String>,
     #[serde(default)]
     intents: Vec<String>,
+    #[serde(default)]
+    parameters: Vec<String>,
 }
 
 /// Multiplier for keyword match boost
 const KEYWORD_BOOST: f32 = 0.1;
 
-/// Convert JSON filter expression to LanceDB WHERE clause.
+#[derive(Debug, Clone, Copy)]
+struct ConfidenceProfile {
+    high_threshold: f32,
+    medium_threshold: f32,
+    high_base: f32,
+    high_scale: f32,
+    high_cap: f32,
+    medium_base: f32,
+    medium_scale: f32,
+    medium_cap: f32,
+    low_floor: f32,
+}
+
+impl Default for ConfidenceProfile {
+    fn default() -> Self {
+        Self {
+            high_threshold: 0.75,
+            medium_threshold: 0.50,
+            high_base: 0.90,
+            high_scale: 0.05,
+            high_cap: 0.99,
+            medium_base: 0.60,
+            medium_scale: 0.30,
+            medium_cap: 0.89,
+            low_floor: 0.10,
+        }
+    }
+}
+
+const CLEAR_WINNER_GAP: f32 = 0.15;
+const MIN_KEYWORD_SCORE_ATTRIBUTE_HIGH: f32 = 0.2;
+const MIN_VECTOR_SCORE_TOOL_DESCRIPTION_HIGH: f32 = 0.55;
+
+fn calibrate_confidence(score: f32, profile: &ConfidenceProfile) -> (&'static str, f32) {
+    if score >= profile.high_threshold {
+        (
+            "high",
+            (profile.high_base + score * profile.high_scale).min(profile.high_cap),
+        )
+    } else if score >= profile.medium_threshold {
+        (
+            "medium",
+            (profile.medium_base + score * profile.medium_scale).min(profile.medium_cap),
+        )
+    } else {
+        ("low", score.max(profile.low_floor))
+    }
+}
+
+fn calibrate_confidence_with_attributes(
+    score: f32,
+    second_score: Option<f32>,
+    vector_score: Option<f32>,
+    keyword_score: Option<f32>,
+    profile: &ConfidenceProfile,
+) -> (&'static str, f32) {
+    let (mut confidence, mut final_score) = calibrate_confidence(score, profile);
+
+    if let Some(second) = second_score
+        && score >= profile.medium_threshold
+        && (score - second) >= CLEAR_WINNER_GAP
+    {
+        confidence = "high";
+        final_score = (profile.high_base + score * profile.high_scale).min(profile.high_cap);
+    }
+
+    let kw = keyword_score.unwrap_or(0.0);
+    let vec = vector_score.unwrap_or(0.0);
+
+    if confidence != "high"
+        && score >= profile.medium_threshold
+        && vec >= MIN_VECTOR_SCORE_TOOL_DESCRIPTION_HIGH
+    {
+        confidence = "high";
+        final_score = (profile.high_base + score * profile.high_scale).min(profile.high_cap);
+    }
+
+    if confidence != "high" && score >= profile.medium_threshold {
+        if kw >= MIN_KEYWORD_SCORE_ATTRIBUTE_HIGH || (kw > 0.0 && vec < 0.5 && kw > vec) {
+            confidence = "high";
+            final_score = (profile.high_base + score * profile.high_scale).min(profile.high_cap);
+        }
+    }
+
+    (confidence, final_score.clamp(0.0, 1.0))
+}
+
+fn canonicalize_json_value(value: &Value) -> Value {
+    match value {
+        Value::Object(map) => {
+            let mut entries = map.iter().collect::<Vec<_>>();
+            entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+            let mut out = serde_json::Map::with_capacity(entries.len());
+            for (key, child) in entries {
+                out.insert(key.clone(), canonicalize_json_value(child));
+            }
+            Value::Object(out)
+        }
+        Value::Array(items) => Value::Array(items.iter().map(canonicalize_json_value).collect()),
+        _ => value.clone(),
+    }
+}
+
+fn input_schema_digest(input_schema: &Value) -> String {
+    let normalized = crate::skill::normalize_input_schema_value(input_schema);
+    if normalized
+        .as_object()
+        .map(|object| object.is_empty())
+        .unwrap_or(true)
+    {
+        return "sha256:empty".to_string();
+    }
+    let canonical = canonicalize_json_value(&normalized);
+    let mut hasher = Sha256::new();
+    hasher.update(canonical.to_string().as_bytes());
+    let digest = hasher.finalize();
+    format!("sha256:{}", hex::encode(digest))
+}
+
+fn build_ranking_reason(
+    result: &crate::skill::ToolSearchResult,
+    raw_score: f32,
+    final_score: f32,
+    confidence: &str,
+) -> String {
+    let mut parts = Vec::new();
+    if let Some(vector_score) = result.vector_score {
+        parts.push(format!("vector={vector_score:.3}"));
+    }
+    if let Some(keyword_score) = result.keyword_score {
+        parts.push(format!("keyword={keyword_score:.3}"));
+    }
+    if !result.category.is_empty() {
+        parts.push(format!("category={}", result.category));
+    }
+    if !result.intents.is_empty() {
+        let top_intents = result.intents.iter().take(3).cloned().collect::<Vec<_>>();
+        parts.push(format!("intents={}", top_intents.join(",")));
+    }
+    parts.push(format!("confidence={confidence}"));
+    parts.push(format!("raw={raw_score:.3}"));
+    parts.push(format!("final={final_score:.3}"));
+    parts.join(" | ")
+}
+
+/// Convert JSON filter expression to `LanceDB` WHERE clause.
+#[must_use]
 pub fn json_to_lance_where(expr: &serde_json::Value) -> String {
     match expr {
         serde_json::Value::Object(obj) => {
@@ -61,9 +221,9 @@ pub fn json_to_lance_where(expr: &serde_json::Value) -> String {
                                     if let Some(val) = comp.get("$gt").or(comp.get(">")) {
                                         match val {
                                             serde_json::Value::String(s) => {
-                                                format!("{} > '{}'", key, s)
+                                                format!("{key} > '{s}'")
                                             }
-                                            _ => format!("{} > {}", key, val),
+                                            _ => format!("{key} > {val}"),
                                         }
                                     } else {
                                         continue;
@@ -73,9 +233,9 @@ pub fn json_to_lance_where(expr: &serde_json::Value) -> String {
                                     if let Some(val) = comp.get("$gte").or(comp.get(">=")) {
                                         match val {
                                             serde_json::Value::String(s) => {
-                                                format!("{} >= '{}'", key, s)
+                                                format!("{key} >= '{s}'")
                                             }
-                                            _ => format!("{} >= {}", key, val),
+                                            _ => format!("{key} >= {val}"),
                                         }
                                     } else {
                                         continue;
@@ -85,9 +245,9 @@ pub fn json_to_lance_where(expr: &serde_json::Value) -> String {
                                     if let Some(val) = comp.get("$lt").or(comp.get("<")) {
                                         match val {
                                             serde_json::Value::String(s) => {
-                                                format!("{} < '{}'", key, s)
+                                                format!("{key} < '{s}'")
                                             }
-                                            _ => format!("{} < {}", key, val),
+                                            _ => format!("{key} < {val}"),
                                         }
                                     } else {
                                         continue;
@@ -97,9 +257,9 @@ pub fn json_to_lance_where(expr: &serde_json::Value) -> String {
                                     if let Some(val) = comp.get("$lte").or(comp.get("<=")) {
                                         match val {
                                             serde_json::Value::String(s) => {
-                                                format!("{} <= '{}'", key, s)
+                                                format!("{key} <= '{s}'")
                                             }
-                                            _ => format!("{} <= {}", key, val),
+                                            _ => format!("{key} <= {val}"),
                                         }
                                     } else {
                                         continue;
@@ -109,9 +269,9 @@ pub fn json_to_lance_where(expr: &serde_json::Value) -> String {
                                     if let Some(val) = comp.get("$ne").or(comp.get("!=")) {
                                         match val {
                                             serde_json::Value::String(s) => {
-                                                format!("{} != '{}'", key, s)
+                                                format!("{key} != '{s}'")
                                             }
-                                            _ => format!("{} != {}", key, val),
+                                            _ => format!("{key} != {val}"),
                                         }
                                     } else {
                                         continue;
@@ -123,9 +283,9 @@ pub fn json_to_lance_where(expr: &serde_json::Value) -> String {
                             continue;
                         }
                     }
-                    serde_json::Value::String(s) => format!("{} = '{}'", key, s),
-                    serde_json::Value::Number(n) => format!("{} = {}", key, n),
-                    serde_json::Value::Bool(b) => format!("{} = {}", key, b),
+                    serde_json::Value::String(s) => format!("{key} = '{s}'"),
+                    serde_json::Value::Number(n) => format!("{key} = {n}"),
+                    serde_json::Value::Bool(b) => format!("{key} = {b}"),
                     _ => continue,
                 };
                 clauses.push(clause);
@@ -152,9 +312,11 @@ const IPC_VECTOR_COLUMNS: &[&str] = &[
     "metadata",
 ];
 
-/// Encode search results as Arrow IPC stream bytes (single RecordBatch).
+/// Encode search results as Arrow IPC stream bytes (single `RecordBatch`).
 /// If `projection` is Some and non-empty, only those columns are included (smaller payload).
-/// Schema (full): id, content, tool_name, file_path, routing_keywords (List<Utf8>), intents (List<Utf8>), _distance, metadata (Utf8).
+/// Schema (full): id, content, `tool_name`, `file_path`, `routing_keywords` (List<Utf8>),
+/// intents (List<Utf8>), _distance, metadata (Utf8).
+#[allow(clippy::too_many_lines)]
 fn search_results_to_ipc(
     results: &[VectorSearchResult],
     projection: Option<&[String]>,
@@ -204,7 +366,7 @@ fn search_results_to_ipc(
         Some(p) if !p.is_empty() => {
             for name in p {
                 if !IPC_VECTOR_COLUMNS.contains(&name.as_str()) {
-                    return Err(format!("invalid ipc_projection column: {}", name));
+                    return Err(format!("invalid ipc_projection column: {name}"));
                 }
             }
             p.iter().map(String::as_str).collect()
@@ -271,9 +433,13 @@ fn search_results_to_ipc(
     Ok(buf.into_inner())
 }
 
-/// Encode tool search results as Arrow IPC stream bytes (single RecordBatch).
-/// Schema: name, description, score, skill_name, tool_name, file_path, routing_keywords (List<Utf8>), intents (List<Utf8>), category, metadata (Utf8 JSON), vector_score, keyword_score.
-/// Python ToolSearchPayload.from_arrow_table consumes this (confidence/final_score default on Python side).
+/// Encode tool search results as Arrow IPC stream bytes (single `RecordBatch`).
+/// Schema: name, description, score, `skill_name`, `tool_name`, `file_path`,
+/// `routing_keywords` (List<Utf8>), intents (List<Utf8>), category, metadata (Utf8 JSON),
+/// `vector_score`, `keyword_score`, `final_score`, `confidence`, `ranking_reason`,
+/// `input_schema_digest`.
+/// Python `ToolSearchPayload.from_arrow_table` consumes this canonical contract directly.
+#[allow(clippy::too_many_lines)]
 pub(crate) fn tool_search_results_to_ipc(
     results: &[crate::skill::ToolSearchResult],
 ) -> Result<Vec<u8>, String> {
@@ -285,6 +451,10 @@ pub(crate) fn tool_search_results_to_ipc(
             Field::new("name", DataType::Utf8, true),
             Field::new("description", DataType::Utf8, true),
             Field::new("score", DataType::Float32, true),
+            Field::new("final_score", DataType::Float32, true),
+            Field::new("confidence", DataType::Utf8, true),
+            Field::new("ranking_reason", DataType::Utf8, true),
+            Field::new("input_schema_digest", DataType::Utf8, true),
         ]);
         let batch = RecordBatch::try_new(
             Arc::new(schema),
@@ -292,6 +462,10 @@ pub(crate) fn tool_search_results_to_ipc(
                 Arc::new(StringArray::from(Vec::<String>::new())),
                 Arc::new(StringArray::from(Vec::<String>::new())),
                 Arc::new(Float32Array::from(Vec::<f32>::new())),
+                Arc::new(Float32Array::from(Vec::<f32>::new())),
+                Arc::new(StringArray::from(Vec::<String>::new())),
+                Arc::new(StringArray::from(Vec::<String>::new())),
+                Arc::new(StringArray::from(Vec::<String>::new())),
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -317,9 +491,36 @@ pub(crate) fn tool_search_results_to_ipc(
     let metadata_refs: Vec<&str> = metadata_strs.iter().map(String::as_str).collect();
     let vector_scores: Vec<Option<f32>> = results.iter().map(|r| r.vector_score).collect();
     let keyword_scores: Vec<Option<f32>> = results.iter().map(|r| r.keyword_score).collect();
+    let profile = ConfidenceProfile::default();
+    let mut final_scores: Vec<f32> = Vec::with_capacity(results.len());
+    let mut confidences: Vec<String> = Vec::with_capacity(results.len());
+    let mut ranking_reasons: Vec<String> = Vec::with_capacity(results.len());
+    let mut input_schema_digests: Vec<String> = Vec::with_capacity(results.len());
+    for (index, result) in results.iter().enumerate() {
+        let second_score = results.get(index + 1).map(|s| s.score);
+        let (confidence, final_score) = calibrate_confidence_with_attributes(
+            result.score,
+            second_score,
+            result.vector_score,
+            result.keyword_score,
+            &profile,
+        );
+        final_scores.push(final_score);
+        confidences.push(confidence.to_string());
+        ranking_reasons.push(build_ranking_reason(
+            result,
+            result.score,
+            final_score,
+            confidence,
+        ));
+        input_schema_digests.push(input_schema_digest(&result.input_schema));
+    }
 
-    let vec_score_arr = Float32Array::from_iter(vector_scores.into_iter());
-    let kw_score_arr = Float32Array::from_iter(keyword_scores.into_iter());
+    let vec_score_arr = vector_scores.into_iter().collect::<Float32Array>();
+    let kw_score_arr = keyword_scores.into_iter().collect::<Float32Array>();
+    let confidence_refs: Vec<&str> = confidences.iter().map(String::as_str).collect();
+    let ranking_reason_refs: Vec<&str> = ranking_reasons.iter().map(String::as_str).collect();
+    let digest_refs: Vec<&str> = input_schema_digests.iter().map(String::as_str).collect();
 
     let mut rk_builder = ListBuilder::new(StringBuilder::new());
     for r in results {
@@ -360,6 +561,10 @@ pub(crate) fn tool_search_results_to_ipc(
         Field::new("metadata", DataType::Utf8, true),
         Field::new("vector_score", DataType::Float32, true),
         Field::new("keyword_score", DataType::Float32, true),
+        Field::new("final_score", DataType::Float32, true),
+        Field::new("confidence", DataType::Utf8, true),
+        Field::new("ranking_reason", DataType::Utf8, true),
+        Field::new("input_schema_digest", DataType::Utf8, true),
     ]);
 
     let batch = RecordBatch::try_new(
@@ -377,6 +582,10 @@ pub(crate) fn tool_search_results_to_ipc(
             Arc::new(StringArray::from(metadata_refs)),
             Arc::new(vec_score_arr),
             Arc::new(kw_score_arr),
+            Arc::new(Float32Array::from(final_scores)),
+            Arc::new(StringArray::from(confidence_refs)),
+            Arc::new(StringArray::from(ranking_reason_refs)),
+            Arc::new(StringArray::from(digest_refs)),
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -391,6 +600,10 @@ pub(crate) fn tool_search_results_to_ipc(
 
 impl VectorStore {
     /// Backward-compatible search wrapper.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when dataset/table access fails or the query cannot be executed.
     pub async fn search(
         &self,
         table_name: &str,
@@ -402,6 +615,12 @@ impl VectorStore {
     }
 
     /// Search with configurable scanner tuning for projection / read-ahead.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the table does not exist, scanner setup fails, batch decoding
+    /// fails, or Lance returns a query execution error.
+    #[allow(clippy::too_many_lines)]
     pub async fn search_optimized(
         &self,
         table_name: &str,
@@ -468,12 +687,22 @@ impl VectorStore {
             let routing_keywords_col = batch.column_by_name(crate::ROUTING_KEYWORDS_COLUMN);
             let intents_col = batch.column_by_name(crate::INTENTS_COLUMN);
 
-            let ids = id_col.as_any().downcast_ref::<StringArray>().unwrap();
-            let contents = content_col.as_any().downcast_ref::<StringArray>().unwrap();
+            let ids = id_col
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .ok_or_else(|| VectorStoreError::General("id column type mismatch".to_string()))?;
+            let contents = content_col
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .ok_or_else(|| {
+                    VectorStoreError::General("content column type mismatch".to_string())
+                })?;
             let distances = distance_col
                 .as_any()
                 .downcast_ref::<Float32Array>()
-                .unwrap();
+                .ok_or_else(|| {
+                    VectorStoreError::General("_distance column type mismatch".to_string())
+                })?;
 
             let str_at = |col: Option<&std::sync::Arc<dyn Array>>, i: usize| -> String {
                 col.map(|c| crate::ops::get_utf8_at(c.as_ref(), i))
@@ -508,7 +737,7 @@ impl VectorStore {
                                 if meta_arr.is_null(i) {
                                     serde_json::Value::Null
                                 } else {
-                                    serde_json::from_str(meta_arr.value(i)).unwrap_or_default()
+                                    parse_metadata_cell(meta_arr.value(i))
                                 }
                             } else {
                                 serde_json::Value::Null
@@ -554,20 +783,57 @@ impl VectorStore {
                             intents_out,
                         )
                     } else {
-                        let kw_json: Vec<serde_json::Value> = routing_keywords_vec
-                            .iter()
-                            .map(|s| serde_json::Value::String(s.clone()))
-                            .collect();
-                        let inv_json: Vec<serde_json::Value> = intents_vec
-                            .iter()
-                            .map(|s| serde_json::Value::String(s.clone()))
-                            .collect();
-                        let metadata = serde_json::json!({
-                            "tool_name": tool_name,
-                            "file_path": file_path,
-                            "routing_keywords": kw_json,
-                            "intents": inv_json,
-                        });
+                        let mut metadata = if let Some(meta_col) = metadata_col {
+                            if let Some(meta_arr) = meta_col.as_any().downcast_ref::<StringArray>()
+                            {
+                                if meta_arr.is_null(i) {
+                                    serde_json::Value::Object(serde_json::Map::new())
+                                } else {
+                                    parse_metadata_cell(meta_arr.value(i))
+                                }
+                            } else {
+                                serde_json::Value::Object(serde_json::Map::new())
+                            }
+                        } else {
+                            serde_json::Value::Object(serde_json::Map::new())
+                        };
+
+                        if !metadata.is_object() {
+                            metadata = serde_json::Value::Object(serde_json::Map::new());
+                        }
+                        if let Some(obj) = metadata.as_object_mut() {
+                            if !tool_name.is_empty() {
+                                obj.entry("tool_name".to_string()).or_insert_with(|| {
+                                    serde_json::Value::String(tool_name.clone())
+                                });
+                            }
+                            if !file_path.is_empty() {
+                                obj.entry("file_path".to_string()).or_insert_with(|| {
+                                    serde_json::Value::String(file_path.clone())
+                                });
+                            }
+                            if !routing_keywords_vec.is_empty() {
+                                obj.entry("routing_keywords".to_string())
+                                    .or_insert_with(|| {
+                                        serde_json::Value::Array(
+                                            routing_keywords_vec
+                                                .iter()
+                                                .map(|s| serde_json::Value::String(s.clone()))
+                                                .collect(),
+                                        )
+                                    });
+                            }
+                            if !intents_vec.is_empty() {
+                                obj.entry("intents".to_string()).or_insert_with(|| {
+                                    serde_json::Value::Array(
+                                        intents_vec
+                                            .iter()
+                                            .map(|s| serde_json::Value::String(s.clone()))
+                                            .collect(),
+                                    )
+                                });
+                            }
+                        }
                         (
                             metadata,
                             tool_name.clone(),
@@ -577,10 +843,10 @@ impl VectorStore {
                         )
                     };
 
-                if let Some(ref conditions) = metadata_filter {
-                    if !VectorStore::matches_filter(&metadata, conditions) {
-                        continue;
-                    }
+                if let Some(ref conditions) = metadata_filter
+                    && !VectorStore::matches_filter(&metadata, conditions)
+                {
+                    continue;
                 }
 
                 let id_val = ids.value(i).to_string();
@@ -613,6 +879,10 @@ impl VectorStore {
 
     /// Search with configurable options; returns Arrow IPC stream bytes for zero-copy consumption in Python.
     /// See [search result batch contract](docs/reference/search-result-batch-contract.md).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if underlying vector search fails or IPC encoding fails.
     pub async fn search_optimized_ipc(
         &self,
         table_name: &str,
@@ -628,7 +898,14 @@ impl VectorStore {
     }
 
     /// Tool search; returns Arrow IPC stream bytes for zero-copy consumption in Python.
-    /// Schema: name, description, score, skill_name, tool_name, file_path, routing_keywords, intents, category, metadata, vector_score, keyword_score.
+    /// Schema: name, description, score, `skill_name`, `tool_name`, `file_path`,
+    /// `routing_keywords`, intents, category, metadata, `vector_score`, `keyword_score`,
+    /// `final_score`, `confidence`, `ranking_reason`, `input_schema_digest`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if tool search fails or IPC encoding fails.
+    #[allow(clippy::too_many_arguments)]
     pub async fn search_tools_ipc(
         &self,
         table_name: &str,
@@ -654,6 +931,12 @@ impl VectorStore {
     }
 
     /// Run native Lance full-text search over the content column.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the table is missing or Lance FTS query execution fails.
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::cast_possible_truncation)]
     pub async fn search_fts(
         &self,
         table_name: &str,
@@ -766,38 +1049,40 @@ impl VectorStore {
                 let skill_name_raw = skill_name_col
                     .map(|c| crate::ops::get_utf8_at(c.as_ref(), i))
                     .unwrap_or_default();
-                let skill_name = if !skill_name_raw.is_empty() {
-                    skill_name_raw
-                } else {
+                let skill_name = if skill_name_raw.is_empty() {
                     meta.skill_name
                         .clone()
                         .filter(|s| !s.is_empty())
                         .unwrap_or_else(|| tool_name.split('.').next().unwrap_or("").to_string())
+                } else {
+                    skill_name_raw
                 };
                 let category_raw = category_col
                     .map(|c| crate::ops::get_utf8_at(c.as_ref(), i))
                     .unwrap_or_default();
-                let category = if !category_raw.is_empty() {
-                    category_raw
-                } else {
+                let category = if category_raw.is_empty() {
                     meta.category
                         .clone()
                         .filter(|s| !s.is_empty())
                         .unwrap_or_else(|| skill_name.clone())
+                } else {
+                    category_raw
                 };
-                let keywords = opt_utf8(routing_keywords_col, i)
-                    .map(|s| normalize_string_vec(s.split_whitespace().map(String::from).collect()))
-                    .unwrap_or_else(|| normalize_string_vec(meta.routing_keywords));
-                let intents = opt_utf8(intents_col, i)
-                    .map(|s| normalize_string_vec(s.split(" | ").map(String::from).collect()))
-                    .unwrap_or_else(|| normalize_string_vec(meta.intents));
+                let keywords = opt_utf8(routing_keywords_col, i).map_or_else(
+                    || normalize_string_vec(meta.routing_keywords),
+                    |s| normalize_string_vec(s.split_whitespace().map(String::from).collect()),
+                );
+                let intents = opt_utf8(intents_col, i).map_or_else(
+                    || normalize_string_vec(meta.intents),
+                    |s| normalize_string_vec(s.split(" | ").map(String::from).collect()),
+                );
                 let file_path = opt_utf8(file_path_col, i)
                     .unwrap_or_else(|| meta.file_path.unwrap_or_default());
-                let input_schema = meta
-                    .input_schema
-                    .as_ref()
-                    .map(skill::normalize_input_schema_value)
-                    .unwrap_or_else(|| serde_json::json!({}));
+                let input_schema = meta.input_schema.as_ref().map_or_else(
+                    || serde_json::json!({}),
+                    skill::normalize_input_schema_value,
+                );
+                let parameters = meta.parameters.clone();
 
                 results.push(skill::ToolSearchResult {
                     name: id_str,
@@ -812,6 +1097,7 @@ impl VectorStore {
                     routing_keywords: keywords,
                     intents,
                     category,
+                    parameters,
                 });
             }
         }
@@ -826,6 +1112,10 @@ impl VectorStore {
     }
 
     /// Unified keyword search entrypoint for configured backend.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if keyword backend is unavailable or backend query fails.
     pub async fn keyword_search(
         &self,
         table_name: &str,
@@ -880,6 +1170,11 @@ impl VectorStore {
     /// Hybrid search combining vector similarity and keyword (BM25) search.
     /// Vector and keyword queries run in parallel via `try_join!` to reduce latency;
     /// vector failure fails fast, keyword failure falls back to empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if vector search fails.
+    #[allow(clippy::cast_possible_truncation)]
     pub async fn hybrid_search(
         &self,
         table_name: &str,
@@ -902,7 +1197,7 @@ impl VectorStore {
             match self.keyword_search(table_name, query, limit * 2).await {
                 Ok(v) => Ok(v),
                 Err(e) => {
-                    log::debug!("Keyword search failed, falling back to vector-only: {}", e);
+                    log::debug!("Keyword search failed, falling back to vector-only: {e}");
                     Ok(Vec::new())
                 }
             }
@@ -927,6 +1222,10 @@ impl VectorStore {
     }
 
     /// Index a document in the keyword index.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if keyword backend upsert fails.
     pub fn index_keyword(
         &self,
         name: &str,
@@ -945,6 +1244,10 @@ impl VectorStore {
     }
 
     /// Bulk index documents in the keyword index.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if bulk keyword indexing fails.
     pub fn bulk_index_keywords<I>(&self, docs: I) -> Result<(), VectorStoreError>
     where
         I: IntoIterator<Item = (String, String, String, Vec<String>, Vec<String>)>,
@@ -979,7 +1282,7 @@ impl VectorStore {
                 result
                     .routing_keywords
                     .split_whitespace()
-                    .map(|s| s.to_lowercase())
+                    .map(str::to_lowercase)
                     .collect()
             } else if let Some(keywords_arr) = result
                 .metadata
@@ -988,7 +1291,7 @@ impl VectorStore {
             {
                 keywords_arr
                     .iter()
-                    .filter_map(|k| k.as_str().map(|s| s.to_lowercase()))
+                    .filter_map(|k| k.as_str().map(str::to_lowercase))
                     .collect()
             } else {
                 vec![]
@@ -1011,7 +1314,7 @@ impl VectorStore {
             {
                 intents_arr
                     .iter()
-                    .filter_map(|k| k.as_str().map(|s| s.to_lowercase()))
+                    .filter_map(|k| k.as_str().map(str::to_lowercase))
                     .collect()
             } else {
                 vec![]
@@ -1037,7 +1340,7 @@ impl VectorStore {
                 }
             }
             let keyword_bonus = keyword_score * 0.3f32;
-            result.distance = (result.distance - keyword_bonus as f64).max(0.0);
+            result.distance = (result.distance - f64::from(keyword_bonus)).max(0.0);
         }
     }
 }
@@ -1118,6 +1421,9 @@ mod tests {
 
     #[test]
     fn test_tool_search_results_to_ipc_one_row() {
+        use arrow::array::{Float32Array, StringArray};
+        use arrow_ipc::reader::StreamReader;
+
         let r = ToolSearchResult {
             name: "git.commit".to_string(),
             description: "Commit changes".to_string(),
@@ -1131,8 +1437,46 @@ mod tests {
             routing_keywords: vec!["git".to_string(), "commit".to_string()],
             intents: vec!["Save changes".to_string()],
             category: "vcs".to_string(),
+            parameters: vec![],
         };
         let bytes = tool_search_results_to_ipc(&[r]).unwrap();
         assert!(!bytes.is_empty());
+
+        let mut reader = StreamReader::try_new(std::io::Cursor::new(bytes), None)
+            .expect("failed to read IPC stream");
+        let batch = reader
+            .next()
+            .expect("missing first record batch")
+            .expect("failed to decode record batch");
+
+        let final_scores = batch
+            .column_by_name("final_score")
+            .expect("missing final_score column")
+            .as_any()
+            .downcast_ref::<Float32Array>()
+            .expect("final_score type mismatch");
+        let confidences = batch
+            .column_by_name("confidence")
+            .expect("missing confidence column")
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .expect("confidence type mismatch");
+        let ranking_reasons = batch
+            .column_by_name("ranking_reason")
+            .expect("missing ranking_reason column")
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .expect("ranking_reason type mismatch");
+        let digests = batch
+            .column_by_name("input_schema_digest")
+            .expect("missing input_schema_digest column")
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .expect("input_schema_digest type mismatch");
+
+        assert!(final_scores.value(0) > 0.0);
+        assert!(matches!(confidences.value(0), "high" | "medium" | "low"));
+        assert!(ranking_reasons.value(0).contains("final="));
+        assert!(digests.value(0).starts_with("sha256:"));
     }
 }

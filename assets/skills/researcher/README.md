@@ -161,11 +161,13 @@ Instead of copying entire directories, LLM designs precise Glob patterns:
 - `crates/agentgateway/src/lib.rs` (specific file)
 - `crates/agentgateway/src/**/mod.rs` (module files)
 
-### 2. Noise Reduction
+### 2. Noise Reduction (repomix)
 
 - **Comments removal**: For architecture analysis (saves ~30-50% tokens)
 - **Empty line removal**: For compact output
 - **Pattern exclusion**: Tests, configs, generated files
+
+**Do we need repomix?** Yes for typical repos. repomix reduces tokens (removeComments, removeEmptyLines) and structures output (XML). Alternative: raw file concatenation—simpler, no subprocess (~1–3s saved per shard), but more tokens and less structure. For small repos or speed-critical runs, a future `skip_repomix` option could use raw concatenation.
 
 ### 3. Iterative Scouting
 

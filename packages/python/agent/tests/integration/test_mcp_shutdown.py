@@ -228,7 +228,7 @@ class TestSSEModeShutdown:
 
         source = inspect.getsource(_setup_signal_handler)
         # SSE mode should stop the transport
-        assert "transport_ref.stop" in source or "transport.stop" in source
+        assert "_stop_transport_for_shutdown" in source
 
     def test_sse_mode_calls_graceful_shutdown(self):
         """Verify SSE mode code calls _sync_graceful_shutdown."""

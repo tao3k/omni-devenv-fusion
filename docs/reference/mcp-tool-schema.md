@@ -1,9 +1,88 @@
 # MCP Tool Schema - Developer Guide
 
 > Trinity Architecture - Agent Layer (L3 Transport)
-> Last Updated: 2026-02-12
+> Last Updated: 2026-02-19
 
-This document describes the MCP Tool schema system, including `inputSchema`, **tools/call result contract**, and how to use the `@skill_command` decorator effectively.
+This document describes the MCP Tool schema system, including `inputSchema`, **tools/call result contract**, **agent server info**, and how to use the `@skill_command` decorator effectively.
+
+---
+
+## 0a. Agent server info (GET /sse, /mcp)
+
+**Shared schema (SSOT):** `packages/shared/schemas/omni.agent.server_info.v1.schema.json`  
+**API:** `omni.foundation.api.agent_schema` — `get_schema_path()`, `get_validator()`, `validate(payload)`, `build_server_info(name, version, protocol_version, message)`.
+
+When a client sends GET to `/sse` or `/mcp` (no body), the server returns a JSON object conforming to this schema: `name`, `version`, `protocolVersion`, and optional `message`. The SSE handler uses `build_server_info()` so responses are validated against the shared schema.
+
+---
+
+## 0b. tools/list payload + observability (Rust DB-first)
+
+`tools/list` now uses the Rust registry DB as the only source of truth (no in-memory fallback path). Runtime behavior:
+
+- Registry read path: `store.list_all_tools(table_name, None)` must succeed, otherwise request fails fast.
+- Payload compaction:
+  - Tool `description` is normalized and capped (`140` chars by default, configurable via `mcp.tools_list.description_max_chars`).
+  - `inputSchema` recursively drops non-essential metadata keys (`description`, `examples`, `example`, `title`, `default`, `$comment`, `markdownDescription`).
+  - Request concurrency gate: handler-side `tools/list` in-flight cap is configurable via `mcp.tools_list.max_in_flight` (default `90`).
+- Hot polling controls:
+  - short TTL cache + singleflight rebuild (`_tools_cache_ttl_secs`).
+  - Rust agent-side `tools/list` snapshot cache TTL is configurable via `mcp.agent_list_tools_cache_ttl_ms` (or `OMNI_AGENT_MCP_LIST_TOOLS_CACHE_TTL_MS` override).
+  - Rust gateway `GET /health` exposes MCP cache summary (`cache_hits`, `cache_misses`, `cache_refreshes`, `hit_rate_pct`) when MCP is enabled.
+  - Dynamic Loader info log throttling (`_tools_log_interval_secs`).
+  - SSE runtime auto-selects fastest available uvicorn backend (`uvloop`/`httptools`).
+  - Fast runtime dependencies are declared in `omni-agent` / `omni-mcp`; run `uv sync` after pulling updates.
+  - If optional fast modules are missing at runtime, startup logs an explicit warning and falls back to `asyncio`/`h11`.
+  - SSE request pressure observability is enabled:
+    - Periodic pressure log: endpoint-level request count, errors, in-flight/max-in-flight, `p95/p99`.
+    - `/health` includes a lightweight `observability` summary (`total_requests`, `total_errors`, in-flight, top endpoints).
+
+### Periodic stats log
+
+The handler emits aggregated observability logs for `tools/list` at a fixed interval (`_tools_stats_log_interval_secs`, default `60s`):
+
+```text
+[MCP] tools/list stats requests=<n> hit_rate=<pct> cache_hits=<n> cache_misses=<n> build_count=<n> build_failures=<n> build_avg_ms=<ms> build_max_ms=<ms>
+```
+
+Use this line as the primary signal for cache effectiveness and registry build stability during load tests.
+
+### One-shot probe command
+
+Use the channel script to run health, payload size, embed dimension, sequential latency, concurrent latency, and optional log scanning in one command:
+
+```bash
+scripts/channel/test-omni-agent-mcp-tools-list-observability.sh \
+  --base-url http://127.0.0.1:3002 \
+  --log-file .run/logs/omni-mcp-sse-3002.log \
+  --json-out .run/reports/mcp-tools-list-observability.json
+```
+
+### Concurrency sweep + SLO recommendation
+
+Use this sweep command to benchmark multiple concurrency points and output a recommended cap based on `p95/p99` SLO targets:
+
+```bash
+scripts/channel/test-omni-agent-mcp-tools-list-concurrency-sweep.sh \
+  --base-url http://127.0.0.1:3002 \
+  --total 1000 \
+  --concurrency-values 40,80,120,160,200 \
+  --p95-slo-ms 400 \
+  --p99-slo-ms 800
+```
+
+The sweep client now auto-tunes HTTP connection-pool limits from the tested max concurrency to avoid client-side queue bottlenecks biasing benchmark results.
+
+Reports are written to:
+
+- `.run/reports/mcp-tools-list-observability-<host>-<port>-concurrency-sweep.json`
+- `.run/reports/mcp-tools-list-observability-<host>-<port>-concurrency-sweep.md`
+
+The JSON includes:
+
+- per-point throughput and tail latency
+- estimated knee concurrency
+- `recommended_concurrency` and feasible set under the SLO
 
 ---
 

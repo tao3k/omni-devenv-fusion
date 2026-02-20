@@ -35,6 +35,7 @@ pub struct ContextAssembler {
 
 impl ContextAssembler {
     /// Create a new context assembler with default settings.
+    #[must_use]
     pub fn new() -> Self {
         let mut env = Environment::new();
         env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
@@ -58,7 +59,12 @@ impl ContextAssembler {
     /// # Returns
     ///
     /// `Result<AssemblyResult>` containing the assembled content and metadata
+    ///
+    /// # Errors
+    ///
+    /// This currently never returns an error and is modeled as `Result` for API compatibility.
     #[cfg(feature = "assembler")]
+    #[allow(clippy::needless_pass_by_value, clippy::unnecessary_wraps)]
     pub fn assemble_skill(
         &self,
         main_path: PathBuf,
@@ -82,7 +88,7 @@ impl ContextAssembler {
         let rendered_main = self
             .env
             .render_str(&main_template, &variables)
-            .unwrap_or_else(|e| format!("[Template Error: {}]", e));
+            .unwrap_or_else(|e| format!("[Template Error: {e}]"));
 
         // 3. [Assembly] Build the final buffer
         let mut buffer = String::with_capacity(rendered_main.len() + 2048);
@@ -100,7 +106,7 @@ impl ContextAssembler {
                         if let Some(name) = path.file_name() {
                             buffer.push_str(&name.to_string_lossy());
                         }
-                        buffer.push_str("\n");
+                        buffer.push('\n');
                         buffer.push_str(&c);
                     }
                     Err(_) => missing.push(path),

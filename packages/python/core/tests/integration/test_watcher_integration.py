@@ -170,6 +170,128 @@ def commit():
         result = watcher._extract_skill_name(test_path)
         assert result is None or result == "test_skill"
 
+    @pytest.mark.asyncio
+    async def test_markdown_change_triggers_common_link_graph_refresh_only(
+        self,
+        mock_indexer,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Markdown-only changes should trigger common refresh, not skill indexing."""
+        from omni.core.kernel.watcher import FileChangeEvent, FileChangeType, ReactiveSkillWatcher
+
+        backend = MagicMock()
+        backend.refresh_with_delta = AsyncMock(
+            return_value={"mode": "delta", "changed_count": 1, "fallback": False}
+        )
+        monkeypatch.setattr(
+            "omni.rag.link_graph.get_link_graph_backend",
+            lambda notebook_dir=None, **_: backend,
+        )
+
+        watcher = ReactiveSkillWatcher(
+            indexer=mock_indexer,
+            patterns=["**/*.py"],
+        )
+        watcher.project_root = tmp_path
+
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        note_path = docs_dir / "new-note.md"
+        note_path.write_text("# New Note\n")
+        watcher._link_graph_watch_roots = [docs_dir.resolve()]
+
+        await watcher._process_batch(
+            [FileChangeEvent(event_type=FileChangeType.MODIFIED, path=str(note_path))]
+        )
+
+        backend.refresh_with_delta.assert_awaited_once_with([str(note_path)], force_full=False)
+        mock_indexer.index_file.assert_not_called()
+        mock_indexer.reindex_file.assert_not_called()
+        mock_indexer.remove_file.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_markdown_change_emits_link_graph_index_signals_in_monitor_report(
+        self,
+        mock_indexer,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Watcher-triggered markdown refresh should flow into monitor index signals."""
+        from omni.core.kernel.watcher import FileChangeEvent, FileChangeType, ReactiveSkillWatcher
+        from omni.foundation.runtime.skills_monitor.context import (
+            reset_current_monitor,
+            set_current_monitor,
+        )
+        from omni.foundation.runtime.skills_monitor.monitor import SkillsMonitor
+        from omni.foundation.runtime.skills_monitor.reporters.summary_reporter import (
+            SummaryReporter,
+        )
+        from omni.foundation.runtime.skills_monitor.context import record_phase
+        import io
+
+        class _Backend:
+            async def refresh_with_delta(self, _changed_paths, *, force_full: bool = False):
+                record_phase(
+                    "link_graph.index.delta.plan",
+                    1.0,
+                    strategy="delta",
+                    reason="delta_requested",
+                    changed_count=1,
+                    threshold=256,
+                    force_full=force_full,
+                )
+                record_phase(
+                    "link_graph.index.delta.apply",
+                    2.0,
+                    success=True,
+                    changed_count=1,
+                )
+                return {"mode": "delta", "changed_count": 1, "fallback": False}
+
+        monkeypatch.setattr(
+            "omni.rag.link_graph.get_link_graph_backend",
+            lambda notebook_dir=None, **_: _Backend(),
+        )
+
+        watcher = ReactiveSkillWatcher(
+            indexer=mock_indexer,
+            patterns=["**/*.py"],
+        )
+        watcher.project_root = tmp_path
+
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        note_path = docs_dir / "signal-note.md"
+        note_path.write_text("# Signal Note\n")
+        watcher._link_graph_watch_roots = [docs_dir.resolve()]
+
+        monitor = SkillsMonitor("knowledge.recall")
+        token = set_current_monitor(monitor)
+        try:
+            await watcher._process_batch(
+                [FileChangeEvent(event_type=FileChangeType.MODIFIED, path=str(note_path))]
+            )
+        finally:
+            reset_current_monitor(token)
+
+        report = monitor.build_report()
+        payload = report.to_dict()
+        signals = payload.get("link_graph_signals")
+        assert isinstance(signals, dict)
+        index = signals.get("index_refresh")
+        assert isinstance(index, dict)
+        assert index["observed"]["total"] == 2
+        assert index["plan"]["count"] == 1
+        assert index["delta_apply"]["count"] == 1
+        assert index["delta_apply"]["success"] == 1
+
+        stream = io.StringIO()
+        SummaryReporter(stream=stream).emit(report)
+        output = stream.getvalue()
+        assert "LinkGraph Index Signals:" in output
+        assert "observed: total=2 plan=1 delta_apply=1 full_rebuild=0" in output
+
 
 class TestWatcherWithActualKernel:
     """Tests using the actual Kernel initialization."""

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.omni.dev/omni.discover.match.v1.schema.json",
+  "title": "Omni Discover Match v1",
+  "description": "Canonical discover ranking row emitted by skill.discover and router governance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tool",
+    "usage",
+    "score",
+    "final_score",
+    "confidence",
+    "ranking_reason",
+    "input_schema_digest"
+  ],
+  "properties": {
+    "tool": {
+      "type": "string",
+      "minLength": 3,
+      "pattern": "^[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+$"
+    },
+    "usage": {
+      "type": "string",
+      "minLength": 1
+    },
+    "score": {
+      "type": "number"
+    },
+    "final_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"]
+    },
+    "ranking_reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "input_schema_digest": {
+      "type": "string",
+      "pattern": "^sha256:[A-Za-z0-9_-]{6,}$"
+    },
+    "documentation_path": {
+      "type": "string"
+    }
+  }
+}

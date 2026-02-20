@@ -265,3 +265,4 @@ WARNING:omni.agent.core.context.pruner:ContextPruner falling back to estimation 
 - [Cognitive Re-anchoring](cognitive-reanchoring.md)
 - [AutoFix Loop Scenario Test](../testing/scenario-test-driven-autofix-loop.md)
 - [Rust Crates](../architecture/rust-crates.md)
+- [Pensieve / StateLM: Implications for Omni-Dev-Fusion](pensieve-statelm-implications.md) — stateful context self-management (arXiv:2602.12108)

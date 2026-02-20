@@ -44,15 +44,27 @@ class TestRunCommandExecution:
 
     def test_run_functions_exist(self):
         """Verify helper functions exist."""
-        from omni.agent.cli.commands.run import (
-            _execute_task_via_kernel,
-            _print_banner,
-            _print_session_report,
+        from omni.agent.workflows.run_entry import (
+            execute_task_via_kernel,
+            execute_task_with_session,
+            print_banner,
+            print_session_report,
         )
 
-        assert callable(_print_session_report)
-        assert callable(_print_banner)
-        assert callable(_execute_task_via_kernel)
+        assert callable(print_session_report)
+        assert callable(print_banner)
+        assert callable(execute_task_via_kernel)
+        assert callable(execute_task_with_session)
+
+    def test_gateway_agent_commands_registered(self):
+        """Verify gateway and agent commands are registered."""
+        from omni.agent.cli.commands.gateway_agent import (
+            register_gateway_command,
+            register_agent_command,
+        )
+
+        assert callable(register_gateway_command)
+        assert callable(register_agent_command)
 
 
 class TestRunCommandExecutionPath:
@@ -178,15 +190,15 @@ class TestRunCommandOutput:
 
     def test_print_session_report_function(self):
         """Verify _print_session_report function exists."""
-        from omni.agent.cli.commands.run import _print_session_report
+        from omni.agent.workflows.run_entry import print_session_report
 
-        assert callable(_print_session_report)
+        assert callable(print_session_report)
 
     def test_print_banner_function(self):
         """Verify _print_banner function exists."""
-        from omni.agent.cli.commands.run import _print_banner
+        from omni.agent.workflows.run_entry import print_banner
 
-        assert callable(_print_banner)
+        assert callable(print_banner)
 
     def test_register_run_command_function(self):
         """Verify register_run_command function exists."""
@@ -196,7 +208,7 @@ class TestRunCommandOutput:
 
     def test_session_report_with_dict_output(self, capsys):
         """Verify _print_session_report renders dict output correctly."""
-        from omni.agent.cli.commands.run import _print_session_report
+        from omni.agent.workflows.run_entry import print_session_report
 
         result = {
             "session_id": "test_123",
@@ -210,7 +222,7 @@ class TestRunCommandOutput:
         tool_counts = {"tool_calls": 1}
         tokens = 500
 
-        _print_session_report("test task", result, step_count, tool_counts, tokens)
+        print_session_report("test task", result, step_count, tool_counts, tokens)
 
         captured = capsys.readouterr()
         out = _strip_ansi(captured.out)
@@ -224,7 +236,7 @@ class TestRunCommandOutput:
 
     def test_session_report_with_markdown_output(self, capsys):
         """Verify _print_session_report renders markdown output correctly."""
-        from omni.agent.cli.commands.run import _print_session_report
+        from omni.agent.workflows.run_entry import print_session_report
 
         result = {
             "session_id": "test_456",
@@ -234,7 +246,7 @@ class TestRunCommandOutput:
         tool_counts = {"tool_calls": 2}
         tokens = 1000
 
-        _print_session_report("markdown task", result, step_count, tool_counts, tokens)
+        print_session_report("markdown task", result, step_count, tool_counts, tokens)
 
         captured = capsys.readouterr()
         out = _strip_ansi(captured.out)
@@ -245,7 +257,7 @@ class TestRunCommandOutput:
 
     def test_session_report_panel_title(self, capsys):
         """Verify session report has correct panel title."""
-        from omni.agent.cli.commands.run import _print_session_report
+        from omni.agent.workflows.run_entry import print_session_report
 
         result = {
             "session_id": "test_789",
@@ -255,7 +267,7 @@ class TestRunCommandOutput:
         tool_counts = {}
         tokens = 100
 
-        _print_session_report("simple task", result, step_count, tool_counts, tokens)
+        print_session_report("simple task", result, step_count, tool_counts, tokens)
 
         captured = capsys.readouterr()
         # Verify panel title
@@ -263,7 +275,7 @@ class TestRunCommandOutput:
 
     def test_session_report_cleans_tool_call_artifacts(self, capsys):
         """Verify _print_session_report cleans up tool call artifacts."""
-        from omni.agent.cli.commands.run import _print_session_report
+        from omni.agent.workflows.run_entry import print_session_report
 
         # Simulate corrupted output with tool call markers
         result = {
@@ -280,7 +292,7 @@ This is the actual result.""",
         tool_counts = {"filesystem": 2}
         tokens = 500
 
-        _print_session_report("cleanup test", result, step_count, tool_counts, tokens)
+        print_session_report("cleanup test", result, step_count, tool_counts, tokens)
 
         captured = capsys.readouterr()
         # Verify tool call artifacts are removed
@@ -291,7 +303,7 @@ This is the actual result.""",
 
     def test_session_report_with_empty_output(self, capsys):
         """Verify _print_session_report handles empty output."""
-        from omni.agent.cli.commands.run import _print_session_report
+        from omni.agent.workflows.run_entry import print_session_report
 
         result = {
             "session_id": "test_empty",
@@ -301,7 +313,7 @@ This is the actual result.""",
         tool_counts = {}
         tokens = 100
 
-        _print_session_report("empty output test", result, step_count, tool_counts, tokens)
+        print_session_report("empty output test", result, step_count, tool_counts, tokens)
 
         captured = capsys.readouterr()
         # Should still render the report
@@ -310,7 +322,7 @@ This is the actual result.""",
 
     def test_session_report_with_none_output(self, capsys):
         """Verify _print_session_report handles None output."""
-        from omni.agent.cli.commands.run import _print_session_report
+        from omni.agent.workflows.run_entry import print_session_report
 
         result = {
             "session_id": "test_none",
@@ -320,7 +332,7 @@ This is the actual result.""",
         tool_counts = {}
         tokens = 100
 
-        _print_session_report("none output test", result, step_count, tool_counts, tokens)
+        print_session_report("none output test", result, step_count, tool_counts, tokens)
 
         captured = capsys.readouterr()
         # Should still render the report with default message
@@ -328,7 +340,7 @@ This is the actual result.""",
 
     def test_session_report_with_no_output_key(self, capsys):
         """Verify _print_session_report handles missing output key."""
-        from omni.agent.cli.commands.run import _print_session_report
+        from omni.agent.workflows.run_entry import print_session_report
 
         result = {
             "session_id": "test_no_key",
@@ -338,7 +350,7 @@ This is the actual result.""",
         tool_counts = {}
         tokens = 100
 
-        _print_session_report("no output key test", result, step_count, tool_counts, tokens)
+        print_session_report("no output key test", result, step_count, tool_counts, tokens)
 
         captured = capsys.readouterr()
         # Should still render the report
@@ -346,7 +358,7 @@ This is the actual result.""",
 
     def test_session_report_with_multiple_tool_calls(self, capsys):
         """Verify _print_session_report handles multiple tool calls in output."""
-        from omni.agent.cli.commands.run import _print_session_report
+        from omni.agent.workflows.run_entry import print_session_report
 
         result = {
             "session_id": "test_multi_tool",
@@ -366,7 +378,7 @@ Analysis complete.""",
         tool_counts = {"knowledge": 1, "filesystem": 2}
         tokens = 800
 
-        _print_session_report("multi tool test", result, step_count, tool_counts, tokens)
+        print_session_report("multi tool test", result, step_count, tool_counts, tokens)
 
         captured = capsys.readouterr()
         # Verify report still renders correctly
@@ -377,7 +389,7 @@ Analysis complete.""",
 
     def test_session_report_with_research_result(self, capsys):
         """Verify _print_session_report renders research-style result dict."""
-        from omni.agent.cli.commands.run import _print_session_report
+        from omni.agent.workflows.run_entry import print_session_report
 
         result = {
             "session_id": "test_research",
@@ -392,7 +404,7 @@ Analysis complete.""",
         tool_counts = {"researcher": 5}
         tokens = 2000
 
-        _print_session_report("research task", result, step_count, tool_counts, tokens)
+        print_session_report("research task", result, step_count, tool_counts, tokens)
 
         captured = capsys.readouterr()
         # Verify report renders dict as JSON
@@ -401,7 +413,7 @@ Analysis complete.""",
 
     def test_session_report_with_json_string(self, capsys):
         """Verify _print_session_report handles JSON-like string output."""
-        from omni.agent.cli.commands.run import _print_session_report
+        from omni.agent.workflows.run_entry import print_session_report
 
         result = {
             "session_id": "test_json_str",
@@ -411,7 +423,7 @@ Analysis complete.""",
         tool_counts = {}
         tokens = 200
 
-        _print_session_report("json string test", result, step_count, tool_counts, tokens)
+        print_session_report("json string test", result, step_count, tool_counts, tokens)
 
         captured = capsys.readouterr()
         assert "✨ CCA Session Report ✨" in captured.out

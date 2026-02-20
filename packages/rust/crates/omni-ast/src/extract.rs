@@ -3,7 +3,7 @@
 //! Provides high-level functions for extracting code elements from source files
 //! with precise location information (byte offsets, line numbers) and capture support.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::lang::Lang;
 use crate::re_exports::{LanguageExt, MatcherExt, MetaVariable, Pattern, SupportLang};
@@ -26,7 +26,7 @@ pub struct ExtractResult {
 }
 
 impl ExtractResult {
-    /// Create a new ExtractResult
+    /// Create a new `ExtractResult`.
     #[must_use]
     pub fn new(
         text: String,
@@ -77,6 +77,7 @@ impl ExtractResult {
 /// let results = extract_items(content, "def $NAME", Lang::Python, None);
 /// assert_eq!(results.len(), 2);
 /// ```
+#[must_use]
 pub fn extract_items(
     content: &str,
     pattern: &str,
@@ -92,9 +93,8 @@ pub fn extract_items(
     let grep_result = support_lang.ast_grep(content);
     let root_node = grep_result.root();
 
-    let search_pattern = match Pattern::try_new(pattern, support_lang) {
-        Ok(p) => p,
-        Err(_) => return Vec::new(),
+    let Ok(search_pattern) = Pattern::try_new(pattern, support_lang) else {
+        return Vec::new();
     };
 
     // Pre-compute line index for fast line number lookup
@@ -105,8 +105,8 @@ pub fn extract_items(
         .chain(std::iter::once(content.len()))
         .collect();
 
-    let capture_names: Option<HashMap<String, ()>> =
-        capture_names.map(|v| v.into_iter().map(|s| (s.to_string(), ())).collect());
+    let capture_names: Option<HashSet<String>> =
+        capture_names.map(|v| v.into_iter().map(str::to_string).collect());
 
     let mut results = Vec::new();
 
@@ -118,16 +118,17 @@ pub fn extract_items(
             let mut captures = HashMap::new();
             for mv in env.get_matched_variables() {
                 let name = match &mv {
-                    MetaVariable::Capture(name, _) => name.as_str(),
-                    MetaVariable::MultiCapture(name) => name.as_str(),
+                    MetaVariable::Capture(name, _) | MetaVariable::MultiCapture(name) => {
+                        name.as_str()
+                    }
                     _ => continue,
                 };
 
                 // Apply capture name filter if provided
-                if let Some(ref filter) = capture_names {
-                    if !filter.contains_key(name) {
-                        continue;
-                    }
+                if let Some(ref filter) = capture_names
+                    && !filter.contains(name)
+                {
+                    continue;
                 }
 
                 if let Some(captured) = env.get_match(name) {
@@ -159,14 +160,12 @@ fn byte_to_line(byte_start: usize, byte_end: usize, line_offsets: &[usize]) -> (
     let line_start = line_offsets
         .iter()
         .position(|&offset| offset >= byte_start)
-        .map(|i| i + 1) // Convert to 1-indexed
-        .unwrap_or(1);
+        .map_or(1, |i| i + 1); // Convert to 1-indexed
 
     let line_end = line_offsets
         .iter()
         .position(|&offset| offset >= byte_end)
-        .map(|i| i + 1) // Convert to 1-indexed
-        .unwrap_or(line_start);
+        .map_or(line_start, |i| i + 1); // Convert to 1-indexed
 
     (line_start, line_end)
 }
@@ -175,6 +174,7 @@ fn byte_to_line(byte_start: usize, byte_end: usize, line_offsets: &[usize]) -> (
 ///
 /// These patterns extract only signatures (function/class definitions with docstrings),
 /// removing implementation details for lightweight indexing.
+#[must_use]
 pub fn get_skeleton_patterns(lang: Lang) -> &'static [&'static str] {
     match lang {
         Lang::Python => &["def $NAME", "class $NAME", "async def $NAME"],
@@ -239,6 +239,7 @@ pub fn get_skeleton_patterns(lang: Lang) -> &'static [&'static str] {
 /// assert!(skeleton.contains("def hello"));
 /// assert!(skeleton.contains("Greet someone")); // docstring preserved
 /// ```
+#[must_use]
 pub fn extract_skeleton(content: &str, lang: Lang) -> String {
     let patterns = get_skeleton_patterns(lang);
 

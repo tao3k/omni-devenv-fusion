@@ -32,12 +32,16 @@ Workflow:
 from __future__ import annotations
 
 import json
-import logging
 import os
 from pathlib import Path
 from typing import Any
 
 from omni.foundation.api.decorators import skill_command, skill_resource
+from omni.foundation.api.response_payloads import (
+    build_error_response,
+    build_status_error_response,
+    build_success_error_response,
+)
 from omni.foundation.config.logging import get_logger
 
 logger = get_logger("skill.knowledge.dependency")
@@ -61,11 +65,11 @@ def dependency_index_resource() -> dict:
         total = 0
         for crate_dir in index_dir.iterdir():
             if crate_dir.is_dir():
-                for f in crate_dir.glob("*.json"):
+                for _f in crate_dir.glob("*.json"):
                     total += 1
         return {"indexed_crates": len(crates), "total_symbols": total, "crates": crates}
     except Exception as e:
-        return {"error": str(e)}
+        return build_error_response(error=str(e))
 
 
 def _get_project_root() -> str:
@@ -241,18 +245,16 @@ async def dependency_search(
 
     except ImportError as e:
         logger.error(f"Import error: {e}")
-        return {
-            "success": False,
-            "error": "PyDependencyIndexer not available",
-            "hint": "Ensure omni-core-rs is properly installed",
-        }
+        return build_success_error_response(
+            error="PyDependencyIndexer not available",
+            extra={"hint": "Ensure omni-core-rs is properly installed"},
+        )
     except Exception as e:
         logger.error(f"Dependency search failed: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "query": query,
-        }
+        return build_success_error_response(
+            error=str(e),
+            extra={"query": query},
+        )
 
 
 @skill_command(
@@ -304,16 +306,10 @@ async def dependency_status() -> dict[str, Any]:
         }
 
     except ImportError:
-        return {
-            "status": "error",
-            "error": "PyDependencyIndexer not available",
-        }
+        return build_status_error_response(error="PyDependencyIndexer not available")
     except Exception as e:
         logger.error(f"Dependency status check failed: {e}")
-        return {
-            "status": "error",
-            "error": str(e),
-        }
+        return build_status_error_response(error=str(e))
 
 
 @skill_command(
@@ -373,17 +369,13 @@ async def dependency_build() -> dict[str, Any]:
         }
 
     except ImportError:
-        return {
-            "success": False,
-            "error": "PyDependencyIndexer not available",
-            "hint": "Ensure omni-core-rs is properly installed",
-        }
+        return build_success_error_response(
+            error="PyDependencyIndexer not available",
+            extra={"hint": "Ensure omni-core-rs is properly installed"},
+        )
     except Exception as e:
         logger.error(f"Dependency build failed: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-        }
+        return build_success_error_response(error=str(e))
 
 
 @skill_command(
@@ -429,21 +421,15 @@ async def dependency_list() -> dict[str, Any]:
         }
 
     except ImportError:
-        return {
-            "success": False,
-            "error": "PyDependencyIndexer not available",
-        }
+        return build_success_error_response(error="PyDependencyIndexer not available")
     except Exception as e:
         logger.error(f"Dependency list failed: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-        }
+        return build_success_error_response(error=str(e))
 
 
 __all__ = [
-    "dependency_search",
-    "dependency_status",
     "dependency_build",
     "dependency_list",
+    "dependency_search",
+    "dependency_status",
 ]

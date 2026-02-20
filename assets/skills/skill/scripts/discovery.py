@@ -51,8 +51,8 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
 
     This is the "Google for Agent Tools" - always consult when unsure.
     """
-    from omni.core.router.main import RouterRegistry
     from omni.core.kernel import get_kernel
+    from omni.core.router.main import RouterRegistry
 
     kernel = get_kernel()
     router = RouterRegistry.get()
@@ -72,6 +72,15 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
         }
 
     # Construct "Intelligent Discovery Report"
+    import hashlib
+    import json
+
+    def _schema_digest(schema: dict[str, Any]) -> str:
+        if not isinstance(schema, dict) or not schema:
+            return "sha256:empty"
+        canonical = json.dumps(schema, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return f"sha256:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
+
     details = []
 
     for r in results:
@@ -104,8 +113,6 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
             pass
 
         # 2. Generate EXACT usage template (SSOT)
-        import json
-
         try:
             props = input_schema.get("properties", {})
             required = input_schema.get("required", [])
@@ -119,7 +126,7 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
                         args[p_name] = f"<{p_name}?>"
 
             usage = f'@omni("{full_id}", {json.dumps(args)})'
-        except:
+        except Exception:
             usage = f'@omni("{full_id}", {{...}})'
 
         # 3. Documentation hints
@@ -127,16 +134,36 @@ async def discover(intent: str, limit: int = 3) -> dict[str, Any]:
         if doc_path:
             doc_cues.append(f"Full manual available at: {doc_path}")
 
+        confidence_raw = getattr(r, "confidence", "low")
+        if hasattr(confidence_raw, "value"):
+            confidence = str(confidence_raw.value)
+        else:
+            confidence = str(confidence_raw)
+        score = float(getattr(r, "score", 0.0))
+        final_score = float(getattr(r, "final_score", score) or score)
+
+        ranking_reason = str(
+            getattr(r, "ranking_reason", "")
+            or f"confidence={confidence} | score={score:.3f} | final_score={final_score:.3f}"
+        )
+        input_schema_digest = str(
+            getattr(r, "input_schema_digest", "") or _schema_digest(input_schema)
+        )
+
         details.append(
             {
                 "tool": full_id,
-                "score": r.score,
+                "score": score,
+                "final_score": final_score,
+                "confidence": confidence,
+                "ranking_reason": ranking_reason,
+                "input_schema_digest": input_schema_digest,
                 "description": description,
                 "usage": usage,
                 "documentation_path": doc_path,
                 "source_code_path": file_path,
                 "documentation_hints": doc_cues,
-                "advice": f"Check the usage pattern. If arguments are complex, read 'documentation_path'.",
+                "advice": "Check the usage pattern. If arguments are complex, read 'documentation_path'.",
             }
         )
 
@@ -183,7 +210,7 @@ async def list_index() -> str:
     from omni.core.skills.discovery import SkillDiscoveryService
 
     service = SkillDiscoveryService()
-    skills = service.discover_all()
+    skills = await service.discover_all()
 
     lines = ["Skills Index:", ""]
     lines.append(f"Total skills: {len(skills)}")

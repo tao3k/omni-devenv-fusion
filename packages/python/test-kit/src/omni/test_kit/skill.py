@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import inspect
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -52,11 +53,32 @@ class SkillCommandTester:
         return getattr(imported, command)
 
     def run(self, skill: str, module: str, command: str, **kwargs: Any) -> Any:
-        """Execute a skill command and resolve async/sync return values."""
+        """Execute a skill command and resolve async/sync return values.
+
+        Unwraps MCP-style content (content[0].text as JSON) to raw dict for simpler tests.
+        """
         func = self.load(skill=skill, module=module, command=command)
         result = func(**kwargs)
         if inspect.isawaitable(result):
-            return run_async_blocking(result)
+            result = run_async_blocking(result)
+        return self._unwrap_mcp_content(result)
+
+    @staticmethod
+    def _unwrap_mcp_content(result: Any) -> Any:
+        """Unwrap MCP content format to raw dict for test assertions."""
+        if not isinstance(result, dict):
+            return result
+        content = result.get("content")
+        if not content or not isinstance(content, list) or len(content) == 0:
+            return result
+        first = content[0]
+        if isinstance(first, dict) and first.get("type") == "text":
+            text = first.get("text")
+            if isinstance(text, str):
+                try:
+                    return json.loads(text)
+                except json.JSONDecodeError:
+                    pass
         return result
 
 

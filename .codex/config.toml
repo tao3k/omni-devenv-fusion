@@ -1,6 +1,4 @@
-[mcp_servers.omniAgent]
-command = "omni"
-args = ["mcp", "--transport", "stdio"]
 
-[mcpANTHROPIC_API_KEY_servers.omniAgent.env]
-OMNI_UX_MODE = "headless"
+[mcp_servers.omniAgent]
+url = "http://127.0.0.1:3002/mcp"
+enabled = true

@@ -16,7 +16,7 @@ let
   nixosModules =
     (inputs.omnibus.pops.nixosProfiles.addLoadExtender {
       load = {
-        src = ./assets/nix/modules;
+        src = ./nix/modules;
         inputs = {
           __nixpkgs__ = nixpkgs-latest;
           __inputs__ = {
@@ -33,7 +33,7 @@ let
   packages =
     (inputs.omnibus.pops.packages.addLoadExtender {
       load = {
-        src = ./assets/nix/packages;
+        src = ./nix/packages;
         inputs = {
           inputs = {
             nixpkgs = nixpkgs-latest;
@@ -77,6 +77,9 @@ in
   # https://devenv.sh/packages/
   packages = [
     packages.secretspec
+    pkgs.ollama
+    pkgs.valkey
+    pkgs.ngrok
   ];
 
   dotenv.enable = true;

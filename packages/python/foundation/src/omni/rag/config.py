@@ -87,7 +87,7 @@ class KnowledgeGraphConfig:
         enabled: Enable knowledge graph and entity extraction
         entity_types: List of entity types to extract
         extraction_llm: LLM for entity extraction (None = use default)
-        store_in_rust: Store entities in Rust omni-knowledge crate
+        store_in_rust: Store entities in Rust xiuxian-wendao crate
         max_entities_per_doc: Maximum entities per document
         relation_types: List of relation types to extract
     """
@@ -158,13 +158,13 @@ class RAGConfig:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> RAGConfig:
-        """Create RAGConfig from a dictionary (e.g., from settings.yaml).
+        """Create RAGConfig from a dictionary (e.g., from settings).
 
         Args:
             data: Dictionary with optional configuration sections.
 
         Returns:
-            RAGConfig instance with merged settings.
+            RAGConfig instance with merged system+user settings.
         """
         # Extract sub-configurations if present
         doc_parse_cfg = DocumentParsingConfig()
@@ -258,7 +258,7 @@ _rag_config: RAGConfig | None = None
 def get_rag_config() -> RAGConfig:
     """Get the RAG configuration singleton.
 
-    Loads configuration from settings.yaml if available,
+    Loads configuration from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) if available,
     otherwise returns default configuration.
 
     Returns:
@@ -277,7 +277,7 @@ def get_rag_config() -> RAGConfig:
         if rag_settings:
             _rag_config = RAGConfig.from_dict(rag_settings)
             logger.info(
-                "RAG config loaded from settings.yaml",
+                "RAG config loaded from settings",
                 enabled=_rag_config.enabled,
             )
         else:

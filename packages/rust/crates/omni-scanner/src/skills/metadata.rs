@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Parsed skill metadata from SKILL.md YAML frontmatter.
-#[derive(Debug, Clone, Deserialize, Serialize, SchemarsJsonSchema, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, SchemarsJsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub struct SkillMetadata {
     /// Unique name identifying this skill.
@@ -42,22 +42,6 @@ pub struct SkillMetadata {
     /// Zero Trust: Empty permissions means NO access to any capabilities.
     #[serde(default)]
     pub permissions: Vec<String>,
-}
-
-impl Default for SkillMetadata {
-    fn default() -> Self {
-        Self {
-            skill_name: String::new(),
-            version: String::new(),
-            description: String::new(),
-            routing_keywords: Vec::new(),
-            authors: Vec::new(),
-            intents: Vec::new(),
-            require_refs: Vec::new(),
-            repository: String::new(),
-            permissions: Vec::new(),
-        }
-    }
 }
 
 impl SkillMetadata {
@@ -96,7 +80,7 @@ impl SkillMetadata {
 /// A single sniffer rule (typically from extensions/sniffer/rules.toml).
 #[derive(Debug, Clone, Deserialize, Serialize, SchemarsJsonSchema, PartialEq, Eq)]
 pub struct SnifferRule {
-    /// Rule type: "file_exists" or "file_pattern"
+    /// Rule type: "`file_exists`" or "`file_pattern`"
     #[serde(rename = "type")]
     pub rule_type: String,
     /// Glob pattern or filename to match
@@ -123,6 +107,7 @@ impl SnifferRule {
 /// of using a tool, enabling smarter execution decisions.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq, SchemarsJsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ToolAnnotations {
     /// Read-only operations that don't modify system state.
     #[serde(default)]
@@ -183,7 +168,7 @@ impl ToolAnnotations {
 // Decorator Arguments - Extracted from @skill_command decorator
 // =============================================================================
 
-/// Arguments extracted from @skill_command decorator kwargs.
+/// Arguments extracted from @`skill_command` decorator kwargs.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DecoratorArgs {
     /// Explicit tool name from decorator (overrides function name).
@@ -253,7 +238,7 @@ pub struct ToolRecord {
     /// Parameter names inferred from function signature.
     #[serde(default)]
     pub parameters: Vec<String>,
-    /// Full tool names (skill.tool) this skill tool refers to for docs (SkillToolsRefers).
+    /// Full tool names (skill.tool) this skill tool refers to for docs (`SkillToolsRefers`).
     #[serde(default)]
     pub skill_tools_refers: Vec<String>,
     /// MCP Resource URI.  Non-empty means this tool is also an MCP Resource.
@@ -293,6 +278,7 @@ impl ToolRecord {
 
     /// Creates a fully populated `ToolRecord` with all enrichment data.
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn with_enrichment(
         tool_name: String,
         description: String,
@@ -306,7 +292,7 @@ impl ToolRecord {
         docstring: String,
         category: String,
         annotations: ToolAnnotations,
-        parameters: Vec<super::skill_command::parser::ParsedParameter>,
+        parameters: &[super::skill_command::parser::ParsedParameter],
         input_schema: String,
         skill_tools_refers: Vec<String>,
         resource_uri: String,
@@ -347,20 +333,25 @@ impl ReferencePath {
     const VALID_EXTENSIONS: &[&str] = &["md", "pdf", "txt", "html", "json", "yaml", "yml"];
 
     /// Creates a new `ReferencePath` after validating the path format.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the path is empty, absolute, contains `..`,
+    /// or has an unsupported file extension.
     pub fn new(path: impl Into<String>) -> Result<Self, String> {
         let path = path.into();
         if path.trim().is_empty() {
             return Err("Reference path cannot be empty".to_string());
         }
         if path.starts_with('/') {
-            return Err(format!("Reference path must be relative: {}", path));
+            return Err(format!("Reference path must be relative: {path}"));
         }
         if path.contains("..") {
-            return Err(format!("Reference path cannot contain '..': {}", path));
+            return Err(format!("Reference path cannot contain '..': {path}"));
         }
-        let ext = path.split('.').last().unwrap_or("");
+        let ext = path.rsplit('.').next().unwrap_or("");
         if !ext.is_empty() && !Self::VALID_EXTENSIONS.contains(&ext) {
-            return Err(format!("Invalid reference extension '{}'", ext));
+            return Err(format!("Invalid reference extension '{ext}'"));
         }
         Ok(Self(path))
     }
@@ -433,7 +424,7 @@ pub struct SkillIndexEntry {
     /// Permissions declared by this skill (Zero Trust: empty = no access).
     #[serde(default)]
     pub permissions: Vec<String>,
-    /// Reference docs from `references/*.md` (metadata.for_tools per doc).
+    /// Reference docs from `references/*.md` (`metadata.for_tools` per doc).
     #[serde(default)]
     pub references: Vec<ReferenceRecord>,
 }
@@ -789,7 +780,7 @@ impl ReferenceRecord {
     pub fn applies_to_tool(&self, full_tool_name: &str) -> bool {
         self.for_tools
             .as_ref()
-            .map_or(false, |v| v.iter().any(|t| t.as_str() == full_tool_name))
+            .is_some_and(|v| v.iter().any(|t| t.as_str() == full_tool_name))
     }
 }
 
@@ -1006,16 +997,16 @@ impl SyncReport {
 
 /// Calculate sync operations between scanned tools and existing index.
 ///
-/// Uses file_hash for fast-path comparison to skip unchanged tools.
+/// Uses `file_hash` for fast-path comparison to skip unchanged tools.
 ///
 /// Args:
-///   scanned: Vector of scanned ToolRecord objects
-///   existing: Vector of existing IndexToolEntry objects
+///   scanned: Vector of scanned `ToolRecord` objects
+///   existing: Vector of existing `IndexToolEntry` objects
 ///
 /// Returns:
-///   SyncReport with lists of added, updated, deleted, and unchanged tools.
+///   `SyncReport` with lists of added, updated, deleted, and unchanged tools.
 #[must_use]
-pub fn calculate_sync_ops(scanned: Vec<ToolRecord>, existing: Vec<IndexToolEntry>) -> SyncReport {
+pub fn calculate_sync_ops(scanned: Vec<ToolRecord>, existing: &[IndexToolEntry]) -> SyncReport {
     let mut report = SyncReport::new();
 
     // Build a map of existing tools by name for quick lookup
@@ -1060,14 +1051,14 @@ pub fn calculate_sync_ops(scanned: Vec<ToolRecord>, existing: Vec<IndexToolEntry
 // Resource Record - MCP Resource metadata
 // =============================================================================
 
-/// Represents a discovered MCP Resource from @skill_resource decorated functions.
+/// Represents a discovered MCP Resource from @`skill_resource` decorated functions.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ResourceRecord {
     /// Resource name (from decorator or function name).
     pub name: String,
     /// Human-readable description of the resource.
     pub description: String,
-    /// Full resource URI (e.g., "omni://skill/knowledge/graph_stats").
+    /// Full resource URI (e.g., `<omni://skill/knowledge/graph_stats>`).
     pub resource_uri: String,
     /// MIME type of the resource content.
     pub mime_type: String,
@@ -1082,8 +1073,9 @@ pub struct ResourceRecord {
 }
 
 impl ResourceRecord {
-    /// Create a new ResourceRecord.
+    /// Create a new `ResourceRecord`.
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: String,
         description: String,
@@ -1132,7 +1124,7 @@ pub struct PromptRecord {
 }
 
 impl PromptRecord {
-    /// Create a new PromptRecord.
+    /// Create a new `PromptRecord`.
     #[must_use]
     pub fn new(
         name: String,

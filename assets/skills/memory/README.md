@@ -96,7 +96,7 @@ await memory.search_memory(query, limit)
 
 ## Path Configuration
 
-**settings.yaml:**
+**Merged settings** (packages/conf/settings.yaml + user):
 
 ```yaml
 memory:

@@ -397,4 +397,4 @@ After:  User: "rename txt to md" → batch_rename (Expert)
 - [OmniCell](../omni-cell.md) - Generalist execution engine
 - [Skill Standard](../../human/architecture/skill-standard.md) - Skill interface definition
 - [Router](../../architecture/router.md) - Skill routing system
-- [Memory Mesh](../memory-mesh.md) - Episodic memory integration
+- [Memory Mesh](memory-mesh.md) - Episodic memory integration

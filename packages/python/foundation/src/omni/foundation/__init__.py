@@ -28,7 +28,6 @@ _runtime_module = None
 _config_module = None
 _checkpoint_module = None
 _rag_module = None
-_embedding_server_module = None
 _embedding_client_module = None
 
 
@@ -43,7 +42,6 @@ def __getattr__(name: str):
         _config_module, \
         _checkpoint_module, \
         _rag_module, \
-        _embedding_server_module, \
         _embedding_client_module
 
     if name == "__version__":
@@ -226,21 +224,11 @@ def __getattr__(name: str):
         "KnowledgeGraphStore",
         "get_graph_extractor",
         "get_graph_store",
+        "extract_pdf_images",
     ):
         if _rag_module is None:
             _rag_module = __import__("omni.rag", fromlist=[""])
         return getattr(_rag_module, name)
-
-    # Lazy load embedding_server module
-    if name in (
-        "EmbeddingHTTPServer",
-        "get_embedding_server",
-        "start_embedding_server",
-        "stop_embedding_server",
-    ):
-        if _embedding_server_module is None:
-            _embedding_server_module = __import__("omni.foundation.embedding_server", fromlist=[""])
-        return getattr(_embedding_server_module, name)
 
     # Lazy load embedding_client module
     if name in (

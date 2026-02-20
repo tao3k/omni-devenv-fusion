@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "algorithm": "sha256",
+  "entries": [
+    {
+      "path": "packages/rust/crates/omni-agent/src/contracts/memory_gate.rs",
+      "sha256": "c977601226ad6b8ac8c4692a48cd3513debe50c37e1770a3bb804d3b448f4fc7"
+    },
+    {
+      "path": "packages/rust/crates/omni-agent/src/contracts/omega.rs",
+      "sha256": "4bae537923badc069192833cc9b54c26297f7171ee5f5b64622d7bd7408d1fa8"
+    },
+    {
+      "path": "packages/rust/crates/xiuxian-qianhuan/src/contracts/block.rs",
+      "sha256": "6105af0955b83add585a75df277c908d5c75fe52ea988df55fe1a0fcc081eee3"
+    },
+    {
+      "path": "packages/rust/crates/xiuxian-qianhuan/src/contracts/policy.rs",
+      "sha256": "943539fefce10200c41334d7cbe286772972b784172f7793c8eeaa44093daa6e"
+    },
+    {
+      "path": "packages/rust/crates/xiuxian-qianhuan/src/contracts/snapshot.rs",
+      "sha256": "42ea11764fb1dbd1354be6860badb9147e9b1991c45048e3596d4887b9d1c956"
+    },
+    {
+      "path": "packages/shared/schemas/omni.agent.route_trace.v1.schema.json",
+      "sha256": "3c66f615416c930eef8821421de5804b4cb3608fd8c214007dccdfa352c49733"
+    },
+    {
+      "path": "packages/shared/schemas/omni.discover.match.v1.schema.json",
+      "sha256": "210af4fba14c82104adc9a1967304422ae3713afcbc9083e30b7c5a04c78d590"
+    },
+    {
+      "path": "packages/shared/schemas/omni.memory.gate_event.v1.schema.json",
+      "sha256": "d6f2536561b839a46eb2853e29844ae2bb9ce9258e29239d7cedf8bc66eb2a8c"
+    }
+  ]
+}

@@ -9,6 +9,7 @@ import socket
 
 import httpx
 import pytest
+import pytest_asyncio
 from mcp.types import JSONRPCRequest, JSONRPCResponse
 
 from omni.mcp.transport.sse import SSEServer
@@ -61,7 +62,7 @@ def handler():
     return MockRequestHandler()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sse_server(handler):
     """Create and start SSE server for testing."""
     port = get_unused_port()
@@ -96,6 +97,8 @@ class TestSSEHealthEndpoints:
             data = response.json()
             assert data["status"] == "healthy"
             assert "active_sessions" in data
+            assert data["ready"] is True
+            assert data["initializing"] is False
 
     @pytest.mark.asyncio
     async def test_ready_endpoint(self, sse_server):

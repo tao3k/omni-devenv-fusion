@@ -15,19 +15,40 @@ Module Structure:
 
 from __future__ import annotations
 
-import importlib
-import inspect
-import sys
-from collections.abc import Callable
+import time
 from pathlib import Path
-from typing import Any, override
+from typing import TYPE_CHECKING, Any
 
 from omni.foundation.config.logging import get_logger
 
+from .tools_loader_index import build_rust_command_index
+from .tools_loader_paths import (
+    cleanup_namespace_paths,
+    iter_script_files,
+    prepare_namespace_paths,
+    scripts_pkg_for_file,
+)
+from .tools_loader_script_loading import load_script
+from .tools_loader_validation import register_command_for_validation
+from .tools_loader_variants import load_variants
+
 logger = get_logger("omni.core.tools_loader")
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # Storage for decorator registration - populated by framework
 _skill_command_registry: dict[str, dict[str, Any]] = {}
+
+
+def _record_phase(phase: str, duration_ms: float, **extra: Any) -> None:
+    """Record monitor phase when skills monitor is active."""
+    try:
+        from omni.foundation.runtime.skills_monitor import record_phase
+
+        record_phase(phase, duration_ms, **extra)
+    except Exception:
+        pass
 
 
 class ToolsLoader:
@@ -48,11 +69,42 @@ class ToolsLoader:
         self.variant_commands: dict[str, dict[str, Callable]] = {}  # command -> {variant -> func}
         self.native_functions: dict[str, Callable] = {}  # Native functions without decorator
         self._context: dict[str, Any] = {}
+        self._command_index: dict[str, list[Path]] | None = None
+        self.allow_module_reuse = False
 
     def inject(self, key: str, value: Any) -> None:
         """Inject a dependency (e.g., Rust accelerator) into script context."""
         self._context[key] = value
         logger.debug(f"[{self.skill_name}] Injected context: {key}")
+
+    def set_allow_module_reuse(self, enabled: bool) -> None:
+        """Enable/disable module reuse when scripts are reloaded in same process."""
+        self.allow_module_reuse = bool(enabled)
+
+    def _prepare_namespace_paths(self) -> tuple[list[str], str]:
+        """Prepare sys.path for namespace-package script loading."""
+        return prepare_namespace_paths(self.scripts_path, self.skill_name)
+
+    def _cleanup_namespace_paths(self, paths_added: list[str]) -> None:
+        """Remove sys.path entries added by _prepare_namespace_paths()."""
+        cleanup_namespace_paths(paths_added)
+
+    def _iter_script_files(self) -> list[Path]:
+        """Return all script files in deterministic dependency-friendly order."""
+        return iter_script_files(self.scripts_path)
+
+    def _build_command_index(self) -> dict[str, list[Path]]:
+        """Build command->script index from Rust scanner (single source of truth)."""
+        if self._command_index is not None:
+            return self._command_index
+
+        index = build_rust_command_index(self.skill_name, self.scripts_path)
+        self._command_index = index
+        return index
+
+    def _scripts_pkg_for_file(self, py_file: Path, full_scripts_pkg: str) -> str:
+        """Compute scripts package path for one file."""
+        return scripts_pkg_for_file(py_file, self.scripts_path, full_scripts_pkg)
 
     def _register_for_validation(self, full_name: str, cmd: Callable) -> None:
         """Register a command's config in the validation registry for fast-fail validation.
@@ -61,15 +113,7 @@ class ToolsLoader:
             full_name: Full command name (e.g., 'knowledge.ingest_document')
             cmd: The command function with _skill_config attached
         """
-        try:
-            from omni.core.skills.validation import register_skill_command
-
-            config = getattr(cmd, "_skill_config", None)
-            if config and isinstance(config, dict):
-                register_skill_command(full_name, config)
-        except Exception:
-            # Validation module may not be available - silent fail is OK
-            pass
+        register_command_for_validation(full_name, cmd)
 
     def load_all(self) -> None:
         """Load all scripts and register commands.
@@ -88,167 +132,106 @@ class ToolsLoader:
             logger.debug(f"Scripts path does not exist: {self.scripts_path}")
             return
 
-        # PEP 420: Add parent of skill root to sys.path for namespace package resolution
-        # This allows 'from git.scripts.commit_state import ...' to work
-        # For real skills: assets/skills/git/scripts -> parent is assets/skills
-        # For tests: tmp/scripted_skill/scripts -> parent is tmp
-        skill_root = self.scripts_path.parent
-        parent_of_skill = str(skill_root.parent)
-
-        paths_added: list[str] = []
-        if parent_of_skill not in sys.path:
-            sys.path.insert(0, parent_of_skill)
-            paths_added.append(parent_of_skill)
-
-        # Also ensure the skill_root itself is accessible
-        if str(skill_root) not in sys.path:
-            sys.path.insert(0, str(skill_root))
-            paths_added.append(str(skill_root))
-
-        # Full module path for this skill's scripts (e.g., "git.scripts")
-        full_scripts_pkg = f"{self.skill_name}.scripts"
-
-        # Ensure scripts_path is in sys.path for sibling imports
-        # This is critical for 'from git.scripts.commit_state import ...' to work
-        scripts_path_str = str(self.scripts_path)
-        if scripts_path_str not in sys.path:
-            sys.path.insert(0, scripts_path_str)
-            paths_added.append(scripts_path_str)
+        self._command_index = None
+        paths_added, full_scripts_pkg = self._prepare_namespace_paths()
 
         try:
-            # Collect all files first
-            all_files: list[Path] = []
-            for py_file in self.scripts_path.rglob("*.py"):
-                if py_file.name == "__init__.py":
-                    continue
-                all_files.append(py_file)
-
-            # Separate underscore and non-underscore files
-            # Load non-underscore files first, then underscore files
-            non_underscore_files = [f for f in all_files if not f.stem.startswith("_")]
-            underscore_files = [f for f in all_files if f.stem.startswith("_")]
-
-            # Sort by path depth (shallower first) then alphabetically
-            # This ensures base modules load before modules that depend on them
-            def depth_then_name(p: Path) -> tuple[int, str]:
-                return (len(p.relative_to(self.scripts_path).parts), str(p))
-
-            non_underscore_files.sort(key=depth_then_name)
-            underscore_files.sort(key=depth_then_name)
-
-            # Load in order: non-underscore first, then underscore
-            ordered_files = non_underscore_files + underscore_files
-
-            for py_file in ordered_files:
-                # Calculate relative package name for subdirectories
-                rel_path = py_file.relative_to(self.scripts_path)
-                pkg_parts = list(rel_path.parent.parts)
-                pkg_suffix = ".".join(pkg_parts)
-                current_pkg = f"{full_scripts_pkg}.{pkg_suffix}" if pkg_suffix else full_scripts_pkg
-
-                self._load_script(py_file, current_pkg)
+            for py_file in self._iter_script_files():
+                load_script(
+                    py_file,
+                    self._scripts_pkg_for_file(py_file, full_scripts_pkg),
+                    skill_name=self.skill_name,
+                    scripts_path=self.scripts_path,
+                    context=self._context,
+                    commands=self.commands,
+                    logger=logger,
+                    allow_module_reuse=self.allow_module_reuse,
+                )
 
             logger.debug(f"[{self.skill_name}] {len(self.commands)} commands")
 
-            # Load variant implementations
-            self._load_variants(full_scripts_pkg)
+            load_variants(
+                scripts_path=self.scripts_path,
+                scripts_pkg=full_scripts_pkg,
+                skill_name=self.skill_name,
+                variants_dir=self.VARIANTS_DIR,
+                context=self._context,
+                variant_commands=self.variant_commands,
+                logger=logger,
+            )
 
         finally:
-            # Clean up sys.path
-            for path in paths_added:
-                if path in sys.path:
-                    sys.path.remove(path)
+            self._cleanup_namespace_paths(paths_added)
 
-    def _load_script(self, path: Path, scripts_pkg: str) -> None:
-        """Load a single script file using a robust modular strategy."""
-        import importlib.util
-        import types
+    def load_command(self, command_name: str) -> bool:
+        """Load only modules needed by one command (best effort).
 
-        module_name = path.stem
-        # Construct the full internal package path, e.g. "skill.scripts.subdir.module"
-        full_module_name = f"{scripts_pkg}.{module_name}"
+        Returns:
+            True if the command is available after targeted load, else False.
+        """
+        if not self.scripts_path.exists():
+            logger.debug(f"Scripts path does not exist: {self.scripts_path}")
+            return False
 
+        target = command_name.strip()
+        skill_prefix = f"{self.skill_name}."
+        if target.startswith(skill_prefix):
+            target = target[len(skill_prefix) :]
+        if not target:
+            return False
+
+        self._command_index = None
+        paths_added, full_scripts_pkg = self._prepare_namespace_paths()
+        loaded_files = 0
         try:
-            # 1. Ensure the parent packages exist in sys.modules (Fundamental Fix)
-            # This is required for relative imports to work in PEP 420 namespace packages.
-            parts = full_module_name.split(".")
-            scripts_path_str = str(self.scripts_path)
+            index = self._build_command_index()
+            candidates = index.get(target, [])
+            if not candidates:
+                logger.debug(
+                    f"[{self.skill_name}] Targeted load missed: no Rust record for {target}"
+                )
+                return False
 
-            for i in range(1, len(parts)):
-                parent_pkg = ".".join(parts[:i])
-                # Calculate the path for this parent package
-                # e.g., "code_tools.scripts.smart_ast" -> scripts_path / "smart_ast"
-                # Note: parts[1] is 'scripts' which is already in scripts_path_str
-                # so we start from parts[2] (the first subdirectory after scripts)
-                parent_parts = parts[2:i]  # Skip skill_name and 'scripts'
-                if parent_parts:
-                    parent_path = scripts_path_str
-                    for part in parent_parts:
-                        parent_path = str(Path(parent_path) / part)
-                else:
-                    parent_path = scripts_path_str
-
-                if parent_pkg not in sys.modules:
-                    # Create a dummy namespace package with correct path
-                    m = types.ModuleType(parent_pkg)
-                    m.__path__ = [parent_path]
-                    sys.modules[parent_pkg] = m
-                else:
-                    # Update existing package's __path__ to include the correct directory
-                    parent_mod = sys.modules[parent_pkg]
-                    if hasattr(parent_mod, "__path__") and parent_path not in parent_mod.__path__:
-                        parent_mod.__path__.append(parent_path)
-
-            # 2. Load the actual module
-            spec = importlib.util.spec_from_file_location(full_module_name, path)
-            if not (spec and spec.loader):
-                return
-
-            module = importlib.util.module_from_spec(spec)
-
-            # 3. Critical Metadata for Relative Imports
-            module.__package__ = ".".join(parts[:-1])
-
-            # 4. Inject Search Path for sibling discovery
-            script_dir = str(path.parent)
-            if script_dir not in sys.path:
-                sys.path.insert(0, script_dir)
-
-            sys.modules[full_module_name] = module
-
-            # 5. Inject Foundation Context
-            for key, value in self._context.items():
-                setattr(module, key, value)
-            module.skill_name = self.skill_name
-
-            # 6. Execute
-            spec.loader.exec_module(module)
-
-            # 7. Harvest @skill_command functions
-            count = 0
-            for attr_name in dir(module):
-                if attr_name.startswith("_"):
+            seen: set[Path] = set()
+            ordered: list[Path] = []
+            for py_file in candidates:
+                if py_file in seen:
                     continue
-                attr = getattr(module, attr_name)
+                seen.add(py_file)
+                ordered.append(py_file)
 
-                if hasattr(attr, "_is_skill_command") and attr._is_skill_command:
-                    config = getattr(attr, "_skill_config", {})
-                    cmd_name = (
-                        config.get("name") if config else getattr(attr, "_command_name", attr_name)
-                    )
+            for py_file in ordered:
+                module_started = time.perf_counter()
+                loaded_count, reused = load_script(
+                    py_file,
+                    self._scripts_pkg_for_file(py_file, full_scripts_pkg),
+                    skill_name=self.skill_name,
+                    scripts_path=self.scripts_path,
+                    context=self._context,
+                    commands=self.commands,
+                    logger=logger,
+                    allow_module_reuse=self.allow_module_reuse,
+                )
+                _record_phase(
+                    "runner.fast.load.module",
+                    (time.perf_counter() - module_started) * 1000,
+                    skill=self.skill_name,
+                    module=str(py_file.name),
+                    command_count=loaded_count,
+                    reused=reused,
+                    target=target,
+                )
+                loaded_files += 1
 
-                    full_name = f"{self.skill_name}.{cmd_name}"
-                    self.commands[full_name] = attr
-                    count += 1
-
-            if count > 0:
-                logger.debug(f"[{self.skill_name}] Modular load success: {full_name}")
-
-        except Exception as e:
-            logger.debug(f"[{self.skill_name}] Modular load failed for {path}: {e}")
-            # Clean up if failed to prevent poisoned imports
-            if full_module_name in sys.modules:
-                del sys.modules[full_module_name]
+            full_name = f"{self.skill_name}.{target}"
+            found = full_name in self.commands or target in self.commands
+            logger.debug(
+                f"[{self.skill_name}] Targeted load {'hit' if found else 'miss'}: "
+                f"target={target} files={loaded_files} commands={len(self.commands)}"
+            )
+            return found
+        finally:
+            self._cleanup_namespace_paths(paths_added)
 
     def get_command(self, full_name: str) -> Callable | None:
         """Get a command by its full name (e.g., 'git.status').
@@ -296,126 +279,6 @@ class ToolsLoader:
         if command_name not in self.variant_commands:
             return None
         return self.variant_commands[command_name].get(variant_name)
-
-    def _load_variants(self, scripts_pkg: str) -> None:
-        """Load variant implementations from variants/ directory.
-
-        Expected structure:
-        scripts/
-            variants/
-                <command_name>/
-                    <variant_name>.py
-
-        Example:
-        scripts/variants/code_search/rust.py
-        scripts/variants/code_search/local.py
-        """
-        variants_path = self.scripts_path / self.VARIANTS_DIR
-        if not variants_path.exists():
-            logger.debug(f"[{self.skill_name}] No variants directory found: {variants_path}")
-            return
-
-        # Find all variant directories
-        for command_dir in variants_path.iterdir():
-            if not command_dir.is_dir():
-                continue
-
-            command_name = command_dir.name
-            if command_name.startswith("_"):
-                continue
-
-            # Find variant implementations
-            for variant_file in command_dir.glob("*.py"):
-                if variant_file.stem.startswith("_"):
-                    continue
-
-                variant_name = variant_file.stem
-                module_name = f"{command_name}_{variant_name}"
-                full_module_name = (
-                    f"{scripts_pkg}.{self.VARIANTS_DIR}.{command_dir.name}.{variant_file.stem}"
-                )
-
-                try:
-                    self._load_variant_script(
-                        variant_file,
-                        scripts_pkg,
-                        command_name,
-                        variant_name,
-                        module_name,
-                        full_module_name,
-                    )
-                except Exception as e:
-                    logger.debug(
-                        f"[{self.skill_name}] Failed to load variant {command_name}/{variant_name}: {e}"
-                    )
-
-        logger.debug(
-            f"[{self.skill_name}] Loaded {sum(len(v) for v in self.variant_commands.values())} variants"
-        )
-
-    def _load_variant_script(
-        self,
-        path: Path,
-        scripts_pkg: str,
-        command_name: str,
-        variant_name: str,
-        module_name: str,
-        full_module_name: str,
-    ) -> None:
-        """Load a single variant script."""
-        import importlib.util
-        import types
-
-        try:
-            # Ensure parent package exists
-            parent_pkg = f"{scripts_pkg}.{self.VARIANTS_DIR}.{path.parent.name}"
-            if parent_pkg not in sys.modules:
-                m = types.ModuleType(parent_pkg)
-                m.__path__ = [str(path.parent)]
-                sys.modules[parent_pkg] = m
-
-            # Load the module
-            spec = importlib.util.spec_from_file_location(full_module_name, path)
-            if not (spec and spec.loader):
-                return
-
-            module = importlib.util.module_from_spec(spec)
-            module.__package__ = scripts_pkg
-
-            # Inject context
-            for key, value in self._context.items():
-                setattr(module, key, value)
-            module.skill_name = self.skill_name
-
-            # Execute
-            sys.modules[full_module_name] = module
-            spec.loader.exec_module(module)
-
-            # Harvest @skill_command functions
-            for attr_name in dir(module):
-                if attr_name.startswith("_"):
-                    continue
-                attr = getattr(module, attr_name)
-
-                if hasattr(attr, "_is_skill_command") and attr._is_skill_command:
-                    config = getattr(attr, "_skill_config", {})
-                    config["variant"] = variant_name
-                    config["variant_source"] = str(path)
-
-                    # Store in variant_commands
-                    if command_name not in self.variant_commands:
-                        self.variant_commands[command_name] = {}
-
-                    full_name = f"{self.skill_name}.{command_name}.{variant_name}"
-                    self.variant_commands[command_name][variant_name] = attr
-                    logger.debug(
-                        f"[{self.skill_name}] Loaded variant: {command_name}/{variant_name}"
-                    )
-
-        except Exception as e:
-            logger.debug(f"[{self.skill_name}] Failed to load variant script {path}: {e}")
-            if full_module_name in sys.modules:
-                del sys.modules[full_module_name]
 
     def __len__(self) -> int:
         return len(self.commands)

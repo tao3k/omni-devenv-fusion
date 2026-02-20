@@ -30,7 +30,7 @@ use walkdir::WalkDir;
 pub struct SnifferRule {
     /// Unique identifier for this context (e.g., "python", "rust", "nodejs")
     pub id: String,
-    /// Glob patterns to match (e.g., ["*.py", "pyproject.toml", "setup.py"])
+    /// Glob patterns to match (e.g., `["*.py", "pyproject.toml", "setup.py"]`)
     pub patterns: Vec<String>,
     /// Weight for scoring (higher = more specific)
     pub weight: f32,
@@ -71,7 +71,7 @@ where
     }
 }
 
-/// High-performance sniffer engine using compiled GlobSet.
+/// High-performance sniffer engine using compiled `GlobSet`.
 ///
 /// # Performance
 ///
@@ -114,13 +114,15 @@ impl SnifferEngine {
         let mut rule_weights = Vec::new();
 
         // Collect all patterns from all rules
-        for rule in &rules {
-            for pattern in &rule.patterns {
+        for rule in rules {
+            let rule_id = rule.id;
+            let weight = rule.weight;
+            for pattern in rule.patterns {
                 // Add pattern to DFA builder
-                builder.add(Glob::new(pattern)?);
+                builder.add(Glob::new(&pattern)?);
                 // Record which rule this pattern belongs to
-                pattern_to_rule.push(rule.id.clone());
-                rule_weights.push(rule.weight);
+                pattern_to_rule.push(rule_id.clone());
+                rule_weights.push(weight);
             }
         }
 
@@ -135,6 +137,10 @@ impl SnifferEngine {
     /// Create from pre-serialized rules (JSON).
     ///
     /// Useful for loading rules from a database or file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if JSON is invalid or rule compilation fails.
     pub fn from_json(json: &str) -> Result<Self> {
         let rules: Vec<SnifferRule> = serde_json::from_str(json)?;
         Self::new(rules)
@@ -142,12 +148,14 @@ impl SnifferEngine {
 
     /// Get the number of compiled patterns.
     #[inline]
+    #[must_use]
     pub fn pattern_count(&self) -> usize {
         self.pattern_to_rule.len()
     }
 
     /// Get the number of unique context IDs.
     #[inline]
+    #[must_use]
     pub fn context_count(&self) -> usize {
         let mut unique = HashSet::new();
         for id in &self.pattern_to_rule {
@@ -160,6 +168,7 @@ impl SnifferEngine {
     ///
     /// Returns context IDs that match this file.
     #[inline]
+    #[must_use]
     pub fn sniff_file(&self, relative_path: &str) -> Vec<String> {
         let matches = self.glob_set.matches(relative_path);
         let mut detected: Vec<String> = Vec::with_capacity(matches.len());
@@ -178,8 +187,9 @@ impl SnifferEngine {
 
     /// Sniff a single file with weights (for scoring).
     ///
-    /// Returns (context_id, weight) pairs for matched contexts.
+    /// Returns (`context_id`, weight) pairs for matched contexts.
     #[inline]
+    #[must_use]
     pub fn sniff_file_with_weights(&self, relative_path: &str) -> Vec<(String, f32)> {
         let matches = self.glob_set.matches(relative_path);
         let mut detected: Vec<(String, f32)> = Vec::with_capacity(matches.len());
@@ -195,14 +205,10 @@ impl SnifferEngine {
         detected.sort_by(|a, b| a.0.cmp(&b.0));
         let mut result: Vec<(String, f32)> = Vec::new();
         for (id, weight) in detected {
-            if result
-                .last()
-                .map(|(last_id, _)| *last_id != id)
-                .unwrap_or(true)
-            {
+            if result.last().is_none_or(|(last_id, _)| *last_id != id) {
                 result.push((id, weight));
             } else if let Some((_, last_weight)) = result.last_mut() {
-                *last_weight = (*last_weight + weight) / 2.0;
+                *last_weight = f32::midpoint(*last_weight, weight);
             }
         }
 
@@ -222,6 +228,7 @@ impl SnifferEngine {
     /// # Returns
     ///
     /// Vector of unique context IDs detected in the directory tree.
+    #[must_use]
     pub fn sniff_path(&self, root_path: &str, max_depth: usize) -> Vec<String> {
         self.sniff_path_with_workers(root_path, max_depth, None)
     }
@@ -237,6 +244,7 @@ impl SnifferEngine {
     /// # Performance
     ///
     /// Uses thread-local collection to avoid lock contention in parallel processing.
+    #[must_use]
     pub fn sniff_path_with_workers(
         &self,
         root_path: &str,
@@ -254,7 +262,7 @@ impl SnifferEngine {
             .follow_links(false)
             .sort_by(|a, b| a.file_name().cmp(b.file_name()))
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|e| e.file_type().is_file())
             .collect();
 
@@ -312,6 +320,7 @@ impl SnifferEngine {
     /// # Performance
     ///
     /// Uses thread-local collection to avoid lock contention in parallel processing.
+    #[must_use]
     pub fn sniff_path_with_scores(&self, root_path: &str, max_depth: usize) -> Vec<(String, f32)> {
         use rayon::prelude::*;
 
@@ -324,7 +333,7 @@ impl SnifferEngine {
         let entries: Vec<_> = WalkDir::new(root)
             .max_depth(max_depth)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|e| e.file_type().is_file())
             .collect();
 
@@ -375,21 +384,23 @@ impl SnifferEngine {
     /// Quick check if any context would be detected in this path.
     ///
     /// Faster than full scan - stops at first match.
+    #[must_use]
     pub fn has_any_context(&self, root_path: &str, max_depth: usize) -> bool {
         let root = Path::new(root_path);
         if !root.exists() || !root.is_dir() {
             return false;
         }
 
-        for entry in WalkDir::new(root).max_depth(max_depth) {
-            if let Ok(entry) = entry {
-                if entry.file_type().is_file() {
-                    if let Ok(relative) = entry.path().strip_prefix(root) {
-                        if self.glob_set.is_match(relative) {
-                            return true;
-                        }
-                    }
-                }
+        for entry in WalkDir::new(root)
+            .max_depth(max_depth)
+            .into_iter()
+            .flatten()
+        {
+            if entry.file_type().is_file()
+                && let Ok(relative) = entry.path().strip_prefix(root)
+                && self.glob_set.is_match(relative)
+            {
+                return true;
             }
         }
 

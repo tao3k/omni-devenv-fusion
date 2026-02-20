@@ -10,7 +10,7 @@ Usage:
     from omni.foundation.config.skills import SKILLS_DIR, load_skill_module
     from omni.foundation.runtime.gitops import get_project_root
 
-    # Get skill directory path from settings.yaml -> assets/skills
+    # Get skill directory path from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) -> assets.skills_dir
     git_path = SKILLS_DIR("git")                   # -> /project/root/assets/skills/git
     git_commands = SKILLS_DIR("git", "scripts/commands.py")  # -> /project/root/assets/skills/git/scripts/commands.py
 
@@ -21,7 +21,7 @@ Usage:
     root = get_project_root()
 
 Settings:
-    Reads from settings.yaml:
+    Reads from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml):
         assets:
           skills_dir: "assets/skills"        # Skills base directory
           definition_file: "SKILL.md"         # Skill definition file (default: SKILL.md)
@@ -33,7 +33,7 @@ from pathlib import Path
 
 
 class _SkillDirCallable:
-    """Callable that returns skill paths based on settings.yaml config.
+    """Callable that returns skill paths based on settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) config.
 
     Usage:
         SKILLS_DIR("git")                           # -> Path("assets/skills/git")
@@ -46,14 +46,14 @@ class _SkillDirCallable:
     _cached_definition_file: str | None = None
 
     def _get_base_path(self) -> Path:
-        """Get the base skills path from settings.yaml (assets.skills_dir)."""
+        """Get the base skills path from settings (assets.skills_dir)."""
         if self._cached_base_path is not None:
             return self._cached_base_path
 
         try:
             from omni.foundation.config.settings import get_setting
 
-            # Read from settings.yaml -> assets.skills_dir
+            # Read from settings -> assets.skills_dir
             skills_path_str = get_setting("assets.skills_dir")
             if skills_path_str:
                 self._cached_base_path = Path(skills_path_str)
@@ -66,14 +66,14 @@ class _SkillDirCallable:
         return self._cached_base_path
 
     def _get_definition_file(self) -> str:
-        """Get the definition file name from settings.yaml (assets.definition_file)."""
+        """Get the definition file name from settings (assets.definition_file)."""
         if self._cached_definition_file is not None:
             return self._cached_definition_file
 
         try:
             from omni.foundation.config.settings import get_setting
 
-            # Read from settings.yaml -> assets.definition_file
+            # Read from settings -> assets.definition_file
             definition_file = get_setting("assets.definition_file")
             if definition_file:
                 self._cached_definition_file = definition_file
@@ -135,7 +135,7 @@ class _SkillDirCallable:
         return result
 
     def definition_file(self, skill: str | None = None) -> Path:
-        """Get the definition file path for a skill (from settings.yaml assets.definition_file).
+        """Get the definition file path for a skill (from settings assets.definition_file).
 
         Args:
             skill: Optional skill name. If None, returns just the definition filename.
@@ -282,7 +282,7 @@ class SkillPathBuilder:
     Usage:
         builder = SkillPathBuilder()
         builder.git / "scripts/commands.py"
-        builder.definition("git")  # Uses settings.yaml definition_file
+        builder.definition("git")  # Uses settings definition_file
     """
 
     def __init__(self, project_root: Path | None = None):
@@ -312,7 +312,7 @@ class SkillPathBuilder:
         return self._skills_base / skill_name / filename
 
     def definition(self, skill_name: str) -> Path:
-        """Get the definition file for a skill (uses settings.yaml definition_file)."""
+        """Get the definition file for a skill (uses settings definition_file)."""
         return self._skills_base / skill_name / SKILLS_DIR.definition_file()
 
     def scripts_commands(self, skill_name: str) -> Path:

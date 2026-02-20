@@ -4,7 +4,7 @@
 LLM Inference Module
 
 Modularized for testability.
-Configuration-driven from settings.yaml.
+Configuration-driven from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml).
 
 Modules:
 - client.py: InferenceClient class

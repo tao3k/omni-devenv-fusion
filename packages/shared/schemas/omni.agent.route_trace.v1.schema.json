@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.omni.dev/omni.agent.route_trace.v1.schema.json",
+  "title": "Omni Agent Route Trace v1",
+  "description": "Turn-level route trace contract for Omega governance and observability.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session_id",
+    "turn_id",
+    "selected_route",
+    "confidence",
+    "risk_level",
+    "tool_trust_class"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "turn_id": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "selected_route": {
+      "type": "string",
+      "enum": ["react", "graph"]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "tool_trust_class": {
+      "type": "string",
+      "enum": ["evidence", "verification", "other"]
+    },
+    "fallback_applied": {
+      "type": "boolean"
+    },
+    "fallback_policy": {
+      "type": "string",
+      "enum": ["retry_react", "switch_to_graph", "abort"]
+    },
+    "tool_chain": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "latency_ms": {
+      "type": "number",
+      "minimum": 0.0
+    },
+    "failure_taxonomy": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "injection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "blocks_used": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "chars_injected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dropped_by_budget": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

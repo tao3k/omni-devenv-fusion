@@ -15,8 +15,9 @@ Design Philosophy:
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 # Layer 0: Physical Directory Management
 from .dirs import PRJ_CACHE, PRJ_CONFIG, PRJ_DATA, PRJ_DIRS, PRJ_RUNTIME
@@ -69,8 +70,13 @@ class ConfigPaths:
 
     @property
     def settings_file(self) -> Path:
-        """Main settings file: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml"""
+        """Main general settings file: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml"""
         return PRJ_CONFIG("omni-dev-fusion", "settings.yaml")
+
+    @property
+    def wendao_settings_file(self) -> Path:
+        """LinkGraph/Wendao settings file: $PRJ_CONFIG_HOME/omni-dev-fusion/wendao.yaml"""
+        return PRJ_CONFIG("omni-dev-fusion", "wendao.yaml")
 
     # =============================================================================
     # Vendor Specific (Anthropic / OpenAI / etc)
@@ -81,7 +87,7 @@ class ConfigPaths:
         Get Anthropic settings path from configuration.
 
         Strategy:
-        1. Read `api.anthropic_settings` from settings.yaml
+        1. Read `api.anthropic_settings` from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml)
         2. Resolve relative path against project root
         """
         from .settings import get_setting
@@ -96,7 +102,7 @@ class ConfigPaths:
         Get API base URL.
 
         Priority:
-        1. From settings.yaml -> inference.base_url
+        1. From settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) -> inference.base_url
         2. Environment variable ANTHROPIC_BASE_URL
         3. None (uses default Anthropic API)
         """
@@ -158,13 +164,50 @@ class ConfigPaths:
         return None
 
     def get_mcp_timeout(self, server_name: str | None = None) -> int:
-        """Get MCP timeout in seconds."""
-        default_timeout = 120
+        """Get MCP tool execution timeout in seconds. 0 means no timeout."""
+        from .settings import get_setting
+
+        default_timeout = 1800
         if server_name:
             server_config = self.get_mcp_server_config(server_name)
             if server_config and isinstance(server_config, dict):
-                return server_config.get("timeout", default_timeout)
-        return default_timeout
+                return int(server_config.get("timeout", default_timeout))
+        raw = get_setting("mcp.timeout", default_timeout)
+        if raw is None or (isinstance(raw, (int, float)) and raw <= 0):
+            return 0
+        return int(raw)
+
+    def get_mcp_idle_timeout(self, server_name: str | None = None) -> int:
+        """Get MCP idle timeout in seconds. 0 = only use wall-clock timeout (no heartbeat check).
+
+        Enforces invariant: idle_timeout <= timeout when both > 0 (see docs/reference/mcp-timeout-spec.md).
+        """
+        from .settings import get_setting
+
+        default_idle = 0
+        if server_name:
+            server_config = self.get_mcp_server_config(server_name)
+            if server_config and isinstance(server_config, dict):
+                raw = server_config.get("idle_timeout", default_idle)
+                idle = int(raw) if raw is not None else default_idle
+            else:
+                idle = default_idle
+        else:
+            raw = get_setting("mcp.idle_timeout", default_idle)
+            if raw is None or (isinstance(raw, (int, float)) and raw <= 0):
+                return 0
+            idle = int(raw)
+        # Enforce idle_timeout <= timeout (spec invariant)
+        timeout = self.get_mcp_timeout(server_name)
+        if timeout > 0 and idle > timeout:
+            warnings.warn(
+                f"mcp.idle_timeout ({idle}) > mcp.timeout ({timeout}); clamping to {timeout}. "
+                "See docs/reference/mcp-timeout-spec.md.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return timeout
+        return idle
 
     def get_log_dir(self) -> Path:
         """
@@ -199,6 +242,11 @@ class ConfigPaths:
                 "name": "settings.yaml",
                 "path": str(self.settings_file),
                 "exists": self.settings_file.exists(),
+            },
+            {
+                "name": "wendao.yaml",
+                "path": str(self.wendao_settings_file),
+                "exists": self.wendao_settings_file.exists(),
             },
             {
                 "name": "anthropic_settings",
@@ -273,7 +321,7 @@ class AuthorizationWait:
     3. Rejects any attempt to bypass the confirmation
     """
 
-    _pending: dict[str, dict] = {}
+    _pending: ClassVar[dict[str, dict]] = {}
 
     def __init__(self, auth_token: str, command: str, context: str = ""):
         self.auth_token = auth_token

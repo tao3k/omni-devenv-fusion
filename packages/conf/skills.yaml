@@ -1,0 +1,217 @@
+# packages/conf/skills.yaml
+# Skill Management – loaded and merged under settings "skills.*"
+#
+# User overrides: merge via $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml
+# by adding a "skills:" section there (deep-merge over this file).
+
+# =============================================================================
+# Core Preload (Base Layer) - Loaded in ALL modes
+# =============================================================================
+# Keep this minimal to reduce LLM context noise
+preload:
+  - knowledge
+  - memory
+  - git
+  - code_tools
+  - skill
+
+# =============================================================================
+# CLI / Omni Run Extensions
+# =============================================================================
+# Skills to ADD when running via 'omni run' (CLI mode).
+# This inherits from 'preload' and adds the tools below.
+cli:
+  extend:
+    - writer
+    - testing_protocol
+
+# =============================================================================
+# Filter Commands (Pattern Matching)
+# =============================================================================
+# Use glob patterns to hide tools from the LLM (MCP Server).
+# Syntax:
+#   "pattern"   -> Filter matching commands
+#   "!pattern"  -> Whitelist (Keep these even if they match a filter)
+filter_commands:
+  # --- Terminal: Hide noisy ops, keep safe ones for LLM ---
+  - "_template.*"
+  - "terminal.*" # Filter ALL terminal commands
+  # - "!terminal.run_task"        # Exception: Allow task runner
+
+  # - "!filesystem.apply_changes"  # Exception: Keep batch operations
+
+  # --- Git: Hide raw plumbing commands ---
+  - "git.raw_*" # Hide internal raw commands
+
+# LRU + TTL eviction settings
+ttl:
+  timeout: 1800 # Skill eviction timeout in seconds (30 minutes)
+  check_interval: 300 # TTL cleanup check interval (5 minutes)
+
+max_loaded: 15 # Maximum loaded skills limit
+
+# Reload behavior
+reload:
+  enabled: true
+  auto_confirm: false
+
+# =============================================================================
+# Dynamic Tool Loading Limits
+# =============================================================================
+limits:
+  dynamic_tools: 100 # Max dynamic tools per request
+  core_min: 3 # Minimum guaranteed tools
+  rerank_threshold: 20 # If tools found > this, re-rank by score
+  schema_cache_ttl: 300 # Tool schema cache TTL (seconds)
+  auto_optimize: true # Enable automatic context optimization
+
+# =============================================================================
+# Skill Architecture Standards (ODF-EP v7.0)
+# =============================================================================
+# Defines the canonical structure for all Omni skills.
+# Aligned with Anthropic's Skill Standard but extended for Omni's MCP features.
+# Used by StructureValidator to enforce skill structure integrity.
+
+architecture:
+  version: "v2.0"
+
+  # Source of truth for skill definition
+  definition_file: "SKILL.md"
+
+  # Directory structure specification
+  structure:
+    # Required files for every skill (ODF-EP v7.0 Core)
+    required:
+      # Core definition (Trinity: State)
+      - path: "SKILL.md"
+        description: "Skill metadata (YAML frontmatter) and system prompts"
+        type: "file"
+
+    # Default files/directories (auto-generated if not exists)
+    # Validation ignores these - they can exist or not
+    default:
+      - path: "scripts/"
+        description: "Standalone executables (Python workflows, state management)"
+        type: "dir"
+
+      # Extensions directory: Stateful modules, lifecycle hooks, complex logic (Meta-Agent, Watchers)
+      - path: "extensions/"
+        description: "Internal modules and plugins (Meta-Agent, Factory, Watchers)"
+        type: "dir"
+
+      - path: "templates/"
+        description: "Jinja2 templates for skill output (Cascading loader)"
+        type: "dir"
+
+      - path: "references/"
+        description: "Markdown documentation for RAG ingestion"
+        type: "dir"
+
+      - path: "assets/"
+        description: "Static resources, templates, guides"
+        type: "dir"
+
+      - path: "data/"
+        description: "Data files (JSON, CSV, etc.) for skill operations"
+        type: "dir"
+
+      - path: "tests/"
+        description: "Pytest tests specifically for this skill"
+        type: "dir"
+
+      - path: "repomix.json"
+        description: "Repomix configuration (auto-generated if missing)"
+        type: "file"
+
+      # Sidecar Execution Pattern support
+      - path: "pyproject.toml"
+        description: "Skill dependencies for subprocess mode (crawl4ai, playwright, etc.)"
+        type: "file"
+
+      - path: "README.md"
+        description: "Developer documentation (human-readable, not for LLM)"
+        type: "file"
+
+    # Optional structure examples (for documentation and validation)
+    optional:
+      # Example: Cascading template structure
+      - path: "templates/"
+        description: "Skill-local Jinja2 templates (defaults)"
+        example: |
+          assets/skills/git/templates/
+          ├── commit_message.j2
+          ├── workflow_result.j2
+          └── error_message.j2
+        validation: "Optional - if present, enables cascading template loading"
+
+      # Example: Scripts directory with atomic implementations
+      - path: "scripts/"
+        description: "Atomic implementations (Router-Controller pattern)"
+        example: |
+          assets/skills/git/scripts/
+          ├── __init__.py
+          ├── rendering.py    # Template rendering layer
+          ├── workflow.py     # Git workflow logic
+          └── status.py       # Git status implementation
+        validation: "Optional - recommended for complex skills"
+
+      # Example: User template overrides directory
+      - path: "assets/templates/{skill}/"
+        description: "User-level template overrides (cascading pattern)"
+        example: |
+          assets/templates/git/
+          ├── commit_message.j2  # Overrides skill default
+          └── workflow_result.j2
+        validation: "Optional - if exists, takes precedence over skill defaults"
+
+  # Jinja2 template configuration
+  templates:
+    # Centralized templates directory
+    source_dir: "assets/templates/skill"
+
+    # Auto-generate templates
+    auto_generate:
+      - source: "SKILL.md.j2"
+        target: "SKILL.md"
+      - source: "scripts/commands.py.j2"
+        target: "scripts/commands.py"
+
+  # Validation rules
+  validation:
+    # Block commit if skill structure is invalid
+    block_on_invalid: true
+
+    # Allow non-standard files (warning only)
+    allow_ghost_files: false
+
+    # Disallowed files (must not exist - causes LLM confusion)
+    disallowed_files:
+      - "state.py" # Legacy - inline state in scripts/commands.py
+
+# =============================================================================
+# Configuration-Driven Tool Aliasing (Native Mimicry)
+# =============================================================================
+# Defines how skill commands are presented to Claude (aliasing and behavioral hints).
+# Format:
+#   skill.command:
+#     alias: "native_name"          # Rename the tool (optional)
+#     append_doc: "..."             # Behavioral instructions (optional)
+
+overrides:
+  # Web Fetching - Critical override to prevent curl/wget usage
+  crawl4ai.crawl_url:
+    alias: "webCrawl"
+    append_doc: |
+
+      ## ⚡️ OPERATIONAL RULE
+      - **PRIMARY TOOL**: Use this tool for ALL web content retrieval.
+      - **FORBIDDEN**: Do NOT use `curl`, `wget`, or shell requests.
+      - **OUTPUT**: Returns structured Markdown, optimized for reading.
+
+  # Memory Operations
+  memory.get_memory_stats:
+    alias: "get_memory_stats_rename"
+    append_doc: "\n\nSemantic search across your project's memory/knowledge base."
+  memory.save_memory:
+    alias: "save_memory"
+    append_doc: "\n\nPersist important context for future sessions."

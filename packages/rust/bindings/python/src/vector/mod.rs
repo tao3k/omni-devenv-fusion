@@ -29,7 +29,8 @@ pub use tool_record::PyToolRecord;
 use analytics::{get_all_file_hashes_async, get_analytics_table_async};
 use doc_ops::{
     add_documents_async, add_documents_partitioned_async, add_single_async, delete_async,
-    delete_by_file_path_async, merge_insert_documents_async, replace_documents_async,
+    delete_by_file_path_async, delete_by_metadata_source_async, merge_insert_documents_async,
+    replace_documents_async,
 };
 use search_ops::{
     agentic_search_async, create_index_async, load_tool_registry_async, scan_skill_tools_raw,
@@ -37,12 +38,13 @@ use search_ops::{
     search_tools_ipc_async,
 };
 use store::{
-    create_vector_store, store_add_columns, store_alter_columns, store_analyze_table_health,
-    store_analyze_table_health_ipc, store_auto_index_if_needed, store_check_migrations,
-    store_compact, store_count, store_create_bitmap_index, store_create_btree_index,
-    store_create_hnsw_index, store_create_index_background, store_create_optimal_vector_index,
-    store_drop_columns, store_drop_table, store_get_fragment_stats, store_get_index_cache_stats,
-    store_get_query_metrics, store_get_table_info, store_list_versions, store_migrate, store_new,
+    create_vector_store, evict_store_cache, store_add_columns, store_alter_columns,
+    store_analyze_table_health, store_analyze_table_health_ipc, store_auto_index_if_needed,
+    store_check_migrations, store_compact, store_count, store_create_bitmap_index,
+    store_create_btree_index, store_create_hnsw_index, store_create_index_background,
+    store_create_optimal_vector_index, store_drop_columns, store_drop_table,
+    store_get_fragment_stats, store_get_index_cache_stats, store_get_query_metrics,
+    store_get_table_info, store_list_versions, store_migrate, store_new,
     store_suggest_partition_column,
 };
 
@@ -489,6 +491,19 @@ impl PyVectorStore {
         )
     }
 
+    /// Delete rows whose metadata.source equals or ends with `source`. Returns number deleted.
+    fn delete_by_metadata_source(&self, table_name: String, source: String) -> PyResult<u32> {
+        delete_by_metadata_source_async(
+            &self.path,
+            self.dimension,
+            self.enable_keyword_index,
+            self.index_cache_size_bytes,
+            self.max_cached_tables,
+            &table_name,
+            &source,
+        )
+    }
+
     // -------------------------------------------------------------------------
     // Search Operations
     // -------------------------------------------------------------------------
@@ -687,10 +702,16 @@ impl PyVectorStore {
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
-    fn list_all_tools(&self, table_name: Option<String>) -> PyResult<String> {
+    #[pyo3(signature = (table_name=None, source_filter=None))]
+    fn list_all_tools(
+        &self,
+        table_name: Option<String>,
+        source_filter: Option<String>,
+    ) -> PyResult<String> {
         use tool_ops::list_all_tools_async;
 
         let table_name = table_name.unwrap_or_else(|| "skills".to_string());
+        let sf = source_filter.as_deref();
         list_all_tools_async(
             &self.path,
             self.dimension,
@@ -698,6 +719,7 @@ impl PyVectorStore {
             self.index_cache_size_bytes,
             self.max_cached_tables,
             &table_name,
+            sf,
         )
     }
 
@@ -891,4 +913,13 @@ pub fn create_vector_store_py(
         index_cache_size_bytes,
         max_cached_tables,
     )
+}
+
+/// Evict cached Rust VectorStore instances in thread-local cache.
+///
+/// When path is provided, evicts all cached entries for that path (any dimension/config variant).
+/// When path is None, evicts all cached entries.
+#[pyfunction(name = "evict_vector_store_cache", signature = (path = None))]
+pub fn evict_vector_store_cache_py(path: Option<String>) -> usize {
+    evict_store_cache(path.as_deref())
 }

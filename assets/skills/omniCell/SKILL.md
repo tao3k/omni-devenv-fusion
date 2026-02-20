@@ -8,7 +8,7 @@ metadata:
   routing_keywords:
     - "nushell"
     - "nu"
-    - "execute"
+    - "nuShell"
     - "command"
     - "shell"
     - "terminal"
@@ -29,19 +29,39 @@ metadata:
 
 ## Tools
 
-### `execute`
+### `nuShell`
 
-Executes a command in the system's Nushell environment.
+Universal shell tool - use for ANY terminal command.
 
 **Parameters**:
 
-- `command` (string): The Nushell command.
+- `command` (string): Any terminal command (auto-detects observe vs mutate)
+  - **Examples**: `ls -la`, `cargo test`, `git status`, `npm run build`
   - **Read**: `open config.json` (Returns parsed JSON/Dict directly)
   - **List**: `ls **/*.py | sort-by size` (Returns List[Dict])
   - **Query**: `ps | where cpu > 10`
-- `intent` (string):
-  - `"observe"` (Safe, Read-only. Returns JSON data).
-  - `"mutate"` (Write operations. Returns execution status).
+- `intent` (string, optional): Explicitly force `observe` or `mutate`
+- `chunked` (bool, default `false`): Enable chunked delivery for very large payloads
+- `action` (string, optional): `start` or `batch`
+- `session_id` (string): Required for `action=batch`
+- `batch_index` (int, default `0`): Required batch index for `action=batch`
+- `batch_size` (int, default `28000`): Character window per batch
+
+**Usage**:
+
+```xml
+<tool_call>{"name": "omniCell.nuShell", "arguments": {"command": "cargo test"}}</tool_call>
+```
+
+Chunked mode (large output):
+
+```xml
+<tool_call>{"name":"omniCell.nuShell","arguments":{"command":"ls **/*","chunked":true}}</tool_call>
+```
+
+```xml
+<tool_call>{"name":"omniCell.nuShell","arguments":{"action":"batch","session_id":"abc123","batch_index":1}}</tool_call>
+```
 
 ## Best Practices
 
@@ -49,3 +69,4 @@ Executes a command in the system's Nushell environment.
 2. **Pipelines**: Use Nu pipes (`|`) to filter data _before_ it reaches the LLM context.
    - _Bad_: `ls -R` (returns huge text block)
    - _Good_: `ls **/* | where size > 1mb | to json` (returns clean data)
+3. **Large Output**: For huge results, prefer `chunked=true` and read all `batch_index` values instead of truncating content.

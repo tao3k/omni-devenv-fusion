@@ -1,6 +1,20 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+/// A single document row from a full table scan (id, content, vector, metadata).
+/// Used by omni-memory to load all episodes from LanceDB.
+#[derive(Debug, Clone)]
+pub struct DocumentRow {
+    /// Document identifier.
+    pub id: String,
+    /// Document text content.
+    pub content: String,
+    /// Dense embedding vector.
+    pub vector: Vec<f32>,
+    /// Serialized metadata JSON string.
+    pub metadata: String,
+}
+
 /// Lightweight table metadata for admin and observability APIs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TableInfo {

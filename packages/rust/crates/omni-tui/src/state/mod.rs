@@ -144,7 +144,7 @@ impl ExecutionState {
             self.execution_id = Some(exec_id.to_string());
         }
         if let Some(total) = payload.get("total_tasks").and_then(|v| v.as_u64()) {
-            self.total_tasks = total as usize;
+            self.total_tasks = usize::try_from(total).unwrap_or(usize::MAX);
         }
 
         self.start_time = Some(std::time::Instant::now());
@@ -209,7 +209,7 @@ impl ExecutionState {
                 task.error = Some(error.to_string());
             }
             if let Some(retry) = payload.get("retry_count").and_then(|v| v.as_u64()) {
-                task.retry_count = retry as usize;
+                task.retry_count = usize::try_from(retry).unwrap_or(usize::MAX);
             }
             self.failed_tasks += 1;
             log::info!("Task {} failed", task_id);
@@ -221,7 +221,11 @@ impl ExecutionState {
         if self.total_tasks == 0 {
             0.0
         } else {
-            (self.completed_tasks + self.failed_tasks) as f64 / self.total_tasks as f64
+            let completed = u32::try_from(self.completed_tasks).unwrap_or(u32::MAX);
+            let failed = u32::try_from(self.failed_tasks).unwrap_or(u32::MAX);
+            let total = u32::try_from(self.total_tasks).unwrap_or(u32::MAX);
+
+            f64::from(completed.saturating_add(failed)) / f64::from(total)
         }
     }
 
@@ -258,10 +262,10 @@ impl LogWindow {
     /// Add a log line
     pub fn add_line(&mut self, level: &str, message: &str, timestamp: &str) {
         // Apply filter if set
-        if let Some(ref filter) = self.level_filter {
-            if level != filter {
-                return;
-            }
+        if let Some(ref filter) = self.level_filter
+            && level != filter
+        {
+            return;
         }
 
         let line = format!("[{}] [{}] {}", timestamp, level.to_uppercase(), message);
@@ -493,9 +497,8 @@ impl AppState {
     /// Process events from mpsc channel (non-blocking)
     pub fn process_ipc_events(&mut self) {
         // Take the receiver out to avoid borrow issues, then put it back
-        let receiver = match self.event_receiver.take() {
-            Some(r) => r,
-            None => return,
+        let Some(receiver) = self.event_receiver.take() else {
+            return;
         };
 
         // Non-blocking try_iter to drain the queue every frame
@@ -509,6 +512,7 @@ impl AppState {
 
     /// Reducer: Process SocketEvent and update state
     /// This is the core algorithm for state transitions
+    #[allow(clippy::too_many_lines)]
     fn reduce(&mut self, event: &SocketEvent) {
         log::debug!("Reducing event: {} -> {}", event.source, event.topic);
 
@@ -535,7 +539,7 @@ impl AppState {
                     format!(
                         "ID: {:?}\nTotal Tasks: {}",
                         self.execution_state().and_then(|s| s.execution_id.as_ref()),
-                        self.execution_state().map(|s| s.total_tasks).unwrap_or(0)
+                        self.execution_state().map_or(0, |s| s.total_tasks)
                     ),
                 );
             }
@@ -656,11 +660,11 @@ impl AppState {
                     .get("attempt")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(1);
-                if let Some(state) = self.execution_state_mut() {
-                    if let Some(task) = state.find_task_mut(task_id) {
-                        task.status = TaskStatus::Retry;
-                        task.retry_count = attempt as usize;
-                    }
+                if let Some(state) = self.execution_state_mut()
+                    && let Some(task) = state.find_task_mut(task_id)
+                {
+                    task.status = TaskStatus::Retry;
+                    task.retry_count = usize::try_from(attempt).unwrap_or(usize::MAX);
                 }
                 self.set_status(&format!("Retry task {} (attempt {})", task_id, attempt));
             }
@@ -703,19 +707,43 @@ impl AppState {
         self.process_ipc_events();
 
         // Also process legacy events (for backward compatibility)
-        let received = self.received_events.lock().unwrap();
-        let processed = *self.processed_count.lock().unwrap();
+        let (new_events, new_count) = {
+            let received = match self.received_events.lock() {
+                Ok(guard) => guard,
+                Err(err) => {
+                    log::error!("Failed to lock received_events: {}", err);
+                    return;
+                }
+            };
+            let processed = match self.processed_count.lock() {
+                Ok(guard) => *guard,
+                Err(err) => {
+                    log::error!("Failed to lock processed_count: {}", err);
+                    return;
+                }
+            };
 
-        if processed < received.len() {
-            let new_events: Vec<ReceivedEvent> = received.iter().skip(processed).cloned().collect();
-            let new_count = received.len();
-            drop(received);
-
-            for event in new_events {
-                self.on_socket_event(&event);
+            if processed >= received.len() {
+                return;
             }
 
-            *self.processed_count.lock().unwrap() = new_count;
+            (
+                received.iter().skip(processed).cloned().collect::<Vec<_>>(),
+                received.len(),
+            )
+        };
+
+        for event in new_events {
+            self.on_socket_event(&event);
+        }
+
+        match self.processed_count.lock() {
+            Ok(mut processed) => {
+                *processed = new_count;
+            }
+            Err(err) => {
+                log::error!("Failed to update processed_count: {}", err);
+            }
         }
     }
 
@@ -751,10 +779,16 @@ impl AppState {
                 payload: event.payload,
                 timestamp: event.timestamp,
             };
-            let mut events = received_events.lock().unwrap();
-            events.push(received);
-            if events.len() > 100 {
-                events.remove(0);
+            match received_events.lock() {
+                Ok(mut events) => {
+                    events.push(received);
+                    if events.len() > 100 {
+                        events.remove(0);
+                    }
+                }
+                Err(err) => {
+                    log::error!("Failed to lock received_events in socket callback: {}", err);
+                }
             }
         }));
 
@@ -774,15 +808,18 @@ impl AppState {
 
     /// Get received events
     pub fn received_events(&self) -> Vec<ReceivedEvent> {
-        let events = self.received_events.lock().unwrap();
-        events.clone()
+        match self.received_events.lock() {
+            Ok(events) => events.clone(),
+            Err(err) => {
+                log::error!("Failed to lock received_events: {}", err);
+                Vec::new()
+            }
+        }
     }
 
     /// Check if socket server is running
     pub fn is_socket_running(&self) -> bool {
-        self.socket_server
-            .as_ref()
-            .map_or(false, |s| s.is_running())
+        self.socket_server.as_ref().is_some_and(|s| s.is_running())
     }
 
     /// Handle socket event - update UI based on topic

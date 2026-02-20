@@ -40,7 +40,7 @@ class TestSmartCommitWorkflowModular:
         # Direct call to get result dict for easier ID extraction
         from git.scripts.smart_commit_graphflow.commands import _start_smart_commit_async
 
-        start_result = await _start_smart_commit_async()
+        start_result = await _start_smart_commit_async(project_root=str(temp_git_repo))
         workflow_id = start_result.get("workflow_id")
         assert workflow_id
 
@@ -50,7 +50,7 @@ class TestSmartCommitWorkflowModular:
             "smart_commit",
             action="approve",
             workflow_id=workflow_id,
-            message="feat: test commit",
+            message="feat(core): test commit",
         )
 
         assert approve_result.success
@@ -60,19 +60,17 @@ class TestSmartCommitWorkflowModular:
 
     async def test_security_scan_detects_secrets(self, skill_tester, temp_git_repo, monkeypatch):
         """Test that security scan detects sensitive files."""
+        from git.scripts.smart_commit_graphflow._enums import SmartCommitStatus
+        from git.scripts.smart_commit_graphflow.commands import _start_smart_commit_async
+
         monkeypatch.chdir(temp_git_repo)
 
         # Create a sensitive file
         (temp_git_repo / ".env").write_text("SECRET=123")
 
-        result = await skill_tester.run("git", "smart_commit", action="start")
-
-        assert result.success
-        output = result.output
-
-        # Verify security issue detected in rendered output
-        assert "Security Issue Detected" in str(output)
-        assert ".env" in str(output)
+        result = await _start_smart_commit_async(project_root=str(temp_git_repo))
+        assert result.get("status") == SmartCommitStatus.SECURITY_VIOLATION
+        assert ".env" in result.get("security_issues", [])
 
     def _create_failing_lefthook(self, repo_path):
         """Helper to create failing lefthook config."""
@@ -89,6 +87,9 @@ pre-commit:
 
     async def test_lefthook_failure(self, skill_tester, temp_git_repo, monkeypatch):
         """Test handling of lefthook failures."""
+        from git.scripts.smart_commit_graphflow._enums import SmartCommitStatus
+        from git.scripts.smart_commit_graphflow.commands import _start_smart_commit_async
+
         if not shutil.which("lefthook"):
             pytest.skip("lefthook not installed")
 
@@ -97,11 +98,9 @@ pre-commit:
 
         (temp_git_repo / "test.txt").write_text("content")
 
-        result = await skill_tester.run("git", "smart_commit", action="start")
-
-        # Should report error
-        assert result.success
-        assert "Lefthook Pre-commit Failed" in str(result.output)
+        result = await _start_smart_commit_async(project_root=str(temp_git_repo))
+        assert result.get("status") == SmartCommitStatus.LEFTHOOK_FAILED
+        assert result.get("error")
 
     async def test_visualize_workflow(self, skill_tester):
         """Test visualization command."""
@@ -132,10 +131,14 @@ pre-commit:
         python_file = temp_git_repo / "test_file.py"
         python_file.write_text("# Original content\nx = 1\n")
 
-        subprocess.run(["git", "add", "test_file.py"], capture_output=True)
+        subprocess.run(
+            ["git", "add", "test_file.py"],
+            capture_output=True,
+            cwd=temp_git_repo,
+        )
 
         # 2. Start workflow
-        start_result = await _start_smart_commit_async()
+        start_result = await _start_smart_commit_async(project_root=str(temp_git_repo))
         workflow_id = start_result.get("workflow_id")
         assert workflow_id is not None
         assert "test_file.py" in start_result.get("staged_files", [])
@@ -192,10 +195,12 @@ pre-commit:
         result = subprocess.run(
             ["git", "config", "user.email", "test@test.com"],
             capture_output=True,
+            cwd=temp_git_repo,
         )
         result = subprocess.run(
             ["git", "config", "user.name", "Test"],
             capture_output=True,
+            cwd=temp_git_repo,
         )
 
         # Create a Rust file with specific import order (unformatted)
@@ -203,7 +208,11 @@ pre-commit:
         rust_file.write_text("use serde_json::{Value, json};\n\npub fn test() {}\n")
 
         # Stage the file
-        subprocess.run(["git", "add", "lib.rs"], capture_output=True)
+        subprocess.run(
+            ["git", "add", "lib.rs"],
+            capture_output=True,
+            cwd=temp_git_repo,
+        )
 
         # Get staged files before cargo fmt
         result = subprocess.run(
@@ -279,14 +288,22 @@ pre-commit:
         monkeypatch.chdir(temp_git_repo)
 
         # Setup git config
-        subprocess.run(["git", "config", "user.email", "test@test.com"], capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            capture_output=True,
+            cwd=temp_git_repo,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            capture_output=True,
+            cwd=temp_git_repo,
+        )
 
         # Create a lefthook that modifies files (like cargo fmt)
         lefthook_script = temp_git_repo / "lefthook_fmt.sh"
         lefthook_script.write_text("""#!/bin/bash
 # Reorder imports alphabetically (json before Value)
-sed -i '' 's/Value, json/json, Value/' lib.rs
+perl -0777 -i -pe 's/Value, json/json, Value/g' lib.rs
 exit 0
 """)
         lefthook_script.chmod(0o755)
@@ -302,17 +319,29 @@ pre-commit:
         rust_file = temp_git_repo / "lib.rs"
         rust_file.write_text("use serde::{Value, json};\n\npub fn test() {}\n")
 
-        subprocess.run(["git", "add", "lib.rs"], capture_output=True)
-        subprocess.run(["git", "commit", "-m", "initial"], capture_output=True)
+        subprocess.run(
+            ["git", "add", "lib.rs"],
+            capture_output=True,
+            cwd=temp_git_repo,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "initial"],
+            capture_output=True,
+            cwd=temp_git_repo,
+        )
 
         # Create a change
         rust_file.write_text(
             "use serde::{Value, json};\n\npub fn test() {}\n\npub fn another() {}\n"
         )
-        subprocess.run(["git", "add", "lib.rs"], capture_output=True)
+        subprocess.run(
+            ["git", "add", "lib.rs"],
+            capture_output=True,
+            cwd=temp_git_repo,
+        )
 
         # Start workflow
-        start_result = await _start_smart_commit_async()
+        start_result = await _start_smart_commit_async(project_root=str(temp_git_repo))
         workflow_id = start_result.get("workflow_id")
 
         # Approve - this should run lefthook before commit and re-stage
@@ -340,3 +369,90 @@ pre-commit:
         assert "json, Value" in committed_content, (
             f"Formatted import should be in commit. Got: {committed_content}"
         )
+
+    async def test_start_persists_state_via_common_workflow_store(self, temp_git_repo, monkeypatch):
+        """Test start action persists workflow state through WorkflowStateStore."""
+        from git.scripts.smart_commit_graphflow import commands
+
+        monkeypatch.chdir(temp_git_repo)
+        (temp_git_repo / "tracked.txt").write_text("content")
+
+        captured: dict[str, object] = {}
+
+        class _FakeStore:
+            def save(self, workflow_id, state, *, metadata=None):
+                captured["workflow_id"] = workflow_id
+                captured["state"] = state
+
+            def load(self, workflow_id):
+                return None
+
+        monkeypatch.setattr(commands, "_SMART_COMMIT_STORE", _FakeStore())
+
+        result = await commands._start_smart_commit_async(project_root=str(temp_git_repo))
+
+        assert captured["workflow_id"] == result.get("workflow_id")
+        saved_state = captured.get("state")
+        assert isinstance(saved_state, dict)
+        assert saved_state.get("workflow_id") == result.get("workflow_id")
+        assert isinstance(saved_state.get("staged_files"), list)
+
+    async def test_status_uses_common_workflow_store(self, monkeypatch):
+        """Test status retrieval is delegated to WorkflowStateStore."""
+        from git.scripts.smart_commit_graphflow import commands
+
+        class _FakeStore:
+            def save(self, workflow_id, state, *, metadata=None):
+                return None
+
+            def load(self, workflow_id):
+                return {"status": "prepared", "staged_files": ["a.py"]}
+
+        monkeypatch.setattr(commands, "_SMART_COMMIT_STORE", _FakeStore())
+        status = await commands._get_workflow_status_async("wf-status")
+        assert status is not None
+        assert status.get("status") == "prepared"
+
+    async def test_start_allows_missing_pre_commit_hook(self, temp_git_repo, monkeypatch):
+        """Missing pre-commit hook should not mark start as lefthook_failed."""
+        from git.scripts.smart_commit_graphflow.commands import _start_smart_commit_async
+
+        monkeypatch.chdir(temp_git_repo)
+        (temp_git_repo / "missing-hook.txt").write_text("content\n")
+
+        result = await _start_smart_commit_async(project_root=str(temp_git_repo))
+
+        assert result.get("status") != "lefthook_failed"
+        assert result.get("error", "") == ""
+
+    async def test_start_default_root_uses_cwd_git_toplevel(self, temp_git_repo, monkeypatch):
+        """Default start path should follow cwd git top-level, not PRJ_ROOT."""
+        from git.scripts.smart_commit_graphflow.commands import _start_smart_commit_async
+
+        monkeypatch.chdir(temp_git_repo)
+        monkeypatch.setenv("PRJ_ROOT", str(temp_git_repo.parent))
+        (temp_git_repo / "cwd-root.txt").write_text("content\n")
+
+        result = await _start_smart_commit_async()
+
+        assert "cwd-root.txt" in result.get("staged_files", [])
+
+    async def test_action_validation_rejects_invalid_action(self):
+        """Invalid action should return common validation error message."""
+        from git.scripts.smart_commit_graphflow.commands import smart_commit
+        from omni.foundation.api.mcp_schema import extract_text_content
+
+        result = await smart_commit(action="invalid")
+        text = extract_text_content(result) or ""
+
+        assert "action must be one of:" in text
+
+    async def test_action_validation_normalizes_case_and_whitespace(self):
+        """Action normalization should accept mixed-case padded action strings."""
+        from git.scripts.smart_commit_graphflow.commands import smart_commit
+        from omni.foundation.api.mcp_schema import extract_text_content
+
+        result = await smart_commit(action="  Visualize  ")
+        text = extract_text_content(result) or ""
+
+        assert "Smart Commit Workflow" in text

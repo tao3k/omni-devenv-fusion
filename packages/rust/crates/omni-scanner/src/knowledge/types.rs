@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 /// Knowledge categories for organizing documents.
 ///
 /// Categories are used for filtering and routing knowledge queries.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, SchemarsJsonSchema, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, SchemarsJsonSchema, PartialEq, Eq, Default,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum KnowledgeCategory {
     /// Architecture and design patterns
@@ -32,13 +34,8 @@ pub enum KnowledgeCategory {
     Solution,
     /// Uncategorized
     #[serde(other)]
+    #[default]
     Unknown,
-}
-
-impl Default for KnowledgeCategory {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 impl std::str::FromStr for KnowledgeCategory {
@@ -105,7 +102,7 @@ pub struct KnowledgeMetadata {
 }
 
 impl KnowledgeMetadata {
-    /// Create a new empty KnowledgeMetadata.
+    /// Create a new empty `KnowledgeMetadata`.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -128,7 +125,8 @@ impl KnowledgeMetadata {
     /// Add multiple tags.
     #[must_use]
     pub fn with_tags(mut self, tags: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        self.tags.extend(tags.into_iter().map(|t| t.into()));
+        self.tags
+            .extend(tags.into_iter().map(std::convert::Into::into));
         self
     }
 }
@@ -172,7 +170,7 @@ pub struct KnowledgeEntry {
 }
 
 impl KnowledgeEntry {
-    /// Create a new KnowledgeEntry.
+    /// Create a new `KnowledgeEntry`.
     #[must_use]
     pub fn new(
         id: impl Into<String>,

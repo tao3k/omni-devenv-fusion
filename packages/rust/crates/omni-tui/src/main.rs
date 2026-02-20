@@ -7,7 +7,7 @@
 //!
 //! Usage:
 //!   Server mode: omni-tui --socket /path/to/sock --role server
-//!   Client mode: omni-tui --socket /path/to/sock --role client --pid <parent_pid>
+//!   Client mode: omni-tui --socket /path/to/sock --role client --pid `<parent_pid>`
 //!
 //! Can also run in headless mode (no TUI rendering) for testing or CI:
 //!   omni-tui --socket /path/to/sock --headless
@@ -58,15 +58,15 @@ fn run_event_loop(state: &mut AppState, server_handle: thread::JoinHandle<()>, h
         if !headless {
             let timeout = tick_rate.saturating_sub(last_tick.elapsed());
 
-            if event::poll(timeout).unwrap_or(false) {
-                if let Ok(CEvent::Key(key)) = event::read() {
-                    match key.code {
-                        KeyCode::Char('q') | KeyCode::Esc => {
-                            info!("User pressed quit");
-                            break;
-                        }
-                        _ => {}
+            if event::poll(timeout).unwrap_or(false)
+                && let Ok(CEvent::Key(key)) = event::read()
+            {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => {
+                        info!("User pressed quit");
+                        break;
                     }
+                    _ => {}
                 }
             }
         }
@@ -94,7 +94,7 @@ fn main() -> Result<()> {
     info!("Role: {}", args.role);
     info!("Headless: {}", args.headless);
     if let Some(pid) = args.pid {
-        info!("Parent PID: {}", pid);
+        info!("Parent PID: {pid}");
     }
 
     // Create mpsc channel for IPC bridge
@@ -104,7 +104,7 @@ fn main() -> Result<()> {
     let server_handle = if args.role == "client" {
         // Reverse mode: Connect to Python's socket
         info!("Connecting to Python socket as client...");
-        SocketClient::connect(&args.socket, event_tx.clone())?
+        SocketClient::connect(&args.socket, event_tx.clone())
     } else {
         // Legacy mode: Bind and listen
         info!("Binding socket as server...");
@@ -134,7 +134,7 @@ fn main() -> Result<()> {
                 Some(r)
             }
             Err(e) => {
-                warn!("TUI init failed: {}. Switching to headless mode.", e);
+                warn!("TUI init failed: {e}. Switching to headless mode.");
                 None
             }
         }

@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.omni.dev/omni.link_graph.search_options.v1.schema.json",
+  "title": "Omni LinkGraph Search Options v1",
+  "description": "Canonical search options contract for LinkGraph backend search calls.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "match_strategy", "sort", "case_sensitive"],
+  "properties": {
+    "schema": {
+      "const": "omni.link_graph.search_options.v1"
+    },
+    "match_strategy": {
+      "type": "string",
+      "enum": ["fts", "exact", "re"]
+    },
+    "sort": {
+      "type": "string",
+      "enum": [
+        "score_desc",
+        "path_asc",
+        "title_asc",
+        "stem_asc",
+        "created_asc",
+        "created_desc",
+        "modified_asc",
+        "modified_desc"
+      ]
+    },
+    "case_sensitive": {
+      "type": "boolean"
+    },
+    "link_to": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "linked_by": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "related": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "max_distance": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_after": {
+      "type": "integer"
+    },
+    "created_before": {
+      "type": "integer"
+    },
+    "modified_after": {
+      "type": "integer"
+    },
+    "modified_before": {
+      "type": "integer"
+    }
+  }
+}

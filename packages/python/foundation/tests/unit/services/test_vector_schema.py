@@ -241,6 +241,10 @@ def test_tool_search_payload_from_arrow_table_optional_columns():
             "skill_name": ["git"],
             "tool_name": ["commit"],
             "file_path": ["git/scripts/commit.py"],
+            "final_score": [0.93],
+            "confidence": ["high"],
+            "ranking_reason": ["vector=0.900 | keyword=0.700 | final=0.930"],
+            "input_schema_digest": ["sha256:abc123def456"],
         }
     )
     payloads = ToolSearchPayload.from_arrow_table(table)
@@ -248,6 +252,10 @@ def test_tool_search_payload_from_arrow_table_optional_columns():
     assert payloads[0].skill_name == "git"
     assert payloads[0].tool_name == "commit"
     assert payloads[0].file_path == "git/scripts/commit.py"
+    assert payloads[0].final_score == 0.93
+    assert payloads[0].confidence == "high"
+    assert payloads[0].ranking_reason is not None
+    assert payloads[0].input_schema_digest == "sha256:abc123def456"
 
 
 def test_hybrid_payload_from_arrow_table_requires_columns():
@@ -405,6 +413,29 @@ def test_build_tool_router_result_uses_canonical_contract():
     assert parsed.payload.metadata.routing_keywords == ["find", "files", "directory"]
     assert "content" not in router
     assert "content" not in router["payload"]
+
+
+def test_build_tool_router_result_preserves_discover_contract_fields():
+    payload = parse_tool_search_payload(
+        make_tool_search_payload(
+            name="advanced_tools.smart_find",
+            tool_name="advanced_tools.smart_find",
+            description="Find files by extension",
+            score=0.88,
+            final_score=0.92,
+            confidence="high",
+            ranking_reason="vector=0.880 | keyword=0.700 | confidence=high | final=0.920",
+            input_schema_digest="sha256:abc123def456",
+            skill_name="advanced_tools",
+            file_path="assets/skills/advanced_tools/scripts/search.py",
+            routing_keywords=["find", "files", "directory"],
+            intents=["Locate files"],
+            category="search",
+        )
+    )
+    router = build_tool_router_result(payload, "advanced_tools.smart_find")
+    assert router["ranking_reason"].startswith("vector=0.880")
+    assert router["input_schema_digest"] == "sha256:abc123def456"
 
 
 def test_tool_router_result_contract_snapshot_v1():

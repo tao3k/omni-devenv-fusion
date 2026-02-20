@@ -9,6 +9,7 @@ Contains: list, info, query commands.
 from __future__ import annotations
 
 import json
+import re
 import sys
 
 import typer
@@ -17,6 +18,8 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .base import err_console, skill_app
+
+_CANONICAL_COMMAND_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$")
 
 
 @skill_app.command("query")
@@ -83,6 +86,35 @@ def skill_query(
         )
 
 
+def _build_index_from_list_all_tools(tools: list[dict]) -> dict[str, dict]:
+    """Group list_all_tools output by skill_name into index_by_name format."""
+    index_by_name: dict[str, dict] = {}
+    for t in tools:
+        skill_name = t.get("skill_name") or ""
+        tool_name = t.get("tool_name") or ""
+        if not skill_name or not tool_name:
+            continue
+        if "." in tool_name:
+            full_name = tool_name
+        else:
+            full_name = f"{skill_name}.{tool_name}"
+        full_name = full_name.strip()
+        if not _CANONICAL_COMMAND_PATTERN.fullmatch(full_name):
+            continue
+
+        normalized_skill = full_name.split(".", 1)[0]
+        if normalized_skill not in index_by_name:
+            index_by_name[normalized_skill] = {"name": normalized_skill, "tools": []}
+        index_by_name[normalized_skill]["tools"].append(
+            {
+                "name": full_name,
+                "description": t.get("description", ""),
+                "category": t.get("category", ""),
+            }
+        )
+    return index_by_name
+
+
 @skill_app.command("list")
 def skill_list(
     compact: bool = typer.Option(False, "--compact", "-c", help="Show compact view (names only)"),
@@ -94,147 +126,84 @@ def skill_list(
     List installed skills and their commands.
 
     Displays a hierarchical inventory of all available capabilities,
-    including command aliases defined in settings.yaml.
+    including command aliases defined in settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml).
 
-    Use --json to get machine-readable output of all skills from the Rust DB index.
+    Uses Rust DB (LanceDB) only - no filesystem scan, no kernel/sniffer/watcher init.
+    Use --json to get machine-readable output. Run 'omni sync' first if index is empty.
     """
-    import asyncio
-
     from rich.tree import Tree
     from rich.text import Text
-    from omni.core.kernel import get_kernel
     from omni.core.config.loader import load_command_overrides, is_filtered
     from omni.foundation.config.skills import SKILLS_DIR
     from omni.foundation.bridge import RustVectorStore
 
-    # JSON output mode - dump all skills from Rust DB with full metadata
-    if json_output:
-        try:
-            store = RustVectorStore()
-            skills_dir = SKILLS_DIR()
-            skills = store.get_skill_index_sync(str(skills_dir))
-
-            output = []
-            for skill in skills:
-                skill_path = skill.get("path", "")
-                docs_path = f"{skill_path}/SKILL.md" if skill_path else ""
-
-                # Extract docs_available subfields
-                docs_avail = skill.get("docs_available", {})
-                docs_status = {
-                    "skill_md": docs_avail.get("skill_md", False)
-                    if isinstance(docs_avail, dict)
-                    else False,
-                    "readme": docs_avail.get("readme", False)
-                    if isinstance(docs_avail, dict)
-                    else False,
-                    "tests": docs_avail.get("tests", False)
-                    if isinstance(docs_avail, dict)
-                    else False,
-                }
-
-                # Convert require_refs to list of strings
-                require_refs = skill.get("require_refs", [])
-                if require_refs and isinstance(require_refs[0], dict):
-                    require_refs = [
-                        r.get("path", r) if isinstance(r, dict) else r for r in require_refs
-                    ]
-                elif require_refs and isinstance(require_refs[0], str):
-                    pass  # Already strings
-                else:
-                    require_refs = []
-
-                # Convert sniffing_rules to simplified format
-                sniffing_rules = skill.get("sniffing_rules", [])
-                if sniffing_rules and isinstance(sniffing_rules[0], dict):
-                    sniffing_rules = [
-                        {
-                            "type": r.get("type", ""),
-                            "pattern": r.get("pattern", ""),
-                        }
-                        for r in sniffing_rules
-                    ]
-
-                skill_data = {
-                    "name": skill.get("name", ""),
-                    "path": skill_path,
-                    "docs_path": docs_path,
-                    "description": skill.get("description", ""),
-                    "version": skill.get("version", "unknown"),
-                    "repository": skill.get("repository", ""),
-                    "routing_keywords": skill.get("routing_keywords", []),
-                    "intents": skill.get("intents", []),
-                    "authors": skill.get("authors", []),
-                    "permissions": skill.get("permissions", []),
-                    "require_refs": require_refs,
-                    "oss_compliant": skill.get("oss_compliant", []),
-                    "compliance_details": skill.get("compliance_details", []),
-                    "sniffing_rules": sniffing_rules,
-                    "docs_available": docs_status,
-                    "has_extensions": bool(skill.get("tools")),
-                    "tools": [
-                        {
-                            "name": t.get("name", ""),
-                            "description": t.get("description", ""),
-                            "category": t.get("category", ""),
-                            "input_schema": t.get("input_schema", ""),
-                            "file_hash": t.get("file_hash", ""),
-                        }
-                        for t in skill.get("tools", [])
-                    ],
-                }
-                output.append(skill_data)
-
-            # Output JSON to stdout (for piping) instead of stderr
-            sys.stdout.write(json.dumps(output, indent=2, ensure_ascii=False) + "\n")
-            return
-        except Exception as e:
-            err_console.print(
-                Panel(
-                    f"Failed to load skill index: {e}",
-                    title="Error",
-                    style="red",
-                )
-            )
-            raise typer.Exit(1)
-
+    # Light path: list_all_tools reads from LanceDB (fast); avoid get_skill_index_sync (filesystem scan can hang)
     skills_dir = SKILLS_DIR()
-    kernel = get_kernel()
-    ctx = kernel.skill_context
     overrides = load_command_overrides()
+    try:
+        store = RustVectorStore()
+        tools = store.list_all_tools()
+    except Exception as e:
+        err_console.print(
+            Panel(
+                f"Failed to load skill index: {e}. Run 'omni sync' to index skills.",
+                title="Error",
+                style="red",
+            )
+        )
+        raise typer.Exit(1)
 
-    # Get available skills from filesystem
-    available_skills = []
-    if skills_dir.exists():
+    index_by_name = _build_index_from_list_all_tools(tools)
+    available_skills = sorted(index_by_name.keys()) if index_by_name else []
+
+    # JSON output mode - from LanceDB (same as tree view)
+    if json_output:
+        output = [
+            {
+                "name": name,
+                "tools": [
+                    {
+                        "name": t.get("name", ""),
+                        "description": t.get("description", ""),
+                        "category": t.get("category", ""),
+                    }
+                    for t in data.get("tools", [])
+                    if not is_filtered(t.get("name", ""))
+                ],
+            }
+            for name, data in sorted(index_by_name.items())
+            if any(not is_filtered(t.get("name", "")) for t in data.get("tools", []))
+        ]
+        sys.stdout.write(json.dumps(output, indent=2, ensure_ascii=False) + "\n")
+        return
+
+    if not available_skills and skills_dir.exists():
         available_skills = sorted(
             [d.name for d in skills_dir.iterdir() if d.is_dir() and not d.name.startswith("_")]
         )
 
-    loaded_skills = ctx.list_skills()
-
-    # Build Tree
     tree = Tree("📦 [bold]Skill Inventory[/bold]", guide_style="dim")
 
     for skill_name in available_skills:
-        is_loaded = skill_name in loaded_skills
-        status_color = "green" if is_loaded else "dim white"
-        status_icon = "🟢" if is_loaded else "⚪"
+        skill_data = index_by_name.get(skill_name, {})
+        all_tools = skill_data.get("tools", [])
+        tools = [tool for tool in all_tools if not is_filtered(tool.get("name", ""))]
+        if not tools:
+            continue
+        is_indexed = bool(tools)
+        status_color = "green" if is_indexed else "dim white"
+        status_icon = "🟢" if is_indexed else "⚪"
 
         skill_node = tree.add(f"{status_icon} [bold {status_color}]{skill_name}[/]")
 
-        if is_loaded and not compact:
-            skill_obj = ctx.get_skill(skill_name)
-            commands = skill_obj.list_commands() if skill_obj else []
-
-            # Sort commands: Aliased first, then others
-            commands.sort(key=lambda c: (c not in overrides.commands, c))
-
-            for full_cmd in commands:
-                # Filter hidden commands
-                if is_filtered(full_cmd):
+        if is_indexed and not compact:
+            prefix = f"{skill_name}."
+            for tool in tools:
+                full_cmd = tool.get("name", "")
+                if not full_cmd:
                     continue
+                cmd_short = full_cmd[len(prefix) :] if full_cmd.startswith(prefix) else full_cmd
 
-                # Handle Alias
                 override = overrides.commands.get(full_cmd)
                 alias = override.alias if override else None
                 append_doc = override.append_doc if override else None
@@ -246,15 +215,11 @@ def skill_list(
                     cmd_text.append(f" (Canon: {full_cmd})", style="dim")
                 else:
                     cmd_text.append("🔧 ", style="dim")
-                    cmd_text.append(full_cmd, style="white")
+                    cmd_text.append(cmd_short, style="white")
 
-                # Handle Description
-                cmd_obj = ctx.get_command(full_cmd)
-                desc = getattr(cmd_obj, "description", "") or ""
+                desc = tool.get("description", "") or ""
                 if append_doc:
                     desc = f"{desc} {append_doc}"
-
-                # Truncate description for clean display
                 desc = desc.strip().split("\n")[0]
                 if len(desc) > 60:
                     desc = desc[:57] + "..."
@@ -300,22 +265,17 @@ def skill_info(name: str = typer.Argument(..., help="Skill name")):
         err_console.print(Panel(f"Skill '{name}' not found", title="❌ Error", style="red"))
         raise typer.Exit(1)
 
-    # Get commands from index (works even if skill is not loaded)
+    # Get commands from LanceDB (avoid get_skill_index_sync filesystem scan)
     commands = []
     try:
         store = RustVectorStore()
-        skill_index = store.get_skill_index_sync(str(skills_dir))
-        for skill in skill_index:
-            if skill.get("name") != name:
+        tools = store.list_all_tools()
+        for t in tools:
+            if (t.get("skill_name") or "") != name:
                 continue
-            prefix = f"{name}."
-            for tool in skill.get("tools", []):
-                cmd_name = tool.get("name", "")
-                if cmd_name.startswith(prefix):
-                    cmd_name = cmd_name[len(prefix) :]
-                if cmd_name:
-                    commands.append(cmd_name)
-            break
+            tool_name = t.get("tool_name") or ""
+            if tool_name:
+                commands.append(tool_name)
     except Exception:
         pass  # Silently fail - commands will show 0
 

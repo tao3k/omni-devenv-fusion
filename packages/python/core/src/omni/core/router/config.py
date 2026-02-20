@@ -169,7 +169,7 @@ def resolve_router_schema_path(schema_path: str | Path | None = None) -> Path:
 
     Priority:
     1. Explicit `schema_path` argument
-    2. `router.search.schema_file` from merged settings
+    2. `router.search.schema_file` from settings
     3. Default: project root's packages/shared/schemas/omni.router.search_config.v1.schema.json
 
     Paths starting with "packages/shared/" are resolved relative to project root;

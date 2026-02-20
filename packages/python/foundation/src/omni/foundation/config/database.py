@@ -7,7 +7,7 @@ Provides database path management for:
 - Checkpoint database
 - Memory database (Hippocampus)
 
-Reads configuration from settings.yaml.
+Reads configuration from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml).
 
 Sync vs reindex: Both use get_database_path(name) for each DB (skills, router,
 knowledge, memory) so that "omni sync" and "omni reindex [component]" write
@@ -74,7 +74,7 @@ def get_database_path(name: str) -> str:
 def get_checkpoint_db_path() -> Path:
     """Get the checkpoint database path from settings.
 
-    Reads from settings.yaml -> checkpoint.db_path
+    Reads from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) -> checkpoint.db_path
     Supports both relative (to project root) and absolute paths.
 
     Returns:

@@ -25,8 +25,49 @@ jobs:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
-      - name: Check Rust formatting
-        run: secretspec run --provider env --profile default -- devenv shell -- cargo test
+      - name: Rust quality gates (check + strict clippy baseline + nextest)
+        run: secretspec run --provider env --profile default -- devenv shell -- just rust-quality-gate
+
+  telegram-session-isolation-gate:
+    runs-on: ubuntu-latest
+    env:
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: ./.github/actions/common-setup
+        with:
+          SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+
+      - name: Telegram session isolation gate (targeted regressions)
+        run: |
+          secretspec run --provider env --profile default -- devenv shell -- bash -lc '
+            set -euo pipefail
+            cargo test -p omni-agent --test channels_telegram telegram_parse_update_partition_chat_only_isolates_different_chats
+            cargo test -p omni-agent --test channels_telegram telegram_send_global_rate_limit_gate_delays_parallel_send
+            cargo test -p omni-agent --test channels_telegram telegram_send_global_rate_limit_gate_spreads_parallel_followup_requests
+            cargo test -p omni-agent --test channels_telegram_send_gate telegram_send_rate_limit_valkey_constructor_rejects_invalid_url
+            cargo test -p omni-agent --test channels_webhook webhook_partition_chat_only_isolates_same_user_across_chats
+            cargo test -p omni-agent --lib runtime_partition_chat_only_isolates_same_user_across_chats
+            cargo test -p omni-agent --lib runtime_partition_chat_thread_user_isolates_threads
+            cargo test -p omni-agent --test channels_telegram_group_policy telegram_group_policy_recipient_admin_users_runtime_mutation_topic_scope
+            cargo test -p omni-agent --test channels_telegram_group_policy telegram_group_policy_recipient_admin_users_runtime_mutation_group_topic_isolation
+            cargo test -p omni-agent --lib runtime_handle_inbound_session_budget_denies_when_scope_not_granted
+            cargo test -p omni-agent --lib runtime_handle_inbound_plain_text_is_not_blocked_by_slash_acl
+          '
+
+      - name: Telegram isolation gate (Python script regressions)
+        run: |
+          secretspec run --provider env --profile default -- devenv shell -- bash -lc '
+            set -euo pipefail
+            uv run pytest -q \
+              packages/python/test-kit/tests/test_agent_channel_command_events.py \
+              packages/python/test-kit/tests/test_agent_channel_session_matrix.py
+          '
 
   nix-build-default:
     runs-on: ${{ matrix.os }}

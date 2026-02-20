@@ -3,7 +3,7 @@ omni.core.knowledge - Knowledge Management Subsystem
 
 Modules:
 - config: Configuration from references.yaml
-- knowledge_types: Knowledge entry type definitions (from Rust omni-knowledge)
+- knowledge_types: Knowledge entry type definitions (from Rust xiuxian-wendao)
 - librarian: Librarian main class
 
 Usage:
@@ -11,50 +11,52 @@ Usage:
     from omni.core.knowledge.knowledge_types import KnowledgeEntry, KnowledgeCategory
 
 Note:
-    This module uses Rust bindings from omni-knowledge crate for
+    This module uses Rust bindings from xiuxian-wendao crate for
     high-performance knowledge management.
 """
 
+from contextlib import suppress
+
 from .config import KnowledgeConfig, get_knowledge_config, reset_config
-from .librarian import Librarian, ChunkMode
 
 # Re-export types from knowledge_types (which wraps Rust bindings)
 from .knowledge_types import (
+    _HAS_RUST_BINDINGS,
     KnowledgeCategory,
     KnowledgeEntry,
     KnowledgeSearchQuery,
     KnowledgeStats,
-    _HAS_RUST_BINDINGS,
 )
+from .librarian import ChunkMode, Librarian
 
-# Also export ZK entity reference extraction functions from Rust bindings
+# Also export LinkGraph entity reference extraction functions from Rust bindings
+link_graph_extract_entity_refs = None
+link_graph_get_ref_stats = None
+link_graph_count_refs = None
+link_graph_is_valid_ref = None
+
 if _HAS_RUST_BINDINGS:
-    try:
+    with suppress(ImportError):
         from omni_core_rs import (
-            zk_extract_entity_refs,
-            zk_get_ref_stats,
-            zk_count_refs,
-            zk_is_valid_ref,
+            link_graph_count_refs,
+            link_graph_extract_entity_refs,
+            link_graph_get_ref_stats,
+            link_graph_is_valid_ref,
         )
-    except ImportError:
-        zk_extract_entity_refs = None
-        zk_get_ref_stats = None
-        zk_count_refs = None
-        zk_is_valid_ref = None
 
 __all__ = [
-    "KnowledgeConfig",
-    "get_knowledge_config",
-    "reset_config",
-    "Librarian",
+    "_HAS_RUST_BINDINGS",
     "ChunkMode",
     "KnowledgeCategory",
+    "KnowledgeConfig",
     "KnowledgeEntry",
     "KnowledgeSearchQuery",
     "KnowledgeStats",
-    "zk_extract_entity_refs",
-    "zk_get_ref_stats",
-    "zk_count_refs",
-    "zk_is_valid_ref",
-    "_HAS_RUST_BINDINGS",
+    "Librarian",
+    "get_knowledge_config",
+    "link_graph_count_refs",
+    "link_graph_extract_entity_refs",
+    "link_graph_get_ref_stats",
+    "link_graph_is_valid_ref",
+    "reset_config",
 ]

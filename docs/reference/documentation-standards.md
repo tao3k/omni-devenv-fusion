@@ -103,7 +103,7 @@ One-line description.
 
 **Example**:
 
-- `git-workflow.md` - Commit conventions and protocols
+- [ODF-EP Protocol](odf-ep-protocol.md#git-workflow) — Commit conventions and protocols
 
 ### docs/reference/ (Reference Docs)
 
@@ -212,15 +212,19 @@ When this skill is active, add these guidelines:
 
 ## Documentation Writing Principles
 
-### 1. Single Responsibility
+### 1. English Only
+
+All documentation and all committed content in this repository must be written in **English**. This includes everything under `docs/`, `AGENTS.md`, `CLAUDE.md`, skill `SKILL.md` and `README.md`, and code comments that are part of the codebase. Commit messages must be in English. User-facing or external deliverables may use other languages only when explicitly required; the canonical project surface is English.
+
+### 2. Single Responsibility
 
 Each document has exactly one primary purpose. Don't explain architecture in how-to, don't explain history in reference.
 
-### 2. DRY Principle
+### 3. DRY Principle
 
 Avoid duplication. If the same information is needed in multiple places, extract it into a standalone document and reference it.
 
-### 3. Reader-Oriented
+### 4. Reader-Oriented
 
 Before writing, ask:
 
@@ -228,7 +232,7 @@ Before writing, ask:
 - What do they already know?
 - What do they want from this document?
 
-### 4. Match Update Frequency
+### 5. Match Update Frequency
 
 Keep frequently updated documents (like SKILL.md) concise. Less frequently updated documents (like explanation) can be more detailed.
 

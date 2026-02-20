@@ -1,6 +1,6 @@
-//! Resource Scanner - Parses Python scripts for @skill_resource decorated functions.
+//! Resource Scanner - Parses Python scripts for @`skill_resource` decorated functions.
 //!
-//! Uses TreeSitterPythonParser for robust decorator extraction.
+//! Uses `TreeSitterPythonParser` for robust decorator extraction.
 
 use std::fs;
 use std::path::Path;
@@ -12,9 +12,15 @@ use walkdir::WalkDir;
 
 use crate::skills::metadata::ResourceRecord;
 
-/// Scanner for @skill_resource decorated functions.
+/// Scanner for @`skill_resource` decorated functions.
 #[derive(Debug)]
 pub struct ResourceScanner;
+
+impl Default for ResourceScanner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl ResourceScanner {
     /// Create a new resource scanner.
@@ -23,7 +29,7 @@ impl ResourceScanner {
         Self
     }
 
-    /// Scan a scripts directory for @skill_resource decorated functions.
+    /// Scan a scripts directory for @`skill_resource` decorated functions.
     ///
     /// # Arguments
     ///
@@ -33,15 +39,23 @@ impl ResourceScanner {
     /// # Returns
     ///
     /// A vector of `ResourceRecord` objects.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `skill_name` is empty.
     pub fn scan(
         &self,
         scripts_dir: &Path,
         skill_name: &str,
     ) -> Result<Vec<ResourceRecord>, Box<dyn std::error::Error>> {
+        let _ = self;
+        if skill_name.trim().is_empty() {
+            return Err("skill_name cannot be empty".into());
+        }
         let mut resources = Vec::new();
 
         if !scripts_dir.exists() {
-            log::debug!("Scripts directory not found: {:?}", scripts_dir);
+            log::debug!("Scripts directory not found: {}", scripts_dir.display());
             return Ok(resources);
         }
 
@@ -52,7 +66,7 @@ impl ResourceScanner {
             let entry = match entry {
                 Ok(e) => e,
                 Err(e) => {
-                    log::warn!("Error walking directory {:?}: {}", scripts_dir, e);
+                    log::warn!("Error walking directory {}: {e}", scripts_dir.display());
                     continue;
                 }
             };
@@ -68,30 +82,28 @@ impl ResourceScanner {
             }
             if path
                 .file_name()
-                .map(|n| n.to_string_lossy().starts_with("__"))
-                == Some(true)
+                .is_some_and(|n| n.to_string_lossy().starts_with("__"))
             {
                 continue;
             }
 
-            match self.scan_file(path, skill_name) {
+            match Self::scan_file(path, skill_name) {
                 Ok(file_resources) => resources.extend(file_resources),
-                Err(e) => log::warn!("Error scanning {:?}: {}", path, e),
+                Err(e) => log::warn!("Error scanning {}: {e}", path.display()),
             }
         }
 
         log::debug!(
-            "ResourceScanner: Found {} @skill_resource functions in {:?}",
+            "ResourceScanner: Found {} @skill_resource functions in {}",
             resources.len(),
-            scripts_dir
+            scripts_dir.display()
         );
 
         Ok(resources)
     }
 
-    /// Scan a single file for @skill_resource decorated functions.
+    /// Scan a single file for @`skill_resource` decorated functions.
     fn scan_file(
-        &self,
         path: &Path,
         skill_name: &str,
     ) -> Result<Vec<ResourceRecord>, Box<dyn std::error::Error>> {
@@ -116,18 +128,18 @@ impl ResourceScanner {
             let description = decorator_args
                 .and_then(|a| a.description.clone())
                 .or_else(|| {
-                    if !func.docstring.is_empty() {
-                        Some(func.docstring.clone())
-                    } else {
+                    if func.docstring.is_empty() {
                         None
+                    } else {
+                        Some(func.docstring.clone())
                     }
                 })
-                .unwrap_or_else(|| format!("Resource {}.{}", skill_name, name));
+                .unwrap_or_else(|| format!("Resource {skill_name}.{name}"));
 
             // Get resource_uri from decorator or generate default
             let resource_uri = decorator_args
                 .and_then(|a| a.resource_uri.clone())
-                .unwrap_or_else(|| format!("omni://skill/{}/{}", skill_name, name));
+                .unwrap_or_else(|| format!("omni://skill/{skill_name}/{name}"));
 
             resources.push(ResourceRecord::new(
                 name,
@@ -200,14 +212,22 @@ def do_something():
 }
 
 impl ResourceScanner {
-    /// Scan multiple files for @skill_resource decorated functions.
+    /// Scan multiple files for @`skill_resource` decorated functions.
     ///
     /// Used for testing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `skill_name` is empty.
     pub fn scan_paths(
         &self,
         files: &[(String, String)],
         skill_name: &str,
     ) -> Result<Vec<ResourceRecord>, Box<dyn std::error::Error>> {
+        let _ = self;
+        if skill_name.trim().is_empty() {
+            return Err("skill_name cannot be empty".into());
+        }
         let mut all_resources = Vec::new();
 
         for (file_path, content) in files {
@@ -228,17 +248,17 @@ impl ResourceScanner {
                 let description = decorator_args
                     .and_then(|a| a.description.clone())
                     .or_else(|| {
-                        if !func.docstring.is_empty() {
-                            Some(func.docstring.clone())
-                        } else {
+                        if func.docstring.is_empty() {
                             None
+                        } else {
+                            Some(func.docstring.clone())
                         }
                     })
-                    .unwrap_or_else(|| format!("Resource {}.{}", skill_name, name));
+                    .unwrap_or_else(|| format!("Resource {skill_name}.{name}"));
 
                 let resource_uri = decorator_args
                     .and_then(|a| a.resource_uri.clone())
-                    .unwrap_or_else(|| format!("omni://skill/{}/{}", skill_name, name));
+                    .unwrap_or_else(|| format!("omni://skill/{skill_name}/{name}"));
 
                 all_resources.push(ResourceRecord::new(
                     name,

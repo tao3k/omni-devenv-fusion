@@ -1,5 +1,6 @@
 //! Tests for checkpoint store operations.
 
+use lance::dataset::Dataset;
 use omni_vector::CheckpointRecord;
 use omni_vector::CheckpointStore;
 
@@ -171,6 +172,69 @@ async fn test_search_similar() {
     // Verify distances are increasing
     assert!(results[0].2 <= results[1].2);
     assert!(results[1].2 <= results[2].2);
+}
+
+#[tokio::test]
+async fn test_search_uses_per_row_vectors() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("search_row_vector_test");
+    clean_test_db(&db_path);
+
+    let mut store = CheckpointStore::new(
+        temp_dir
+            .path()
+            .join("search_row_vector_test")
+            .to_str()
+            .unwrap(),
+        Some(4),
+    )
+    .await
+    .unwrap();
+
+    let records = vec![
+        (
+            "cp-far",
+            r#"{"kind":"far"}"#,
+            vec![0.0_f32, 1.0_f32, 0.0_f32, 0.0_f32],
+        ),
+        (
+            "cp-near",
+            r#"{"kind":"near"}"#,
+            vec![1.0_f32, 0.0_f32, 0.0_f32, 0.0_f32],
+        ),
+        (
+            "cp-mid",
+            r#"{"kind":"mid"}"#,
+            vec![0.6_f32, 0.4_f32, 0.0_f32, 0.0_f32],
+        ),
+    ];
+
+    for (id, content, embedding) in records {
+        let record = CheckpointRecord {
+            checkpoint_id: id.to_string(),
+            thread_id: "row-vector-thread".to_string(),
+            parent_id: None,
+            timestamp: 1000.0,
+            content: content.to_string(),
+            embedding: Some(embedding),
+            metadata: None,
+        };
+        store
+            .save_checkpoint("row_vector_table", &record)
+            .await
+            .unwrap();
+    }
+
+    let query = vec![1.0_f32, 0.0_f32, 0.0_f32, 0.0_f32];
+    let results = store
+        .search("row_vector_table", &query, 3, None, None)
+        .await
+        .unwrap();
+
+    assert_eq!(results.len(), 3);
+    assert!(results[0].0.contains(r#""kind":"near""#));
+    assert!(results[1].0.contains(r#""kind":"mid""#));
+    assert!(results[2].0.contains(r#""kind":"far""#));
 }
 
 #[tokio::test]
@@ -558,6 +622,61 @@ async fn test_get_latest_timestamp_order() {
 }
 
 #[tokio::test]
+async fn test_auto_compaction_reduces_fragment_growth() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("auto_compact");
+    clean_test_db(&db_path);
+
+    let table_name = "auto_compact_table";
+    let thread_id = "auto-compaction-thread";
+    let total_writes: usize = 160;
+
+    let mut store = CheckpointStore::new(
+        temp_dir.path().join("auto_compact").to_str().unwrap(),
+        Some(8),
+    )
+    .await
+    .unwrap();
+
+    for i in 0..total_writes {
+        let record = CheckpointRecord {
+            checkpoint_id: format!("cp-{i}"),
+            thread_id: thread_id.to_string(),
+            parent_id: if i == 0 {
+                None
+            } else {
+                Some(format!("cp-{}", i - 1))
+            },
+            timestamp: 1000.0 + i as f64,
+            content: format!(r#"{{"step": {i}}}"#),
+            embedding: Some(vec![0.1; 8]),
+            metadata: None,
+        };
+        store.save_checkpoint(table_name, &record).await.unwrap();
+    }
+
+    // Verify read paths still work after many single-row appends.
+    let latest = store.get_latest(table_name, thread_id).await.unwrap();
+    assert!(latest.is_some());
+    assert!(latest.unwrap().contains(r#""step": 159"#));
+
+    let history = store.get_history(table_name, thread_id, 10).await.unwrap();
+    assert_eq!(history.len(), 10);
+
+    // Auto-compaction should keep fragment growth bounded.
+    let table_path = temp_dir
+        .path()
+        .join("auto_compact")
+        .join("auto_compact_table.lance");
+    let dataset = Dataset::open(table_path.to_str().unwrap()).await.unwrap();
+    let fragments = dataset.get_fragments().len();
+    assert!(
+        fragments < (total_writes / 2),
+        "expected auto-compaction to reduce fragments, got {fragments}"
+    );
+}
+
+#[tokio::test]
 async fn test_cleanup_orphan_checkpoints() {
     let temp_dir = tempfile::tempdir().unwrap();
     let db_path = temp_dir.path().join("orphan_test");
@@ -781,4 +900,130 @@ async fn test_corruption_detection() {
     let latest = store.get_latest("detect_table", "session").await.unwrap();
     assert!(latest.is_some());
     assert!(latest.unwrap().contains("new"));
+}
+
+#[tokio::test]
+async fn test_auto_repair_schema_mismatch_on_open() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("schema_repair_test");
+    clean_test_db(&db_path);
+    let table_name = "schema_repair_table";
+
+    // Create valid data with current schema.
+    {
+        let store = CheckpointStore::new(db_path.to_str().unwrap(), Some(10))
+            .await
+            .unwrap();
+        let record = CheckpointRecord {
+            checkpoint_id: "cp-before".to_string(),
+            thread_id: "schema-thread".to_string(),
+            parent_id: None,
+            timestamp: 1000.0,
+            content: r#"{"phase":"before"}"#.to_string(),
+            embedding: Some(vec![0.2; 10]),
+            metadata: None,
+        };
+        store.save_checkpoint(table_name, &record).await.unwrap();
+    }
+
+    // Simulate schema drift by removing one required checkpoint column.
+    let table_uri = db_path.join(format!("{table_name}.lance"));
+    let mut dataset = Dataset::open(table_uri.to_str().unwrap()).await.unwrap();
+    dataset
+        .drop_columns(&["checkpoint_parent_id"])
+        .await
+        .unwrap();
+
+    // Next open should self-heal by recreating the table with the current schema.
+    let mut repaired_store = CheckpointStore::new(db_path.to_str().unwrap(), Some(10))
+        .await
+        .unwrap();
+    let count = repaired_store
+        .count(table_name, "schema-thread")
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+
+    let record = CheckpointRecord {
+        checkpoint_id: "cp-after".to_string(),
+        thread_id: "schema-thread".to_string(),
+        parent_id: None,
+        timestamp: 2000.0,
+        content: r#"{"phase":"after"}"#.to_string(),
+        embedding: Some(vec![0.4; 10]),
+        metadata: None,
+    };
+    repaired_store
+        .save_checkpoint(table_name, &record)
+        .await
+        .unwrap();
+
+    let latest = repaired_store
+        .get_latest(table_name, "schema-thread")
+        .await
+        .unwrap();
+    assert!(latest.is_some());
+    assert!(latest.unwrap().contains("after"));
+}
+
+#[tokio::test]
+async fn test_auto_repair_interrupted_state_on_open() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("startup_repair_test");
+    clean_test_db(&db_path);
+    let table_name = "startup_repair_table";
+
+    // Seed with one valid chain and one dangling checkpoint.
+    {
+        let store = CheckpointStore::new(db_path.to_str().unwrap(), Some(10))
+            .await
+            .unwrap();
+        let valid_1 = CheckpointRecord {
+            checkpoint_id: "valid-1".to_string(),
+            thread_id: "valid-thread".to_string(),
+            parent_id: None,
+            timestamp: 1000.0,
+            content: r#"{"kind":"valid-1"}"#.to_string(),
+            embedding: Some(vec![0.0; 10]),
+            metadata: None,
+        };
+        let valid_2 = CheckpointRecord {
+            checkpoint_id: "valid-2".to_string(),
+            thread_id: "valid-thread".to_string(),
+            parent_id: Some("valid-1".to_string()),
+            timestamp: 1001.0,
+            content: r#"{"kind":"valid-2"}"#.to_string(),
+            embedding: Some(vec![0.1; 10]),
+            metadata: None,
+        };
+        let dangling = CheckpointRecord {
+            checkpoint_id: "dangling-1".to_string(),
+            thread_id: "broken-thread".to_string(),
+            parent_id: Some("missing-parent".to_string()),
+            timestamp: 2000.0,
+            content: r#"{"kind":"dangling"}"#.to_string(),
+            embedding: Some(vec![0.9; 10]),
+            metadata: None,
+        };
+        store.save_checkpoint(table_name, &valid_1).await.unwrap();
+        store.save_checkpoint(table_name, &valid_2).await.unwrap();
+        store.save_checkpoint(table_name, &dangling).await.unwrap();
+    }
+
+    // A new store instance should auto-clean interrupted dangling state during open.
+    let mut repaired_store = CheckpointStore::new(db_path.to_str().unwrap(), Some(10))
+        .await
+        .unwrap();
+
+    let broken_count = repaired_store
+        .count(table_name, "broken-thread")
+        .await
+        .unwrap();
+    assert_eq!(broken_count, 0);
+
+    let valid_count = repaired_store
+        .count(table_name, "valid-thread")
+        .await
+        .unwrap();
+    assert_eq!(valid_count, 2);
 }

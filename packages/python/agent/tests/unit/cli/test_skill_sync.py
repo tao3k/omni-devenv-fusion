@@ -33,6 +33,47 @@ class TestSkillSync:
         """Create Typer CLI runner."""
         return CliRunner()
 
+    def test_sync_handles_null_in_existing_tools(self, runner, tmp_path: Path):
+        """Test sync tolerates null values in list_all_tools (coerced to empty string)."""
+        with patch("omni_core_rs.scan_skill_tools") as mock_scan:
+            mock_scan.return_value = []
+
+            with patch("omni_core_rs.diff_skills") as mock_diff:
+                mock_report = MagicMock()
+                mock_report.added = []
+                mock_report.updated = []
+                mock_report.deleted = []
+                mock_report.unchanged_count = 1
+                mock_diff.return_value = mock_report
+
+                with patch("omni.foundation.bridge.rust_vector.RustVectorStore") as mock_store:
+                    mock_store_instance = MagicMock()
+                    # LanceDB may return null for some fields (e.g. from older schema)
+                    mock_store_instance.list_all_tools = MagicMock(
+                        return_value=[
+                            {
+                                "tool_name": "git.commit",
+                                "description": None,
+                                "category": None,
+                                "input_schema": "{}",
+                                "file_hash": "abc123",
+                            },
+                        ]
+                    )
+                    mock_store.return_value = mock_store_instance
+
+                    result = runner.invoke(app, ["skill", "sync"])
+
+        assert result.exit_code == 0
+        # diff_skills must receive valid JSON (no null for required IndexToolEntry fields)
+        call_args = mock_diff.call_args[0]
+        existing_json = call_args[1]
+        parsed = json.loads(existing_json)
+        assert len(parsed) == 1
+        assert parsed[0]["name"] == "git.commit"
+        assert parsed[0]["description"] == ""
+        assert parsed[0]["category"] == ""
+
     def test_sync_no_changes(self, runner, tmp_path: Path):
         """Test sync reports no changes when LanceDB is up to date."""
         with patch("omni_core_rs.scan_skill_tools") as mock_scan:

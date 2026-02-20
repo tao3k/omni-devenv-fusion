@@ -9,11 +9,13 @@ for command discovery. The actual implementation is in engine.py.
 """
 
 import json
-import structlog
 from pathlib import Path
 from typing import Any
 
+import structlog
+
 from omni.foundation.api.decorators import skill_command
+from omni.foundation.context_delivery import validate_chunked_action
 from omni.foundation.runtime.isolation import run_skill_command
 from omni.foundation.services.llm.client import InferenceClient
 
@@ -164,17 +166,25 @@ async def CrawlUrl(
         - return_skeleton: Include skeleton in response
         - chunk_indices: Specific sections to extract
     """
+    action_name, action_error = validate_chunked_action(
+        action,
+        allowed_actions={"smart", "skeleton", "crawl"},
+        allow_empty=False,
+    )
+    if action_error is not None:
+        return action_error
+
     # Auto-upgrade to smart mode when crawling depth > 1
     # Smart mode uses LLM to plan optimal chunking for multi-page crawls
-    if max_depth > 1 and action == "crawl":
-        action = "smart"
+    if max_depth > 1 and action_name == "crawl":
+        action_name = "smart"
         log.info("Auto-upgraded to smart mode", max_depth=max_depth)
     # For smart action, we need to:
     # 1. First crawl to get skeleton
     # 2. Generate chunk plan with LLM
     # 3. Pass chunk_plan to engine for execution
     chunk_plan = None
-    if action == "smart":
+    if action_name == "smart":
         # First crawl to get skeleton
         crawl_result = run_skill_command(
             skill_dir=_get_skill_dir(),
@@ -203,7 +213,7 @@ async def CrawlUrl(
         script_name="engine.py",
         args={
             "url": url,
-            "action": action,
+            "action": action_name,
             "fit_markdown": fit_markdown,
             "max_depth": max_depth,
             "return_skeleton": return_skeleton,

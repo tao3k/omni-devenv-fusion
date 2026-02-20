@@ -8,7 +8,11 @@ use crate::error::SnifferError;
 
 /// Scan git repository status using libgit2.
 ///
-/// Returns tuple of (branch, modified_count, staged_count, dirty_files).
+/// Returns tuple of `(branch, modified_count, staged_count, dirty_files)`.
+///
+/// # Errors
+///
+/// Returns an error if repository cannot be opened or git status cannot be scanned.
 pub fn scan_git_status(
     repo_path: &std::path::Path,
 ) -> Result<(String, usize, usize, Vec<String>), SnifferError> {

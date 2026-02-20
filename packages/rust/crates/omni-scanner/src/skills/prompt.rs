@@ -1,6 +1,6 @@
 //! Prompt Scanner - Parses Python scripts for @prompt decorated functions.
 //!
-//! Uses TreeSitterPythonParser for robust decorator extraction.
+//! Uses `TreeSitterPythonParser` for robust decorator extraction.
 
 use std::fs;
 use std::path::Path;
@@ -15,6 +15,12 @@ use crate::skills::metadata::PromptRecord;
 /// Scanner for @prompt decorated functions.
 #[derive(Debug)]
 pub struct PromptScanner;
+
+impl Default for PromptScanner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl PromptScanner {
     /// Create a new prompt scanner.
@@ -33,15 +39,23 @@ impl PromptScanner {
     /// # Returns
     ///
     /// A vector of `PromptRecord` objects.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `skill_name` is empty.
     pub fn scan(
         &self,
         scripts_dir: &Path,
         skill_name: &str,
     ) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+        let _ = self;
+        if skill_name.trim().is_empty() {
+            return Err("skill_name cannot be empty".into());
+        }
         let mut prompts = Vec::new();
 
         if !scripts_dir.exists() {
-            log::debug!("Scripts directory not found: {:?}", scripts_dir);
+            log::debug!("Scripts directory not found: {}", scripts_dir.display());
             return Ok(prompts);
         }
 
@@ -52,7 +66,7 @@ impl PromptScanner {
             let entry = match entry {
                 Ok(e) => e,
                 Err(e) => {
-                    log::warn!("Error walking directory {:?}: {}", scripts_dir, e);
+                    log::warn!("Error walking directory {}: {e}", scripts_dir.display());
                     continue;
                 }
             };
@@ -68,22 +82,21 @@ impl PromptScanner {
             }
             if path
                 .file_name()
-                .map(|n| n.to_string_lossy().starts_with("__"))
-                == Some(true)
+                .is_some_and(|n| n.to_string_lossy().starts_with("__"))
             {
                 continue;
             }
 
-            match self.scan_file(path, skill_name) {
+            match Self::scan_file(path, skill_name) {
                 Ok(file_prompts) => prompts.extend(file_prompts),
-                Err(e) => log::warn!("Error scanning {:?}: {}", path, e),
+                Err(e) => log::warn!("Error scanning {}: {e}", path.display()),
             }
         }
 
         log::debug!(
-            "PromptScanner: Found {} @prompt functions in {:?}",
+            "PromptScanner: Found {} @prompt functions in {}",
             prompts.len(),
-            scripts_dir
+            scripts_dir.display()
         );
 
         Ok(prompts)
@@ -91,7 +104,6 @@ impl PromptScanner {
 
     /// Scan a single file for @prompt decorated functions.
     fn scan_file(
-        &self,
         path: &Path,
         skill_name: &str,
     ) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
@@ -116,13 +128,13 @@ impl PromptScanner {
             let description = decorator_args
                 .and_then(|a| a.description.clone())
                 .or_else(|| {
-                    if !func.docstring.is_empty() {
-                        Some(func.docstring.clone())
-                    } else {
+                    if func.docstring.is_empty() {
                         None
+                    } else {
+                        Some(func.docstring.clone())
                     }
                 })
-                .unwrap_or_else(|| format!("Prompt {}.{}", skill_name, name));
+                .unwrap_or_else(|| format!("Prompt {skill_name}.{name}"));
 
             // Extract parameter names
             let parameters: Vec<String> = func.parameters.iter().map(|p| p.name.clone()).collect();
@@ -181,11 +193,19 @@ impl PromptScanner {
     /// Scan multiple files for @prompt decorated functions.
     ///
     /// Used for testing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `skill_name` is empty.
     pub fn scan_paths(
         &self,
         files: &[(String, String)],
         skill_name: &str,
     ) -> Result<Vec<PromptRecord>, Box<dyn std::error::Error>> {
+        let _ = self;
+        if skill_name.trim().is_empty() {
+            return Err("skill_name cannot be empty".into());
+        }
         let mut all_prompts = Vec::new();
 
         for (file_path, content) in files {
@@ -206,13 +226,13 @@ impl PromptScanner {
                 let description = decorator_args
                     .and_then(|a| a.description.clone())
                     .or_else(|| {
-                        if !func.docstring.is_empty() {
-                            Some(func.docstring.clone())
-                        } else {
+                        if func.docstring.is_empty() {
                             None
+                        } else {
+                            Some(func.docstring.clone())
                         }
                     })
-                    .unwrap_or_else(|| format!("Prompt {}.{}", skill_name, name));
+                    .unwrap_or_else(|| format!("Prompt {skill_name}.{name}"));
 
                 let parameters: Vec<String> =
                     func.parameters.iter().map(|p| p.name.clone()).collect();

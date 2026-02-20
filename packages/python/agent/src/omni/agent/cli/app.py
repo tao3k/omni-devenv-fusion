@@ -27,9 +27,12 @@ from omni.foundation.config.settings import get_settings
 
 # Command Imports
 from .commands import (
+    register_agent_command,
+    register_channel_command,
     register_completions_command,
     register_dashboard_command,
     register_db_command,
+    register_gateway_command,
     register_knowledge_command,
     register_mcp_command,
     register_reindex_command,
@@ -169,7 +172,13 @@ def _bootstrap_configuration(
     if verbose:
         log_level = "DEBUG"
 
-    configure_logging(level=log_level)
+    # Force reconfigure so foundation verbosity state always matches CLI -v.
+    # Without force, early logger init can leave is_verbose() stale (INFO) and
+    # skip monitor output in skill runner.
+    configure_logging(level=log_level, verbose=verbose, force=True)
+
+    # Cross-layer verbose signal for shared/common code (core/foundation).
+    os.environ["OMNI_CLI_VERBOSE"] = "1" if verbose else "0"
 
     # Store verbose flag globally for subcommands to check
     global _verbose_flag
@@ -195,9 +204,10 @@ def _verbose_callback(ctx: typer.Context, param: Any, value: bool) -> None:
     global _verbose_flag
     if value:
         _verbose_flag = True
+        os.environ["OMNI_CLI_VERBOSE"] = "1"
         # Reconfigure logging immediately if already configured
         try:
-            configure_logging(level="DEBUG")
+            configure_logging(level="DEBUG", verbose=True, force=True)
         except Exception:
             pass  # Logging might not be configured yet
 
@@ -232,7 +242,10 @@ def main(
     pass
 
 
-# Register subcommands
+# Register subcommands (each declares load requirements via register_requirements)
+from omni.agent.cli.load_requirements import register_requirements
+
+register_requirements("version", ollama=False, embedding_index=False)
 register_completions_command(app)
 register_dashboard_command(app)
 register_db_command(app)
@@ -240,9 +253,17 @@ register_skill_command(app)
 register_mcp_command(app)
 register_route_command(app)
 register_run_command(app)
+register_gateway_command(app)
+register_agent_command(app)
+register_channel_command(app)
 register_sync_command(app)
 register_knowledge_command(app)
 register_reindex_command(app)
+
+# So that CLI-invoked skills use MCP-first embedding (warm path when MCP is running)
+from omni.agent.embedding_override import install_skill_embedding_override
+
+install_skill_embedding_override()
 
 
 def entry_point():
@@ -251,7 +272,11 @@ def entry_point():
     Pre-parses global options (--verbose, -v, --conf, -c) before Typer takes over,
     ensuring logging is configured BEFORE any command runs.
     """
+    import os
     import sys
+
+    # Disable tqdm progress bars (LanceDB/lance) for cleaner MCP/CLI output
+    os.environ.setdefault("TQDM_DISABLE", "1")
 
     # Pre-parse to detect --verbose and --conf before Typer takes over
     conf = None
@@ -279,15 +304,24 @@ def entry_point():
     # Bootstrap configuration (logging) BEFORE any command runs
     _bootstrap_configuration(conf, verbose)
 
-    # Auto-reindex vector indexes when embedding signature changes.
-    # Skip when user is already invoking reindex command explicitly.
-    if not (argv and argv[0] == "reindex"):
+    # Declarative on-demand loading: each command registers its requirements via load_requirements
+    from omni.agent.cli.load_requirements import get_requirements
+
+    cmd = argv[0] if argv else None
+    reqs = get_requirements(cmd)
+    if reqs.ollama:
         try:
-            from .commands.reindex import ensure_embedding_index_compatibility
+            from omni.agent.ollama_lifecycle import ensure_ollama_for_embedding
+
+            ensure_ollama_for_embedding()
+        except Exception:
+            pass
+    if reqs.embedding_index:
+        try:
+            from omni.agent.services.reindex import ensure_embedding_index_compatibility
 
             ensure_embedding_index_compatibility(auto_fix=True)
         except Exception:
-            # Best effort guardrail; never block CLI startup.
             pass
 
     # Restore argv and invoke app

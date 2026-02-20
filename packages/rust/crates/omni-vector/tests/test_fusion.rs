@@ -22,6 +22,7 @@ fn make_tool_result(name: &str, score: f32) -> ToolSearchResult {
         routing_keywords: vec![],
         intents: vec![],
         category: "tool".to_string(),
+        parameters: vec![],
     }
 }
 

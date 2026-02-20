@@ -118,7 +118,9 @@ impl PanelCollection {
             .panels
             .iter()
             .map(|p| {
-                let expanded_lines = p.line_count().min(MAX_EXPANDED_HEIGHT as usize) as u16;
+                let expanded_lines =
+                    u16::try_from(p.line_count().min(usize::from(MAX_EXPANDED_HEIGHT)))
+                        .unwrap_or(MAX_EXPANDED_HEIGHT);
                 Constraint::Length(match *p.state() {
                     PanelState::Folded => FOLDED_HEIGHT,
                     PanelState::Expanded => expanded_lines.saturating_add(2),

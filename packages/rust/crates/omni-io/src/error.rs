@@ -21,7 +21,7 @@ pub enum IoError {
     #[error("Binary file detected")]
     BinaryFile,
 
-    /// Low-level I/O error from std::io.
+    /// Low-level I/O error from `std::io`.
     #[error("IO error: {0}")]
     System(#[from] std::io::Error),
 

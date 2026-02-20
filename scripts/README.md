@@ -4,11 +4,13 @@ This directory contains utility scripts for the Omni-Dev Fusion project.
 
 ## Available Scripts
 
-| Script                         | Purpose                              |
-| ------------------------------ | ------------------------------------ |
-| `generate_llm_index.py`        | Generate skill index for LLM context |
-| `verify_skill_descriptions.py` | Verify skill command descriptions    |
-| `verify_system.py`             | End-to-end smoke test for kernel     |
+| Script                         | Purpose                                              |
+| ------------------------------ | ---------------------------------------------------- |
+| `generate_llm_index.py`        | Generate skill index for LLM context                 |
+| `verify_skill_descriptions.py` | Verify skill command descriptions                    |
+| `verify_system.py`             | End-to-end smoke test for kernel                     |
+| `benchmark_wendao_search.py`   | Benchmark wendao search latency                      |
+| `benchmark_wendao_related.py`  | Benchmark wendao related latency and PPR diagnostics |
 
 ## Running Scripts
 

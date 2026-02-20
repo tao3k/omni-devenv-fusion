@@ -169,7 +169,7 @@ skills = await router.suggest_skills("/project/path")
 
 ### Runtime Configuration
 
-`OmniRouter` reads routing search/profile settings from merged `settings.yaml` (system default: `packages/conf/settings.yaml`; user override: `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml`).
+`OmniRouter` reads routing search/profile from settings: system `packages/conf/settings.yaml`, user `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` (user overrides system).
 The user-facing override mechanism is `--conf <dir>`, which sets the user config directory.
 
 ```yaml

@@ -11,8 +11,10 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
 from typing import Any
 
 from mcp.server import Server
@@ -49,9 +51,16 @@ def register_embedding_tools(app: Server) -> None:
             from omni.foundation.services.embedding import get_embedding_service
 
             embed_service = get_embedding_service()
-            vectors = embed_service.embed_batch(texts)
+            start = time.perf_counter()
+            vectors = await asyncio.to_thread(embed_service.embed_batch, texts)
+            duration_ms = (time.perf_counter() - start) * 1000.0
 
-            logger.debug(f"[MCP] Generated {len(vectors)} embeddings (dim={len(vectors[0])})")
+            logger.debug(
+                "[MCP] Generated %s embeddings (dim=%s) duration_ms=%.2f",
+                len(vectors),
+                len(vectors[0]) if vectors else 0,
+                duration_ms,
+            )
             return [TextContent(type="text", text=json.dumps(vectors))]
 
         except Exception as e:
@@ -78,11 +87,17 @@ def register_embedding_tools(app: Server) -> None:
             from omni.foundation.services.embedding import get_embedding_service
 
             embed_service = get_embedding_service()
-            vectors = embed_service.embed(text)
+            start = time.perf_counter()
+            vectors = await asyncio.to_thread(embed_service.embed, text)
+            duration_ms = (time.perf_counter() - start) * 1000.0
 
             # Return first (and only) embedding
             vector = vectors[0] if vectors else []
-            logger.debug(f"[MCP] Generated single embedding (dim={len(vector)})")
+            logger.debug(
+                "[MCP] Generated single embedding (dim=%s) duration_ms=%.2f",
+                len(vector),
+                duration_ms,
+            )
             return [TextContent(type="text", text=json.dumps(vector))]
 
         except Exception as e:

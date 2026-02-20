@@ -302,7 +302,7 @@ def get_runtime_dir(subdir: str = "") -> Path:
 def get_skills_dir() -> Path:
     """Get the skills directory path.
 
-    Uses SKILLS_DIR from omni.foundation.config.skills which reads from settings.yaml.
+    Uses SKILLS_DIR from omni.foundation.config.skills which reads from settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml).
 
     Returns:
         Path to skills directory (default: assets/skills)

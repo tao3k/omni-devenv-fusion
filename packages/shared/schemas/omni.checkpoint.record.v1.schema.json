@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.omni.dev/omni.checkpoint.record.v1.schema.json",
+  "title": "Omni Checkpoint Record v1",
+  "description": "Canonical checkpoint payload contract for Rust checkpoint store writes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["checkpoint_id", "thread_id", "timestamp", "content"],
+  "properties": {
+    "checkpoint_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "thread_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "number"
+    },
+    "content": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parent_id": {
+      "type": ["string", "null"]
+    },
+    "embedding": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "number"
+      }
+    },
+    "metadata": {
+      "type": ["string", "null"]
+    }
+  }
+}

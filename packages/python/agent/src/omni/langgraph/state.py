@@ -147,24 +147,20 @@ class StateCheckpointer:
         self._update_count = 0
         self._current_checkpoint_id: str | None = None
 
-        # Import Rust bindings
         try:
             from omni_core_rs import create_checkpoint_store
-            from omni.foundation.config.database import get_checkpoint_db_path
+        except ImportError as e:
+            raise RuntimeError(
+                "Rust bindings (omni_core_rs) are required for StateCheckpointer."
+            ) from e
+        from omni.foundation.config.database import get_checkpoint_db_path
 
-            db_path = str(get_checkpoint_db_path())
-            self._store = create_checkpoint_store(db_path, 1536)
-            self._rust_available = True
-        except ImportError:
-            logger.warning("Rust bindings not available, using in-memory fallback")
-            self._store = None
-            self._rust_available = False
-            self._memory: dict[str, dict[str, Any]] = {}
+        db_path = str(get_checkpoint_db_path())
+        self._store = create_checkpoint_store(db_path, 1536)
 
         logger.info(
             "state_checkpointer_initialized",
             table_name=table_name,
-            rust_available=self._rust_available,
         )
 
     def put(
@@ -184,12 +180,9 @@ class StateCheckpointer:
         Returns:
             checkpoint_id: ID of the saved checkpoint
         """
-        import json
-
         self._update_count += 1
 
         checkpoint_id = str(uuid.uuid4())[:8]
-        timestamp = time.time()
 
         checkpoint = StateCheckpoint(
             thread_id=thread_id,
@@ -205,31 +198,37 @@ class StateCheckpointer:
 
         self._current_checkpoint_id = checkpoint_id
 
-        if not self._rust_available:
-            self._memory[thread_id] = dict(state)
-
         return checkpoint_id
 
     def _save_checkpoint(self, checkpoint: StateCheckpoint) -> None:
         """Save checkpoint to Rust store."""
         import json
 
-        if not self._rust_available or self._store is None:
-            return
-
         try:
+            from omni.foundation.api.checkpoint_schema import validate_checkpoint_write
+
             content = checkpoint.to_json()
             metadata_json = json.dumps(checkpoint.metadata)
+            payload = {
+                "checkpoint_id": checkpoint.checkpoint_id,
+                "thread_id": checkpoint.thread_id,
+                "timestamp": checkpoint.timestamp,
+                "content": content,
+                "parent_id": checkpoint.parent_checkpoint_id,
+                "embedding": None,
+                "metadata": metadata_json,
+            }
+            validate_checkpoint_write(self._table_name, payload)
 
             self._store.save_checkpoint(
                 table_name=self._table_name,
-                checkpoint_id=checkpoint.checkpoint_id,
-                thread_id=checkpoint.thread_id,
-                content=content,
-                timestamp=checkpoint.timestamp,
-                parent_id=checkpoint.parent_checkpoint_id,
-                embedding=None,
-                metadata=metadata_json,
+                checkpoint_id=payload["checkpoint_id"],
+                thread_id=payload["thread_id"],
+                content=payload["content"],
+                timestamp=payload["timestamp"],
+                parent_id=payload["parent_id"],
+                embedding=payload["embedding"],
+                metadata=payload["metadata"],
             )
 
             logger.debug(
@@ -255,9 +254,6 @@ class StateCheckpointer:
         Returns:
             Latest GraphState or None if not found
         """
-        if not self._rust_available:
-            return self._memory.get(thread_id)
-
         try:
             content = self._store.get_latest(self._table_name, thread_id)
 
@@ -274,9 +270,6 @@ class StateCheckpointer:
 
     def get_latest_checkpoint_id(self, thread_id: str) -> str | None:
         """Get the latest checkpoint ID for a thread."""
-        if not self._rust_available:
-            return None
-
         try:
             content = self._store.get_latest(self._table_name, thread_id)
             if content:
@@ -297,9 +290,6 @@ class StateCheckpointer:
         Returns:
             List of checkpoint metadata (newest first)
         """
-        if not self._rust_available:
-            return []
-
         try:
             history_contents = self._store.get_history(self._table_name, thread_id, limit)
 
@@ -337,12 +327,6 @@ class StateCheckpointer:
         Returns:
             Number of deleted checkpoints
         """
-        if not self._rust_available:
-            if thread_id in self._memory:
-                del self._memory[thread_id]
-                return 1
-            return 0
-
         try:
             count = self._store.delete_thread(self._table_name, thread_id)
             logger.info(

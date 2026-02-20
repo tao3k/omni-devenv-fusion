@@ -1,8 +1,8 @@
-//! High-performance environment sniffer for Omni DevEnv.
+//! High-performance environment sniffer for Omni `DevEnv`.
 //!
 //! Uses libgit2 for fast git operations and provides environment snapshots.
 //! The `glob_engine` module provides Rust-Native Cortex for high-performance
-//! context detection using GlobSet (ripgrep's core).
+//! context detection using `GlobSet` (ripgrep's core).
 //!
 //! # Architecture (ODF-REP Compliant)
 //!
@@ -16,7 +16,7 @@
 //! └── glob_engine.rs  # High-performance GlobSet sniffer (1600+ rules)
 //! ```
 //!
-//! # Example: High-Performance GlobSet Sniffer
+//! # Example: High-Performance `GlobSet` Sniffer
 //!
 //! ```rust,ignore
 //! use omni_sniffer::{SnifferEngine, SnifferRule};

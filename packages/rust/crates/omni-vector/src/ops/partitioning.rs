@@ -13,6 +13,10 @@ impl VectorStore {
     /// Suggests a column to partition the table by, if the table is large and has
     /// a partition-friendly column (e.g. skill_name, category). Returns `None` if
     /// the table does not exist, is too small, or has no such column.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when opening or counting the table fails.
     pub async fn suggest_partition_column(
         &self,
         table_name: &str,

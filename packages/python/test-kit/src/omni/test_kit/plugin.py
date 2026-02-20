@@ -5,6 +5,8 @@ This module registers all fixtures, markers, and hooks for the Omni Test Kit.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from omni.test_kit.decorators import load_test_cases
@@ -13,6 +15,7 @@ from omni.foundation.config.dirs import get_skills_dir
 
 # Register fixtures from submodules
 pytest_plugins = [
+    "omni.test_kit.fixtures.memory_protection",  # Must load early: memory cap + per-test abort
     "omni.test_kit.fixtures",
     "omni.test_kit.mcp",
     "omni.test_kit.langgraph",

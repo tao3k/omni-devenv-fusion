@@ -52,7 +52,7 @@ available tools and routing strategies.
 
   <memory_rules>
     <rule>Remember: "Always use semantic versioning for git tags"</rule>
-    <rule>Remember: "Run 'just validate' before committing"</rule>
+    <rule>Remember: "Use 'just test' for normal development; 'just validate' only for release pre-release validation"</rule>
     <rule>Remember: "Use conventional commit messages"</rule>
   </memory_rules>
 

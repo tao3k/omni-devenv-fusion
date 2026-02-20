@@ -1,18 +1,18 @@
-//! LanceDB RecordBatch utilities.
+//! `LanceDB` `RecordBatch` utilities.
 //!
-//! Provides Arrow record batch helpers for LanceDB vector storage.
+//! Provides Arrow record batch helpers for `LanceDB` vector storage.
 //!
 //! **Embedding Configuration**:
 //! - Default dimension: 1024 (configured via settings.yaml)
 //! - LLM-based embedding: MiniMax-M2.1 generates 16 core values -> expanded to 1024
-//! - Storage: FixedSizeListArray<f32> with configured dimension
+//! - Storage: `FixedSizeListArray<f32>` with configured dimension
 
 use std::sync::Arc;
 
 use lance::deps::arrow_array::{
     Array, FixedSizeListArray, Float32Array, RecordBatch, RecordBatchReader, StringArray,
 };
-use lance::deps::arrow_schema::{DataType, Field, Schema};
+use lance::deps::arrow_schema::{ArrowError, DataType, Field, Schema};
 
 /// Vector column name
 pub const VECTOR_COLUMN: &str = "vector";
@@ -49,6 +49,7 @@ pub struct VectorRecordBatchReader {
 
 impl VectorRecordBatchReader {
     /// Create a new reader from a vector store batch.
+    #[must_use]
     pub fn new(schema: Arc<Schema>, batches: Vec<RecordBatch>) -> Self {
         Self {
             schema,
@@ -58,13 +59,20 @@ impl VectorRecordBatchReader {
     }
 
     /// Create a reader from individual vectors.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when:
+    /// - `dimension` cannot be represented as `i32`.
+    /// - Arrow array or `RecordBatch` construction fails.
     pub fn from_vectors(
         ids: Vec<String>,
         vectors: Vec<Vec<f32>>,
         contents: Vec<String>,
         metadatas: Vec<String>,
         dimension: usize,
-    ) -> Result<Self, lance::deps::arrow_schema::ArrowError> {
+    ) -> Result<Self, ArrowError> {
+        let dimension_i32 = dimension_to_i32(dimension)?;
         let id_array = StringArray::from(ids);
         let content_array = StringArray::from(contents);
         let metadata_array = StringArray::from(metadatas);
@@ -73,7 +81,7 @@ impl VectorRecordBatchReader {
         let flat_values: Vec<f32> = vectors.into_iter().flatten().collect();
         let vector_array = FixedSizeListArray::try_new(
             Arc::new(Field::new("item", DataType::Float32, true)),
-            dimension as i32,
+            dimension_i32,
             Arc::new(Float32Array::from(flat_values)),
             None,
         )?;
@@ -84,7 +92,7 @@ impl VectorRecordBatchReader {
                 VECTOR_COLUMN,
                 DataType::FixedSizeList(
                     Arc::new(Field::new("item", DataType::Float32, true)),
-                    dimension as i32,
+                    dimension_i32,
                 ),
                 false,
             ),
@@ -110,20 +118,25 @@ impl VectorRecordBatchReader {
     }
 
     /// Get the default schema for vector storage.
-    pub fn default_schema(dimension: usize) -> Arc<Schema> {
-        Arc::new(Schema::new(vec![
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `dimension` cannot be represented as `i32`.
+    pub fn default_schema(dimension: usize) -> Result<Arc<Schema>, ArrowError> {
+        let dimension_i32 = dimension_to_i32(dimension)?;
+        Ok(Arc::new(Schema::new(vec![
             Field::new(ID_COLUMN, DataType::Utf8, false),
             Field::new(
                 VECTOR_COLUMN,
                 DataType::FixedSizeList(
                     Arc::new(Field::new("item", DataType::Float32, true)),
-                    dimension as i32,
+                    dimension_i32,
                 ),
                 false,
             ),
             Field::new(CONTENT_COLUMN, DataType::Utf8, false),
             Field::new(METADATA_COLUMN, DataType::Utf8, true),
-        ]))
+        ])))
     }
 }
 
@@ -146,7 +159,8 @@ impl RecordBatchReader for VectorRecordBatchReader {
     }
 }
 
-/// Extract string values from a StringArray at a specific index.
+/// Extract string values from a `StringArray` at a specific index.
+#[must_use]
 pub fn extract_string(array: &StringArray, index: usize) -> String {
     if array.is_null(index) {
         String::new()
@@ -156,6 +170,7 @@ pub fn extract_string(array: &StringArray, index: usize) -> String {
 }
 
 /// Extract optional string from metadata column.
+#[must_use]
 pub fn extract_optional_string(array: Option<&StringArray>, index: usize) -> Option<String> {
     array.and_then(|arr| {
         if arr.is_null(index) {
@@ -163,5 +178,13 @@ pub fn extract_optional_string(array: Option<&StringArray>, index: usize) -> Opt
         } else {
             Some(arr.value(index).to_string())
         }
+    })
+}
+
+fn dimension_to_i32(dimension: usize) -> Result<i32, ArrowError> {
+    i32::try_from(dimension).map_err(|_| {
+        ArrowError::InvalidArgumentError(format!(
+            "embedding dimension {dimension} exceeds i32::MAX"
+        ))
     })
 }

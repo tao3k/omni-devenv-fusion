@@ -9,8 +9,10 @@ Detects issues like:
 """
 
 import asyncio
+import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -24,6 +26,412 @@ async def handler():
     await handler.initialize()
     yield handler
     # Cleanup if needed
+
+
+class _DummyKernel:
+    def __init__(self, *, is_running: bool) -> None:
+        self.is_ready = True
+        self.is_running = is_running
+        self.initialize_calls = 0
+        self.start_calls = 0
+        self.skill_manager = SimpleNamespace(watcher=object())
+        self.skill_context = SimpleNamespace(list_skills=lambda: [])
+
+    async def initialize(self) -> None:
+        self.initialize_calls += 1
+
+    async def start(self) -> None:
+        self.start_calls += 1
+        self.is_running = True
+
+
+class _SlowDummyKernel(_DummyKernel):
+    async def initialize(self) -> None:
+        self.initialize_calls += 1
+        await asyncio.sleep(0.05)
+
+
+class _ToolCommand:
+    def __init__(self, description: str = "desc", schema: dict | None = None) -> None:
+        self.description = description
+        self.input_schema = schema or {"type": "object"}
+
+
+class _ToolContext:
+    def __init__(self, commands: dict[str, _ToolCommand]) -> None:
+        self._commands = commands
+
+    def get_command(self, name: str):
+        return self._commands.get(name)
+
+    def list_commands(self) -> list[str]:
+        return list(self._commands.keys())
+
+    def list_skills(self) -> list[str]:
+        return sorted({name.split(".", 1)[0] for name in self._commands})
+
+    def get_filtered_commands(self) -> list[str]:
+        return []
+
+
+class _RegistryStoreStub:
+    def __init__(self, rows: list[dict]) -> None:
+        self._rows = rows
+        self.calls = 0
+
+    def list_all_tools(self, *_args):
+        self.calls += 1
+        return json.dumps(self._rows)
+
+
+class _SettingsStub:
+    def __init__(self, value: object) -> None:
+        self._value = value
+
+    def get(self, key: str, default: object = None) -> object:
+        if key == "mcp.tools_list.max_in_flight":
+            return self._value
+        return default
+
+
+@pytest.mark.asyncio
+async def test_initialize_starts_kernel_runtime_when_not_running() -> None:
+    """Handler init must call kernel.start() so Live-Wire watcher can run."""
+    handler = AgentMCPHandler()
+    dummy = _DummyKernel(is_running=False)
+    handler._kernel = dummy  # type: ignore[assignment]
+
+    await handler.initialize()
+
+    assert dummy.initialize_calls == 1
+    assert dummy.start_calls == 1
+    assert handler._initialized is True
+
+
+@pytest.mark.asyncio
+async def test_initialize_does_not_restart_running_kernel() -> None:
+    """Handler init should not call start() when kernel already RUNNING."""
+    handler = AgentMCPHandler()
+    dummy = _DummyKernel(is_running=True)
+    handler._kernel = dummy  # type: ignore[assignment]
+
+    await handler.initialize()
+
+    assert dummy.initialize_calls == 1
+    assert dummy.start_calls == 0
+    assert handler._initialized is True
+
+
+@pytest.mark.asyncio
+async def test_initialize_is_single_flight_under_concurrency() -> None:
+    """Concurrent initialize() calls should bootstrap kernel only once."""
+    handler = AgentMCPHandler()
+    dummy = _SlowDummyKernel(is_running=False)
+    handler._kernel = dummy  # type: ignore[assignment]
+
+    await asyncio.gather(handler.initialize(), handler.initialize(), handler.initialize())
+
+    assert dummy.initialize_calls == 1
+    assert dummy.start_calls == 1
+    assert handler.is_ready is True
+    assert handler.is_initializing is False
+
+
+@pytest.mark.asyncio
+async def test_ready_and_initializing_flags_default_false() -> None:
+    handler = AgentMCPHandler()
+    assert handler.is_ready is False
+    assert handler.is_initializing is False
+
+
+@pytest.mark.asyncio
+async def test_list_tools_uses_registry_cache_within_ttl() -> None:
+    """Burst tools/list calls should reuse cached Rust DB snapshot."""
+    handler = AgentMCPHandler()
+    store = _RegistryStoreStub(
+        [
+            {
+                "id": "git.commit",
+                "content": "Commit staged changes",
+                "metadata": {
+                    "type": "command",
+                    "skill_name": "git",
+                    "tool_name": "git.commit",
+                },
+            }
+        ]
+    )
+    context = _ToolContext({"git.commit": _ToolCommand("Commit staged changes")})
+    handler._kernel = SimpleNamespace(
+        skill_context=context,
+        skill_manager=SimpleNamespace(
+            registry=SimpleNamespace(store=store, table_name="skills_registry")
+        ),
+    )
+    handler._initialized = True
+    handler._tools_cache_ttl_secs = 60.0
+
+    first = await handler._handle_list_tools({"id": 1})
+    second = await handler._handle_list_tools({"id": 2})
+
+    assert store.calls == 1
+    assert first["result"]["tools"] == second["result"]["tools"]
+    assert first["result"]["tools"][0]["name"] == "git.commit"
+    assert handler._tools_list_requests_total == 2
+    assert handler._tools_cache_hits_total == 1
+    assert handler._tools_cache_misses_total == 1
+    assert handler._tools_build_count == 1
+    assert handler._tools_build_failures_total == 0
+    assert handler._tools_build_latency_ms_total >= 0.0
+    assert handler._tools_build_latency_ms_max >= 0.0
+
+
+def test_tools_list_max_in_flight_setting_is_clamped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "omni.foundation.config.settings.get_settings",
+        lambda: _SettingsStub(9999),
+    )
+    assert AgentMCPHandler._load_tools_list_max_in_flight() == 512
+
+    monkeypatch.setattr(
+        "omni.foundation.config.settings.get_settings",
+        lambda: _SettingsStub(-5),
+    )
+    assert AgentMCPHandler._load_tools_list_max_in_flight() == 1
+
+    monkeypatch.setattr(
+        "omni.foundation.config.settings.get_settings",
+        lambda: _SettingsStub("invalid"),
+    )
+    assert AgentMCPHandler._load_tools_list_max_in_flight() == 90
+
+
+@pytest.mark.asyncio
+async def test_list_tools_respects_max_in_flight_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    """tools/list concurrent execution should respect configured in-flight cap."""
+    handler = AgentMCPHandler()
+    context = _ToolContext({"git.commit": _ToolCommand("Commit staged changes")})
+    handler._kernel = SimpleNamespace(
+        skill_context=context,
+        skill_manager=SimpleNamespace(
+            registry=SimpleNamespace(store=None, table_name="skills_registry")
+        ),
+    )
+    handler._initialized = True
+    handler._tools_list_max_in_flight = 2
+    handler._tools_list_semaphore = asyncio.Semaphore(2)
+
+    monkeypatch.setattr(
+        "omni.core.config.loader.load_skill_limits",
+        lambda: SimpleNamespace(auto_optimize=False, dynamic_tools=10_000),
+    )
+
+    active = 0
+    peak = 0
+
+    async def _fake_get_cached_tools() -> tuple[list[dict[str, object]], bool, tuple[str, ...]]:
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        try:
+            await asyncio.sleep(0.02)
+            return (
+                [
+                    {
+                        "name": "git.commit",
+                        "description": "Commit staged changes",
+                        "inputSchema": {"type": "object"},
+                    }
+                ],
+                True,
+                ("git.commit",),
+            )
+        finally:
+            active = max(0, active - 1)
+
+    handler._get_cached_tools = _fake_get_cached_tools  # type: ignore[method-assign]
+    await asyncio.gather(*(handler._handle_list_tools({"id": i}) for i in range(1, 9)))
+
+    assert peak <= 2
+    assert handler._tools_list_max_observed_in_flight <= 2
+    assert handler._tools_list_in_flight == 0
+
+
+@pytest.mark.asyncio
+async def test_list_tools_errors_when_registry_unavailable() -> None:
+    """Registry read failure must hard-fail (no in-memory fallback)."""
+    handler = AgentMCPHandler()
+
+    def _broken_list_all_tools(*_args):
+        raise RuntimeError("registry unavailable")
+
+    context = _ToolContext({"knowledge.search": _ToolCommand("Search knowledge base")})
+    handler._kernel = SimpleNamespace(
+        skill_context=context,
+        skill_manager=SimpleNamespace(
+            registry=SimpleNamespace(
+                store=SimpleNamespace(list_all_tools=_broken_list_all_tools),
+                table_name="skills_registry",
+            )
+        ),
+    )
+    handler._initialized = True
+    handler._tools_cache_ttl_secs = 60.0
+
+    result = await handler.handle_request({"method": "tools/list", "params": {}, "id": 9})
+    assert result.get("error") is not None
+    assert "Rust DB registry" in result["error"]["message"]
+    assert handler._tools_list_requests_total == 1
+    assert handler._tools_cache_hits_total == 0
+    assert handler._tools_cache_misses_total == 1
+    assert handler._tools_build_count == 0
+    assert handler._tools_build_failures_total == 1
+
+
+@pytest.mark.asyncio
+async def test_invalidate_tools_cache_forces_registry_refresh() -> None:
+    """Explicit cache invalidation should trigger a fresh DB read."""
+    handler = AgentMCPHandler()
+    store = _RegistryStoreStub(
+        [
+            {
+                "id": "code.code_search",
+                "content": "Search code",
+                "metadata": {
+                    "type": "command",
+                    "skill_name": "code",
+                    "tool_name": "code.code_search",
+                },
+            }
+        ]
+    )
+    context = _ToolContext({"code.code_search": _ToolCommand("Search code")})
+    handler._kernel = SimpleNamespace(
+        skill_context=context,
+        skill_manager=SimpleNamespace(
+            registry=SimpleNamespace(store=store, table_name="skills_registry")
+        ),
+    )
+    handler._initialized = True
+    handler._tools_cache_ttl_secs = 60.0
+
+    await handler._handle_list_tools({"id": 1})
+    handler.invalidate_tools_cache()
+    await handler._handle_list_tools({"id": 2})
+
+    assert store.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_list_tools_compacts_description_and_schema_payload() -> None:
+    """tools/list should keep response compact for high-frequency polling."""
+    handler = AgentMCPHandler()
+    store = _RegistryStoreStub(
+        [
+            {
+                "id": "memory.search",
+                "content": "Search memories",
+                "metadata": {
+                    "type": "command",
+                    "skill_name": "memory",
+                    "tool_name": "memory.search",
+                },
+            }
+        ]
+    )
+    long_desc = ("Long description with verbose details. " * 80).strip()
+    schema = {
+        "type": "object",
+        "description": "Top-level schema description",
+        "title": "SearchInput",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Query text",
+                "default": "hello",
+                "examples": ["foo"],
+            }
+        },
+        "required": ["query"],
+        "examples": [{"query": "bar"}],
+    }
+    context = _ToolContext({"memory.search": _ToolCommand(long_desc, schema)})
+    handler._kernel = SimpleNamespace(
+        skill_context=context,
+        skill_manager=SimpleNamespace(
+            registry=SimpleNamespace(store=store, table_name="skills_registry")
+        ),
+    )
+    handler._initialized = True
+    handler._tools_cache_ttl_secs = 60.0
+
+    result = await handler._handle_list_tools({"id": 10})
+    tool = result["result"]["tools"][0]
+    assert tool["name"] == "memory.search"
+    assert len(tool["description"]) <= handler._tools_description_max_chars
+    assert "\n" not in tool["description"]
+
+    def _contains_key_recursive(value: object, key: str) -> bool:
+        if isinstance(value, dict):
+            if key in value:
+                return True
+            return any(_contains_key_recursive(v, key) for v in value.values())
+        if isinstance(value, list):
+            return any(_contains_key_recursive(v, key) for v in value)
+        return False
+
+    compact_schema = tool["inputSchema"]
+    for dropped in ("description", "examples", "example", "title", "default"):
+        assert not _contains_key_recursive(compact_schema, dropped)
+    assert compact_schema["type"] == "object"
+    assert "properties" in compact_schema
+    assert "query" in compact_schema["properties"]
+
+
+@pytest.mark.asyncio
+async def test_tools_stats_log_is_throttled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Aggregated tools/list stats log should emit once per configured interval."""
+    handler = AgentMCPHandler()
+    store = _RegistryStoreStub(
+        [
+            {
+                "id": "memory.search",
+                "content": "Search memories",
+                "metadata": {
+                    "type": "command",
+                    "skill_name": "memory",
+                    "tool_name": "memory.search",
+                },
+            }
+        ]
+    )
+    context = _ToolContext({"memory.search": _ToolCommand("Search memories")})
+    handler._kernel = SimpleNamespace(
+        skill_context=context,
+        skill_manager=SimpleNamespace(
+            registry=SimpleNamespace(store=store, table_name="skills_registry")
+        ),
+    )
+    handler._initialized = True
+    handler._tools_cache_ttl_secs = 60.0
+    handler._tools_log_interval_secs = 10_000.0
+    handler._tools_stats_log_interval_secs = 10_000.0
+
+    info_messages: list[str] = []
+
+    def _capture_info(msg: str, *args, **_kwargs) -> None:
+        formatted = msg % args if args else msg
+        info_messages.append(formatted)
+
+    monkeypatch.setattr("omni.agent.server.logger.info", _capture_info)
+
+    await handler._handle_list_tools({"id": 21})
+    await handler._handle_list_tools({"id": 22})
+
+    stats_logs = [line for line in info_messages if "[MCP] tools/list stats" in line]
+    assert len(stats_logs) == 1
 
 
 @pytest.mark.asyncio
@@ -128,9 +536,9 @@ async def test_call_tool_git_commit_returns_canonical_shape(
     Must not commit in the project repo - use tmp_path for git operations.
     """
     # Init a temp git repo and stage one file so commit can succeed
-    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)  # noqa: ASYNC221
     (tmp_path / "f").write_text("x")
-    subprocess.run(["git", "add", "f"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(["git", "add", "f"], cwd=tmp_path, capture_output=True, check=True)  # noqa: ASYNC221
 
     request = {
         "id": 1,
@@ -178,12 +586,12 @@ async def test_list_tools_includes_knowledge_tools(handler: AgentMCPHandler):
 
 
 @pytest.mark.asyncio
-async def test_call_tool_knowledge_zk_stats_via_mcp(handler: AgentMCPHandler):
-    """MCP tools/call knowledge.zk_stats returns canonical shape and valid stats."""
+async def test_call_tool_knowledge_link_graph_stats_via_mcp(handler: AgentMCPHandler):
+    """MCP tools/call knowledge.link_graph_stats returns canonical shape and valid stats."""
     response = await handler.handle_request(
         {
             "method": "tools/call",
-            "params": {"name": "knowledge.zk_stats", "arguments": {}},
+            "params": {"name": "knowledge.link_graph_stats", "arguments": {}},
             "id": 2,
         }
     )
@@ -197,7 +605,9 @@ async def test_call_tool_knowledge_zk_stats_via_mcp(handler: AgentMCPHandler):
     )
     payload = response["result"]
     text = payload["content"][0].get("text", "")
-    assert "zk_stats" in text or "total_notes" in text or "success" in text or "stats" in text
+    assert (
+        "link_graph_stats" in text or "total_notes" in text or "success" in text or "stats" in text
+    )
 
 
 @pytest.mark.asyncio

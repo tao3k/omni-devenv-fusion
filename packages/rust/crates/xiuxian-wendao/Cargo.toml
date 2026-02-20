@@ -1,0 +1,76 @@
+[package]
+name = "xiuxian-wendao"
+version.workspace = true
+edition.workspace = true
+description = "High-performance knowledge management with LanceDB storage"
+authors = ["Omni-Dev-Fusion Team"]
+license = "Apache-2.0"
+publish = false
+default-run = "wendao"
+
+[[bin]]
+name = "wendao"
+path = "src/bin/wendao.rs"
+
+[dependencies]
+# LanceDB core
+lance = { workspace = true }
+lance-arrow = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = "0.9"
+toml = "0.8"
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+# Async stream combinators (for Lance scan → collect)
+futures = "0.3"
+
+# Path resolution
+dirs = "5"
+walkdir = "2"
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Reuse common types
+omni-types = { path = "../omni-types" }
+omni-vector = { path = "../omni-vector" }
+
+# Macro utilities
+omni-macros = { path = "../omni-macros" }
+
+# Python bindings
+pyo3 = { workspace = true }
+
+# Fast hash for sync (5-10x faster than MD5)
+xxhash-rust = "0.8"
+
+# Fast regex for entity reference extraction (10-100x faster than Python)
+regex = "1"
+once_cell = "1"
+lazy_static = "1"
+comrak = { workspace = true }
+
+# Parallel processing
+rayon = "1.11"
+
+# Unicode normalization for entity deduplication
+unicode-normalization = "0.1"
+
+# Logging
+log = { workspace = true }
+clap = { workspace = true }
+redis = { version = "1.0.3", default-features = false }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

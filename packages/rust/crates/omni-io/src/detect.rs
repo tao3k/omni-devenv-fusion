@@ -10,6 +10,7 @@ use crate::error::IoError;
 ///
 /// Files containing NULL bytes in the first 8KB are considered binary.
 /// This is a fast heuristic that works well for most text files.
+#[must_use]
 pub fn is_binary(buffer: &[u8]) -> bool {
     let check_len = std::cmp::min(buffer.len(), 8192);
     memchr(0, &buffer[..check_len]).is_some()
@@ -19,6 +20,9 @@ pub fn is_binary(buffer: &[u8]) -> bool {
 ///
 /// First checks for binary content, then attempts UTF-8 decoding.
 /// Invalid UTF-8 sequences are replaced with U+FFFD.
+///
+/// # Errors
+/// Returns `IoError::BinaryFile` when binary content is detected.
 pub fn decode_buffer(buffer: Vec<u8>) -> Result<String, IoError> {
     if is_binary(&buffer) {
         return Err(IoError::BinaryFile);

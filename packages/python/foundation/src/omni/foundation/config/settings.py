@@ -1,12 +1,17 @@
 """
 Project Settings - Configuration Manager (Refactored)
 
-Architecture:
-- Layer 0 (System): <git-root>/packages/conf/settings.yaml (System Defaults)
-- Layer 1 (User): $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml (User Overrides)
-- Control: CLI flag `--conf` sets $PRJ_CONFIG_HOME dynamically.
+Architecture (two-layer config with modular files):
+- System:
+  - <git-root>/packages/conf/settings.yaml (general defaults)
+  - <git-root>/packages/conf/wendao.yaml (LinkGraph/Wendao defaults)
+- User:
+  - $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml (general overrides)
+  - $PRJ_CONFIG_HOME/omni-dev-fusion/wendao.yaml (LinkGraph/Wendao overrides)
+- CLI flag `--conf` can set PRJ_CONFIG_HOME for a run.
 
-The final configuration is a deep merge of User Overrides onto System Defaults.
+get_setting() returns merged effective values. User layer overrides system layer;
+for LinkGraph keys, `wendao.yaml` overlays `settings.yaml` at each layer.
 """
 
 from __future__ import annotations
@@ -34,8 +39,12 @@ class Settings:
 
     Logic:
     1. Parse `--conf` flag -> updates PRJ_CONFIG_HOME.
-    2. Load system default: `<git-root>/packages/conf/settings.yaml`.
-    3. Load `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` (User).
+    2. Load system defaults:
+       - `<git-root>/packages/conf/settings.yaml`
+       - `<git-root>/packages/conf/wendao.yaml` (overlays settings defaults)
+    3. Load user overrides:
+       - `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml`
+       - `$PRJ_CONFIG_HOME/omni-dev-fusion/wendao.yaml` (overlays user settings)
     4. Merge User > Defaults.
     """
 
@@ -98,7 +107,7 @@ class Settings:
             # Clear again after --conf mutation to ensure fresh path resolution.
             PRJ_DIRS.clear_cache()
 
-        # 2. Load system default from packages/conf/settings.yaml
+        # 2. Load system defaults from packages/conf/*.yaml
         defaults = {}
         try:
             from omni.foundation.runtime.gitops import get_project_root
@@ -106,20 +115,36 @@ class Settings:
             project_root = get_project_root()
         except Exception:
             project_root = PRJ_DIRS.config_home.parent
-        system_settings = project_root / "packages" / "conf" / "settings.yaml"
+        conf_dir = project_root / "packages" / "conf"
+        system_settings = conf_dir / "settings.yaml"
         if system_settings.exists():
             defaults = self._read_yaml(system_settings)
 
-        # 3. Load User Config (from $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml)
-        # This is where the user's specific customizations live
+        # 2b. Load LinkGraph/Wendao defaults from separate config file.
+        # This overlays system settings for `link_graph.*` and related keys.
+        system_wendao = conf_dir / "wendao.yaml"
+        if system_wendao.exists():
+            defaults = self._deep_merge(defaults, self._read_yaml(system_wendao))
+
+        # 2c. Load skills from packages/conf/skills.yaml (convention: same dir as settings.yaml)
+        skills_path = conf_dir / "skills.yaml"
+        defaults["skills"] = self._read_yaml(skills_path) if skills_path.exists() else {}
+
+        # 3. Load user config overlays from $PRJ_CONFIG_HOME/omni-dev-fusion/*.yaml
         user_config = {}
         user_settings_path = PRJ_CONFIG("omni-dev-fusion", "settings.yaml")
-
         if user_settings_path.exists():
             user_config = self._read_yaml(user_settings_path)
 
-        # 4. Merge: User overrides Defaults
-        self._data = self._deep_merge(defaults, user_config)
+        user_wendao = {}
+        user_wendao_path = PRJ_CONFIG("omni-dev-fusion", "wendao.yaml")
+        if user_wendao_path.exists():
+            user_wendao = self._read_yaml(user_wendao_path)
+
+        # 4. Merge: User overrides Defaults.
+        # For link_graph.* keys, user wendao.yaml is the highest-priority user layer.
+        user_overlay = self._deep_merge(user_config, user_wendao)
+        self._data = self._deep_merge(defaults, user_overlay)
 
     def _read_yaml(self, path: os.PathLike) -> dict[str, Any]:
         """Helper to read YAML safely."""

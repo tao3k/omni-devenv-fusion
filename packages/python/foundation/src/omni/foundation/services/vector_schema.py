@@ -237,12 +237,15 @@ class ToolSearchPayload(BaseModel):
     keyword_score: float | None = None
     final_score: float
     confidence: Literal["high", "medium", "low"]
+    ranking_reason: str | None = None
+    input_schema_digest: str | None = None
     skill_name: str = ""
     tool_name: str = Field(min_length=1)
     file_path: str = ""
     routing_keywords: list[str] = Field(default_factory=list)
     intents: list[str] = Field(default_factory=list)
     category: str = ""
+    parameters: list[str] = Field(default_factory=list)
 
     @field_validator("input_schema", mode="before")
     @classmethod
@@ -294,6 +297,10 @@ class ToolSearchPayload(BaseModel):
         category: Any | None = None,
         vector_score: Any | None = None,
         keyword_score: Any | None = None,
+        final_score: Any | None = None,
+        confidence: Any | None = None,
+        ranking_reason: Any | None = None,
+        input_schema_digest: Any | None = None,
     ) -> list[ToolSearchPayload]:
         """Build list of ToolSearchPayload from Arrow columns (no JSON parse).
 
@@ -335,6 +342,10 @@ class ToolSearchPayload(BaseModel):
         cat_a = _arr(category) if category is not None else None
         vs_a = _arr(vector_score) if vector_score is not None else None
         ks_a = _arr(keyword_score) if keyword_score is not None else None
+        fs_a = _arr(final_score) if final_score is not None else None
+        conf_a = _arr(confidence) if confidence is not None else None
+        rr_a = _arr(ranking_reason) if ranking_reason is not None else None
+        digest_a = _arr(input_schema_digest) if input_schema_digest is not None else None
 
         def _opt_float(arr: pa.Array | None, i: int) -> float | None:
             if arr is None or i >= len(arr):
@@ -346,6 +357,18 @@ class ToolSearchPayload(BaseModel):
             if v is None or (isinstance(v, float) and math.isnan(v)):
                 return None
             return float(v)
+
+        def _opt_str(arr: pa.Array | None, i: int) -> str | None:
+            if arr is None or i >= len(arr):
+                return None
+            s = arr[i]
+            if not s.is_valid:
+                return None
+            value = s.as_py()
+            if not isinstance(value, str):
+                return None
+            value = value.strip()
+            return value or None
 
         out: list[ToolSearchPayload] = []
         for i in range(n):
@@ -369,6 +392,24 @@ class ToolSearchPayload(BaseModel):
             )
             vs = _opt_float(vs_a, i) if vs_a is not None else None
             ks = _opt_float(ks_a, i) if ks_a is not None else None
+            final_score_val = (
+                _opt_float(fs_a, i)
+                if fs_a is not None
+                else _opt_float(scores_a, i)
+                if scores_a is not None
+                else None
+            )
+            if final_score_val is None:
+                final_score_val = score_val
+            confidence_val = _opt_str(conf_a, i) if conf_a is not None else None
+            if confidence_val == "high":
+                confidence_label: Literal["high", "medium", "low"] = "high"
+            elif confidence_val == "low":
+                confidence_label = "low"
+            else:
+                confidence_label = "medium"
+            ranking_reason_val = _opt_str(rr_a, i) if rr_a is not None else None
+            digest_val = _opt_str(digest_a, i) if digest_a is not None else None
             out.append(
                 cls(
                     schema=TOOL_SEARCH_SCHEMA_V1,
@@ -376,8 +417,10 @@ class ToolSearchPayload(BaseModel):
                     description=_scalar(contents_a, i),
                     input_schema=input_schema,
                     score=score_val,
-                    final_score=score_val,
-                    confidence="medium",
+                    final_score=final_score_val,
+                    confidence=confidence_label,
+                    ranking_reason=ranking_reason_val,
+                    input_schema_digest=digest_val,
                     skill_name=skill_val,
                     tool_name=tool_val or name_val,
                     file_path=_scalar(fp_a, i) if fp_a is not None else "",
@@ -428,6 +471,12 @@ class ToolSearchPayload(BaseModel):
             category=table["category"] if "category" in cols else None,
             vector_score=table["vector_score"] if "vector_score" in cols else None,
             keyword_score=table["keyword_score"] if "keyword_score" in cols else None,
+            final_score=table["final_score"] if "final_score" in cols else None,
+            confidence=table["confidence"] if "confidence" in cols else None,
+            ranking_reason=table["ranking_reason"] if "ranking_reason" in cols else None,
+            input_schema_digest=(
+                table["input_schema_digest"] if "input_schema_digest" in cols else None
+            ),
         )
 
     def to_router_result(self) -> dict[str, Any]:
@@ -471,6 +520,10 @@ class ToolSearchPayload(BaseModel):
             result["vector_score"] = float(self.vector_score)
         if self.keyword_score is not None:
             result["keyword_score"] = float(self.keyword_score)
+        if self.ranking_reason:
+            result["ranking_reason"] = self.ranking_reason
+        if self.input_schema_digest:
+            result["input_schema_digest"] = self.input_schema_digest
         return result
 
 
@@ -487,6 +540,7 @@ class ToolRouterMetadata(BaseModel):
     intents: list[str] = Field(default_factory=list)
     category: str = ""
     input_schema: dict[str, Any] = Field(default_factory=dict)
+    parameters: list[str] = Field(default_factory=list)
 
 
 class ToolRouterPayload(BaseModel):
@@ -514,6 +568,8 @@ class ToolRouterResult(BaseModel):
     score: float
     confidence: Literal["high", "medium", "low"]
     final_score: float
+    ranking_reason: str | None = None
+    input_schema_digest: str | None = None
     skill_name: str = ""
     tool_name: str = ""
     command: str = ""
@@ -537,6 +593,8 @@ def build_tool_router_result(payload: ToolSearchPayload, full_tool_name: str) ->
         score=float(payload.score),
         confidence=payload.confidence,
         final_score=float(payload.final_score),
+        ranking_reason=payload.ranking_reason,
+        input_schema_digest=payload.input_schema_digest,
         skill_name=payload.skill_name,
         tool_name=full_tool_name,
         command=command,
@@ -561,6 +619,7 @@ def build_tool_router_result(payload: ToolSearchPayload, full_tool_name: str) ->
                 intents=list(payload.intents),
                 category=payload.category,
                 input_schema=dict(payload.input_schema),
+                parameters=list(payload.parameters),
             ),
         ),
         vector_score=payload.vector_score,

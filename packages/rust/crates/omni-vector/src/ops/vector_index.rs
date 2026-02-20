@@ -26,6 +26,10 @@ impl VectorStore {
     /// Create an IVF+HNSW vector index for higher recall on smaller tables.
     ///
     /// Best for: &lt; 100k vectors, when recall matters more than storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the table is missing, too small, or index creation fails.
     pub async fn create_hnsw_index(
         &self,
         table_name: &str,
@@ -41,7 +45,7 @@ impl VectorStore {
         let num_rows = dataset
             .count_rows(None)
             .await
-            .map_err(VectorStoreError::LanceDB)? as usize;
+            .map_err(VectorStoreError::LanceDB)?;
         if num_rows < 50 {
             return Err(VectorStoreError::General(
                 "create_hnsw_index requires at least 50 rows".to_string(),
@@ -72,7 +76,7 @@ impl VectorStore {
             .await
             .map_err(VectorStoreError::LanceDB)?;
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
         if let Some(ref cb) = self.index_progress_callback {
             cb(IndexBuildProgress::Done { duration_ms });
         }
@@ -85,6 +89,10 @@ impl VectorStore {
     }
 
     /// Create the best vector index for the table size (HNSW for small, IVF_FLAT for larger).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if table access fails or index creation fails.
     pub async fn create_optimal_vector_index(
         &self,
         table_name: &str,

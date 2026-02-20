@@ -171,22 +171,34 @@ class AsyncPersistenceService:
             data: Checkpoint data dictionary.
         """
         try:
+            from omni.foundation.api.checkpoint_schema import validate_checkpoint_write
+
             checkpoint_id = data["checkpoint_id"]
             thread_id = data["thread_id"]
             state = json.dumps(data["state"])
             timestamp = data["timestamp"]
+            payload = {
+                "checkpoint_id": checkpoint_id,
+                "thread_id": thread_id,
+                "timestamp": timestamp,
+                "content": state,
+                "parent_id": None,
+                "embedding": None,
+                "metadata": None,
+            }
+            validate_checkpoint_write("checkpoints", payload)
 
             # Call Rust store wrapper
             if hasattr(self._store, "save_checkpoint"):
                 await self._store.save_checkpoint(
                     table_name="checkpoints",
-                    checkpoint_id=checkpoint_id,
-                    thread_id=thread_id,
-                    content=state,
-                    timestamp=timestamp,
+                    checkpoint_id=payload["checkpoint_id"],
+                    thread_id=payload["thread_id"],
+                    content=payload["content"],
+                    timestamp=payload["timestamp"],
                     parent_id=None,
-                    embedding=None,
-                    metadata=None,
+                    embedding=payload["embedding"],
+                    metadata=payload["metadata"],
                 )
                 logger.debug(f"💾 Checkpoint saved: {checkpoint_id}")
             else:

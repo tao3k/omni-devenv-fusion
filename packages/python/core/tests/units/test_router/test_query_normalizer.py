@@ -20,7 +20,7 @@ class TestNormalizeForRouting:
             assert normalize_for_routing("reserach repo") == "reserach repo"
 
     def test_settings_typo_corrections_applied(self):
-        """Typos configured in settings.yaml are corrected."""
+        """Typos configured in settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) are corrected."""
         typos = {"analzye": "analyze", "reserach": "research"}
         with patch("omni.core.router.query_normalizer.get_setting", return_value=typos):
             assert normalize_for_routing("analzye this") == "analyze this"

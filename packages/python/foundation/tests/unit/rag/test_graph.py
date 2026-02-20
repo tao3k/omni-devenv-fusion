@@ -152,6 +152,7 @@ class TestKnowledgeGraphStore:
         from omni.rag.entities import Entity
 
         store = KnowledgeGraphStore()
+        store._backend = None  # simulate no backend (e.g. omni_core_rs not installed)
         entity = Entity(
             name="Test Entity",
             entity_type="CONCEPT",
@@ -169,6 +170,7 @@ class TestKnowledgeGraphStore:
         from omni.rag.entities import Relation
 
         store = KnowledgeGraphStore()
+        store._backend = None  # simulate no backend
         relation = Relation(
             source="A",
             target="B",
@@ -177,6 +179,55 @@ class TestKnowledgeGraphStore:
         )
 
         result = store.add_relation(relation)
+        assert result is False
+
+    def test_add_entity_dict_succeeds_with_rust_backend(self):
+        """Store must accept dict and convert to PyEntity when backend is Rust (no 'dict cannot be cast as PyEntity')."""
+        pytest.importorskip("omni_core_rs")
+        from omni.rag.graph import KnowledgeGraphStore
+
+        store = KnowledgeGraphStore()
+        if store._backend is None:
+            pytest.skip("Rust backend not available")
+        entity_dict = {
+            "name": "Python",
+            "entity_type": "SKILL",
+            "description": "Programming language",
+            "source": "test",
+        }
+        result = store.add_entity(entity_dict)
+        assert result is True
+
+    def test_add_entity_then_relation_dict_succeeds_with_rust_backend(self):
+        """Store must accept dicts and write entities before relations so relation source/target exist."""
+        pytest.importorskip("omni_core_rs")
+        from omni.rag.graph import KnowledgeGraphStore
+
+        store = KnowledgeGraphStore()
+        if store._backend is None:
+            pytest.skip("Rust backend not available")
+        a = {"name": "A", "entity_type": "CONCEPT", "description": "Entity A", "source": ""}
+        b = {"name": "B", "entity_type": "CONCEPT", "description": "Entity B", "source": ""}
+        rel = {"source": "A", "target": "B", "relation_type": "RELATED_TO", "description": "A to B"}
+        assert store.add_entity(a) is True
+        assert store.add_entity(b) is True
+        assert store.add_relation(rel) is True
+
+    def test_add_relation_without_entities_returns_false_with_rust_backend(self):
+        """Rust graph requires source/target entities to exist; add_relation without them returns False."""
+        pytest.importorskip("omni_core_rs")
+        from omni.rag.graph import KnowledgeGraphStore
+
+        store = KnowledgeGraphStore()
+        if store._backend is None:
+            pytest.skip("Rust backend not available")
+        rel = {
+            "source": "NoSuch",
+            "target": "AlsoNoSuch",
+            "relation_type": "RELATED_TO",
+            "description": "",
+        }
+        result = store.add_relation(rel)
         assert result is False
 
     def test_search_entities_no_backend(self):

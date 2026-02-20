@@ -9,7 +9,6 @@ Tests cover:
 
 import sys
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -90,6 +89,48 @@ class TestCrawl4aiCommands:
         assert config is not None
         assert config.get("name") == "crawl_url"
 
+    @pytest.mark.asyncio
+    async def test_crawl_url_rejects_invalid_action(self, monkeypatch):
+        """Invalid action should return standardized validation payload."""
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from scripts.crawl_url import CrawlUrl
+
+        from omni.foundation.api.mcp_schema import parse_result_payload
+
+        result = await CrawlUrl(url="https://example.com", action="invalid")
+        payload = parse_result_payload(result)
+
+        assert payload["status"] == "error"
+        assert payload["action"] == "invalid"
+        assert payload["message"] == "action must be one of: crawl, skeleton, smart"
+
+    @pytest.mark.asyncio
+    async def test_crawl_url_normalizes_action_case_and_whitespace(self, monkeypatch):
+        """Action normalization should accept padded mixed-case values."""
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from scripts import crawl_url as crawl_module
+        from scripts.crawl_url import CrawlUrl
+
+        from omni.foundation.api.mcp_schema import parse_result_payload
+
+        captured: dict[str, object] = {}
+
+        def _fake_run_skill_command(*, skill_dir, script_name, args):
+            captured["args"] = args
+            return {"success": True, "content": "ok"}
+
+        monkeypatch.setattr(crawl_module, "run_skill_command", _fake_run_skill_command)
+        monkeypatch.setattr(crawl_module, "_generate_chunk_plan", MagicMock(return_value=None))
+
+        result = await CrawlUrl(url="https://example.com", action="  CrAwL  ")
+        payload = parse_result_payload(result)
+
+        assert isinstance(payload, dict)
+        assert payload.get("success") is True
+        args = captured.get("args")
+        assert isinstance(args, dict)
+        assert args.get("action") == "crawl"
+
 
 class TestCrawl4aiScriptLoader:
     """Tests for script loading with script_loader."""
@@ -125,8 +166,6 @@ class TestCrawl4aiScriptLoader:
         for CLI usage. Commands must come from crawl_url.py to ensure proper
         isolation via run_skill_command.
         """
-        from omni.core.skills.script_loader import ScriptLoader
-
         skill_path = Path(__file__).parent.parent
 
         # Import engine module directly
@@ -148,14 +187,13 @@ class TestCrawl4aiScriptLoader:
 
     def test_crawl_url_uses_isolation(self):
         """Test that crawl_url command uses run_skill_command (isolation pattern)."""
+        import inspect
+
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from scripts.crawl_url import crawl_url
 
         # The crawl_url function should call run_skill_command
         # We verify this by checking that crawl_url itself doesn't import crawl4ai
-        import scripts.crawl_url as crawl_url_module
-        import inspect
-
         source = inspect.getsource(crawl_url)
         assert "run_skill_command" in source, (
             "crawl_url should call run_skill_command for isolation"

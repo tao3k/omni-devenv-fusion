@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from typing import Any, Protocol
 
+from omni.foundation.api.mcp_schema import extract_text_content, parse_result_payload
+
 from .node_factory import ToolInvoker
 
 
@@ -68,17 +70,25 @@ class MCPToolInvoker(ToolInvoker):
     @staticmethod
     def _normalize_result(result: Any) -> dict[str, Any] | Any:
         """Normalize common MCP response shapes into dict payloads."""
+        if isinstance(result, dict):
+            try:
+                parsed_payload = parse_result_payload(result)
+                if parsed_payload is not result:
+                    return parsed_payload
+            except Exception:
+                pass
+            text = extract_text_content(result)
+            if isinstance(text, str):
+                parsed = MCPToolInvoker._try_parse_json_text(text)
+                return parsed if parsed is not None else {"text": text}
+            return result
+
+        text = extract_text_content(result)
+        if isinstance(text, str):
+            parsed = MCPToolInvoker._try_parse_json_text(text)
+            return parsed if parsed is not None else {"text": text}
         if isinstance(result, list):
-            # Typical MCP content list: [{"type":"text","text":"..."}]
-            if result and isinstance(result[0], dict):
-                text = result[0].get("text")
-                if isinstance(text, str):
-                    parsed = MCPToolInvoker._try_parse_json_text(text)
-                    return parsed if parsed is not None else {"text": text}
             return {"items": result}
-        if isinstance(result, str):
-            parsed = MCPToolInvoker._try_parse_json_text(result)
-            return parsed if parsed is not None else {"text": result}
         return result
 
     @staticmethod

@@ -26,13 +26,69 @@ class Harvester:
     This is the core component of the Self-Evolution system.
     """
 
-    def __init__(self, llm: InferenceClient | None = None):
+    def __init__(self, llm: InferenceClient | None = None, engine: Any = None):
         """Initialize the harvester.
 
         Args:
             llm: Optional LLM client for structured extraction.
+            engine: Optional engine (OmniLoop passes this); used to resolve llm if llm is None.
         """
         self.llm = llm
+        self._engine = engine
+
+    async def analyze_session(self, history: list[dict[str, Any]]) -> "CandidateSkill | None":
+        """Analyze session history and extract a candidate skill if worthy.
+
+        Converts conversation history to ExecutionTrace format and runs process_trace_for_skill.
+        Returns None if history cannot be converted or no worthy skill is found.
+        """
+        if not history or len(history) < 2:
+            return None
+        try:
+            # Build minimal trace from history (user/assistant messages + tool calls)
+            commands: list[str] = []
+            outputs: list[str] = []
+            for msg in history:
+                content = msg.get("content", "")
+                if isinstance(content, str) and content:
+                    if msg.get("role") == "assistant":
+                        outputs.append(content[:500])
+                    elif "tool_calls" in msg:
+                        for tc in msg.get("tool_calls", []):
+                            name = tc.get("function", {}).get("name", "")
+                            if name:
+                                commands.append(name)
+            if not commands:
+                return None
+            from .tracer import ExecutionTrace
+
+            first_user = next((m for m in history if m.get("role") == "user"), None)
+            task_desc = (first_user.get("content", "")[:200] if first_user else "") or "Session"
+            trace = ExecutionTrace(
+                task_id="session",
+                task_description=task_desc,
+                commands=commands,
+                outputs=outputs[:10],
+                success=True,
+                duration_ms=1000.0,
+            )
+            llm = self.llm
+            if llm is None and self._engine is not None:
+                llm = getattr(self._engine, "llm", None) or getattr(
+                    self._engine, "inference_client", None
+                )
+            return await process_trace_for_skill(trace, llm=llm)
+        except Exception as e:
+            logger.debug("analyze_session failed: %s", e)
+            return None
+
+    async def extract_lessons(self, history: list[dict[str, Any]]) -> Any | None:
+        """Extract semantic lessons (rules/preferences) from session history.
+
+        Fast path: store reusable rules in VectorStore. Returns None if no lesson extracted.
+        """
+        # Stub: full implementation would use LLM to extract rules from successful patterns.
+        return None
 
 
 # =============================================================================

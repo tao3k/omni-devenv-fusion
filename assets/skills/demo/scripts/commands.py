@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Literal
 
 from omni.foundation.api.decorators import skill_command
+from omni.foundation.api.response_payloads import build_status_error_response
 from omni.foundation.config.skills import SKILLS_DIR
 
 
@@ -103,10 +104,10 @@ async def test_yaml_pipeline(
     """
     from omni.tracer import (
         ExecutionTracer,
+        NoOpToolInvoker,
+        console,
         create_langgraph_from_yaml,
         load_pipeline,
-        console,
-        NoOpToolInvoker,
     )
     from omni.tracer.ui import print_header, print_success
 
@@ -115,12 +116,13 @@ async def test_yaml_pipeline(
     yaml_path = pipelines_dir / f"{pipeline_type}.yaml"
 
     if not yaml_path.exists():
-        return {
-            "status": "error",
-            "pipeline_type": pipeline_type,
-            "error": f"Pipeline file not found: {yaml_path}",
-            "available_types": ["simple", "loop", "branch", "rag"],
-        }
+        return build_status_error_response(
+            error=f"Pipeline file not found: {yaml_path}",
+            extra={
+                "pipeline_type": pipeline_type,
+                "available_types": ["simple", "loop", "branch", "rag"],
+            },
+        )
 
     # Create tracer
     trace_id = f"test_{pipeline_type}_{datetime.now().strftime('%H%M%S')}"
@@ -141,7 +143,7 @@ async def test_yaml_pipeline(
 
         # Create LangGraph with NoOp tool invoker (no actual LLM calls)
         # This tests YAML loading, compilation, and graph structure
-        graph = create_langgraph_from_yaml(
+        create_langgraph_from_yaml(
             str(yaml_path),
             tracer=tracer,
             tool_invoker=NoOpToolInvoker(),
@@ -152,7 +154,7 @@ async def test_yaml_pipeline(
         memory_summary = tracer.get_memory_summary()
         step_count = len(tracer.trace.steps)
 
-        print_success(f"YAML pipeline compiled successfully (NoOp mode)")
+        print_success("YAML pipeline compiled successfully (NoOp mode)")
 
         return {
             "status": "success",
@@ -172,12 +174,13 @@ async def test_yaml_pipeline(
 
     except Exception as e:
         console.print(f"[red]✗ Pipeline test failed: {e}[/red]")
-        return {
-            "status": "error",
-            "pipeline_type": pipeline_type,
-            "error": str(e),
-            "trace_id": trace_id,
-        }
+        return build_status_error_response(
+            error=str(e),
+            extra={
+                "pipeline_type": pipeline_type,
+                "trace_id": trace_id,
+            },
+        )
 
 
 @skill_command(

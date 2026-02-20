@@ -1,7 +1,7 @@
 # LangGraph Architecture - Omni-Dev-Fusion
 
 > Cognitive State Machine for Agent Workflows
-> Last Updated: 2026-01-22
+> Last Updated: 2026-02-18
 
 ---
 
@@ -47,7 +47,7 @@ User Query
 │         ▼            ▼         ▼    │
 │      ┌──────────────────────────┐  │
 │      │    StateCheckpointer     │◀─┘
-│      │    (SQLite Persistence)  │
+│      │ (Rust CheckpointStore)   │
 │      └──────────────────────────┘
 └─────────────────────────────────────┘
 ```
@@ -73,14 +73,16 @@ packages/python/agent/src/omni/langgraph/
 
 ### Component Mapping
 
-| Component             | Purpose                    | Location                      |
-| --------------------- | -------------------------- | ----------------------------- |
-| `OmniGraph`           | Cognitive state machine    | `omni.langgraph.graph`        |
-| `GraphState`          | ReAct state definition     | `omni.langgraph.state`        |
-| `StateCheckpointer`   | SQLite persistence         | `omni.langgraph.state`        |
-| `DynamicGraphBuilder` | Runtime graph construction | `omni.langgraph.orchestrator` |
-| `CompiledGraph`       | Graph execution wrapper    | `omni.langgraph.orchestrator` |
-| `GraphSkill`          | Composable subgraph base   | `omni.langgraph.skills`       |
+| Component                | Purpose                          | Location                      |
+| ------------------------ | -------------------------------- | ----------------------------- |
+| `OmniGraph`              | Cognitive state machine          | `omni.langgraph.graph`        |
+| `GraphState`             | ReAct state definition           | `omni.langgraph.state`        |
+| `StateCheckpointer`      | Rust LanceDB persistence         | `omni.langgraph.state`        |
+| `DynamicGraphBuilder`    | Runtime graph construction       | `omni.langgraph.orchestrator` |
+| `CompiledGraph`          | Graph execution wrapper          | `omni.langgraph.orchestrator` |
+| `GraphSkill`             | Composable subgraph base         | `omni.langgraph.skills`       |
+| `build_execution_levels` | Level-based shard scheduling     | `omni.langgraph.parallel`     |
+| `run_parallel_levels`    | Parallel execution within levels | `omni.langgraph.parallel`     |
 
 ---
 
@@ -117,7 +119,7 @@ state: GraphState = {
 
 ### StateCheckpointer
 
-SQLite-based checkpoint system for state persistence:
+Rust-backed checkpoint system for state persistence:
 
 ```python
 from omni.langgraph.state import get_checkpointer
@@ -539,7 +541,7 @@ from omni.langgraph import (
 | Function                 | Description                  |
 | ------------------------ | ---------------------------- |
 | `GraphState`             | TypedDict for ReAct state    |
-| `StateCheckpointer`      | SQLite checkpoint system     |
+| `StateCheckpointer`      | Rust checkpoint system       |
 | `get_checkpointer()`     | Get global checkpointer      |
 | `create_initial_state()` | Create initial state utility |
 | `merge_state()`          | Merge state updates utility  |

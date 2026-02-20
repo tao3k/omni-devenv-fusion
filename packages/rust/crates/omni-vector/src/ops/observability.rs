@@ -1,6 +1,7 @@
 //! Observability: table health analysis and recommendations.
 //!
-//! Phase 5 of the LanceDB 2.0 roadmap. Query metrics are in-process (not from Lance tracing yet).
+//! Phase 5 of the `LanceDB` 2.0 roadmap.
+//! Query metrics are in-process (not from Lance tracing yet).
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -18,6 +19,10 @@ const ROW_COUNT_INDEX_THRESHOLD: usize = 1000;
 
 impl VectorStore {
     /// Analyze table health and return a report with recommendations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if metadata queries against the table fail.
     pub async fn analyze_table_health(
         &self,
         table_name: &str,
@@ -25,9 +30,11 @@ impl VectorStore {
         let row_count = self.count(table_name).await?;
         let fragments = self.get_fragment_stats(table_name).await?;
         let fragment_count = fragments.len();
-        let total_rows = row_count as f64;
+        let total_rows = f64::from(row_count);
+        let fragment_count_f64 =
+            u32::try_from(fragment_count).map_or(f64::from(u32::MAX), f64::from);
         let fragmentation_ratio = if total_rows > 0.0 {
-            fragment_count as f64 / total_rows
+            fragment_count_f64 / total_rows
         } else {
             0.0
         };
@@ -67,7 +74,7 @@ impl VectorStore {
         })
     }
 
-    /// Record a query for the table (in-process metrics). Called from agentic_search.
+    /// Record a query for the table (in-process metrics). Called from `agentic_search`.
     pub fn record_query(&self, table_name: &str, elapsed_ms: u64) {
         let cell = self
             .query_metrics
@@ -77,8 +84,13 @@ impl VectorStore {
         cell.1.store(elapsed_ms, Ordering::Relaxed);
     }
 
-    /// Return per-table query metrics. In-process counts and last latency from agentic_search;
+    /// Return per-table query metrics. In-process counts and last latency from `agentic_search`;
     /// when Lance provides per-query tracing, this can be wired to that instead.
+    ///
+    /// # Errors
+    ///
+    /// This currently returns `Ok` unconditionally; the `Result` type is kept for API consistency.
+    #[allow(clippy::unused_async)]
     pub async fn get_query_metrics(
         &self,
         table_name: &str,
@@ -96,6 +108,10 @@ impl VectorStore {
     }
 
     /// Return index cache stats (entry count and hit rate) for the table's dataset.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the dataset cannot be opened.
     pub async fn get_index_cache_stats(
         &self,
         table_name: &str,

@@ -9,35 +9,38 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any
-
-from mcp.server import Server
-from mcp.types import Notification
+from typing import TYPE_CHECKING
 
 from omni.foundation.config.logging import get_logger
 
 if TYPE_CHECKING:
+    from mcp.server import Server
+
     from .server import AgentMCPServer
 
 log = get_logger("omni.agent.lifecycle")
 
 # Global registry for MCP server reference (used by kernel for notifications)
 # Stores AgentMCPServer which has send_tool_list_changed() method
-_mcp_server: "AgentMCPServer | Server | None" = None
+_mcp_server: AgentMCPServer | Server | None = None
 
 
-def set_mcp_server(server: "AgentMCPServer | Server") -> None:
+def set_mcp_server(server: AgentMCPServer | Server | None) -> None:
     """Set the MCP server instance for tool list notifications.
 
     Args:
-        server: AgentMCPServer instance which has send_tool_list_changed() method.
+        server: AgentMCPServer instance (or None to clear registry).
     """
     global _mcp_server
     _mcp_server = server
+    if server is None:
+        log.debug("MCP server registration cleared")
+        return
+
     log.debug("MCP server registered for tool notifications")
 
 
-def get_mcp_server() -> "Server | None":
+def get_mcp_server() -> AgentMCPServer | Server | None:
     """Get the current MCP server instance."""
     return _mcp_server
 
@@ -84,6 +87,20 @@ async def server_lifespan(enable_watcher: bool = True):
             kernel.skill_manager.on_registry_update(on_skills_changed)
             log.info("🔔 Registered skill change callback for Live-Wire")
 
+        # Preload validation tool schemas so first MCP tool call is not slow (Rust scanner load)
+        try:
+            from omni.core.skills.validation import warm_tool_schema_cache
+
+            await asyncio.wait_for(
+                asyncio.to_thread(warm_tool_schema_cache),
+                timeout=15.0,
+            )
+            log.debug("Warmed tool schema cache for fast first-call validation")
+        except TimeoutError:
+            log.warning("Tool schema warm-up timed out (15s); first tool call may be slower")
+        except Exception as e:
+            log.debug("Tool schema warm-up skipped: %s", e)
+
         # Note: Embedding warmup is handled by AgentMCPHandler.initialize()
         # This ensures embedding is loaded when first tool call is made
 
@@ -108,13 +125,15 @@ async def _notify_tools_changed(skill_changes: dict[str, str]) -> None:
     """
     global _mcp_server
 
-    log.info("🔔 Skill changes detected (Live-Wire)", skills=list(skill_changes.keys()))
-
     if _mcp_server is None:
-        log.warning(
-            "No MCP server available for tool notification - Live-Wire notification blocked!"
+        # Normal in non-MCP CLI processes (no connected server transport).
+        log.debug(
+            "Skipping Live-Wire tool notification (no MCP server registered)",
+            skills=list(skill_changes.keys()),
         )
         return
+
+    log.info("🔔 Skill changes detected (Live-Wire)", skills=list(skill_changes.keys()))
 
     try:
         # MCPServer has send_tool_list_changed() method

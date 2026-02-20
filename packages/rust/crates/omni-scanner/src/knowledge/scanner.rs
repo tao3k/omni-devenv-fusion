@@ -99,14 +99,15 @@ impl KnowledgeScanner {
     ///
     /// # Returns
     ///
-    /// `Ok(Some(entry))` if document is valid, `Ok(None)` if not a valid markdown.
-    pub fn scan_document(&self, path: &Path, base_path: &Path) -> Option<KnowledgeEntry> {
+    /// `Some(entry)` if the document is valid, otherwise `None`.
+    #[must_use]
+    pub fn scan_document(path: &Path, base_path: &Path) -> Option<KnowledgeEntry> {
         if !path.exists() || !path.is_file() {
             return None;
         }
 
         // Only process markdown files
-        if path.extension().map_or(true, |ext| ext != "md") {
+        if path.extension().is_none_or(|ext| ext != "md") {
             return None;
         }
 
@@ -137,10 +138,10 @@ impl KnowledgeScanner {
 
         // Generate title from frontmatter or filename
         let title = metadata.title.unwrap_or_else(|| {
-            path.file_stem()
-                .and_then(|s| s.to_str())
-                .map(|s| s.replace(['-', '_'], " "))
-                .unwrap_or_else(|| relative_path.to_string_lossy().into_owned())
+            path.file_stem().and_then(|s| s.to_str()).map_or_else(
+                || relative_path.to_string_lossy().into_owned(),
+                |s| s.replace(['-', '_'], " "),
+            )
         });
 
         // Parse category
@@ -186,32 +187,40 @@ impl KnowledgeScanner {
     /// # Returns
     ///
     /// Vector of discovered knowledge entries.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when:
+    /// - `depth` is less than `-1`.
+    /// - Directory traversal fails while reading entries.
     pub fn scan_all(
         &self,
         base_path: &Path,
         depth: Option<i32>,
     ) -> Result<Vec<KnowledgeEntry>, Box<dyn std::error::Error>> {
         use rayon::prelude::*;
+        let _ = self;
 
         if !base_path.exists() {
-            log::warn!("Knowledge base directory not found: {:?}", base_path);
+            log::warn!(
+                "Knowledge base directory not found: {}",
+                base_path.display()
+            );
             return Ok(Vec::new());
         }
 
         let max_depth = depth.unwrap_or(-1);
+        let walk_depth = walk_depth_from(max_depth)?;
 
         // Collect all markdown files first
         let md_files: Vec<PathBuf> = WalkDir::new(base_path)
             .follow_links(false)
-            .max_depth(if max_depth > 0 {
-                max_depth as usize + 1
-            } else {
-                usize::MAX
-            })
+            .max_depth(walk_depth)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
             .filter(|e| {
-                e.file_type().is_file() && e.path().extension().map_or(false, |ext| ext == "md")
+                e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "md")
             })
             .map(|e| e.path().to_path_buf())
             .collect();
@@ -219,13 +228,13 @@ impl KnowledgeScanner {
         // Process in parallel using rayon
         let entries: Vec<KnowledgeEntry> = md_files
             .par_iter()
-            .filter_map(|path| self.scan_document(path, base_path))
+            .filter_map(|path| Self::scan_document(path, base_path))
             .collect();
 
         log::info!(
-            "Scanned {} knowledge documents from {:?}",
+            "Scanned {} knowledge documents from {}",
             entries.len(),
-            base_path
+            base_path.display()
         );
 
         Ok(entries)
@@ -241,6 +250,10 @@ impl KnowledgeScanner {
     /// # Returns
     ///
     /// Vector of knowledge entries matching the category.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when underlying directory scanning fails.
     pub fn scan_category(
         &self,
         base_path: &Path,
@@ -266,6 +279,10 @@ impl KnowledgeScanner {
     /// # Returns
     ///
     /// Vector of knowledge entries matching any of the tags.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when underlying directory scanning fails.
     pub fn scan_with_tags(
         &self,
         base_path: &Path,
@@ -292,6 +309,10 @@ impl KnowledgeScanner {
     /// # Returns
     ///
     /// Vector of unique tags with their counts.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when underlying directory scanning fails.
     pub fn get_tags(
         &self,
         base_path: &Path,
@@ -307,10 +328,23 @@ impl KnowledgeScanner {
         }
 
         let mut tags: Vec<(String, usize)> = tag_counts.into_iter().collect();
-        tags.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by count descending
+        tags.sort_by_key(|entry| std::cmp::Reverse(entry.1)); // Sort by count descending
 
         Ok(tags)
     }
+}
+
+fn walk_depth_from(depth: i32) -> Result<usize, Box<dyn std::error::Error>> {
+    if depth == -1 {
+        return Ok(usize::MAX);
+    }
+    if depth < -1 {
+        return Err(format!("depth must be -1 or >= 0, got {depth}").into());
+    }
+
+    usize::try_from(depth)?
+        .checked_add(1)
+        .ok_or_else(|| format!("depth overflow for walkdir: {depth}").into())
 }
 
 impl Default for KnowledgeScanner {
@@ -348,8 +382,7 @@ This document describes best practices for git commits.
         let mut file = File::create(&doc_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
-        let scanner = KnowledgeScanner::new();
-        let entry = scanner.scan_document(&doc_path, temp_dir.path()).unwrap();
+        let entry = KnowledgeScanner::scan_document(&doc_path, temp_dir.path()).unwrap();
 
         assert_eq!(entry.title, "Git Commit Best Practices");
         assert_eq!(
@@ -374,8 +407,7 @@ This is a simple readme without frontmatter.
         let mut file = File::create(&doc_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
-        let scanner = KnowledgeScanner::new();
-        let entry = scanner.scan_document(&doc_path, temp_dir.path()).unwrap();
+        let entry = KnowledgeScanner::scan_document(&doc_path, temp_dir.path()).unwrap();
 
         // Title should be derived from filename
         assert_eq!(entry.title, "readme");
@@ -390,8 +422,7 @@ This is a simple readme without frontmatter.
 
         std::fs::write(&doc_path, r#"{"key": "value"}"#).unwrap();
 
-        let scanner = KnowledgeScanner::new();
-        let entry = scanner.scan_document(&doc_path, temp_dir.path());
+        let entry = KnowledgeScanner::scan_document(&doc_path, temp_dir.path());
 
         assert!(entry.is_none());
     }

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.omni.dev/omni.link_graph.stats.cache.v1.schema.json",
+  "title": "omni.link_graph.stats.cache.v1",
+  "description": "Persistent LinkGraph stats cache payload for xiuxian-wendao-py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "source_key", "updated_at_unix", "stats"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "omni.link_graph.stats.cache.v1"
+    },
+    "source_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "updated_at_unix": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_notes",
+        "orphans",
+        "links_in_graph",
+        "nodes_in_graph"
+      ],
+      "properties": {
+        "total_notes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "orphans": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "links_in_graph": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nodes_in_graph": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

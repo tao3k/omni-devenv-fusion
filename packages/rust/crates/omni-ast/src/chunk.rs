@@ -41,12 +41,15 @@ pub struct CodeChunk {
 /// * `content` - Source code content
 /// * `file_path` - Path to the file (for ID generation)
 /// * `lang` - Programming language
-/// * `patterns` - AST patterns to match (e.g., ["def $NAME", "class $NAME"])
+/// * `patterns` - AST patterns to match (e.g., `["def $NAME", "class $NAME"]`)
 /// * `min_lines` - Minimum lines for a chunk to be included
 /// * `max_lines` - Maximum lines for a chunk (splits large chunks, 0 = no limit)
 ///
 /// # Returns
-/// Vector of CodeChunk objects
+/// Vector of `CodeChunk` objects.
+///
+/// # Errors
+/// Returns an error when language or pattern parsing fails.
 pub fn chunk_code(
     content: &str,
     file_path: &str,
@@ -58,7 +61,7 @@ pub fn chunk_code(
     let lang_str = lang.as_str();
     let support_lang: SupportLang = lang_str
         .parse()
-        .with_context(|| format!("Failed to parse language: {}", lang_str))?;
+        .with_context(|| format!("Failed to parse language: {lang_str}"))?;
 
     let grep_result = support_lang.ast_grep(content);
     let root_node = grep_result.root();
@@ -71,7 +74,7 @@ pub fn chunk_code(
 
     for (chunk_idx, pattern) in patterns.iter().enumerate() {
         let search_pattern = Pattern::try_new(pattern, support_lang)
-            .with_context(|| format!("Failed to parse pattern: {}", pattern))?;
+            .with_context(|| format!("Failed to parse pattern: {pattern}"))?;
 
         // Determine chunk type from pattern
         let chunk_type = detect_chunk_type(pattern, chunk_idx);
@@ -95,15 +98,15 @@ pub fn chunk_code(
                 let mut metadata = HashMap::new();
                 let env = m.get_env();
                 for mv in env.get_matched_variables() {
-                    if let MetaVariable::Capture(name, _) = mv {
-                        if let Some(captured) = env.get_match(&name) {
-                            metadata.insert(name.to_string(), captured.text().to_string());
-                        }
+                    if let MetaVariable::Capture(name, _) = mv
+                        && let Some(captured) = env.get_match(&name)
+                    {
+                        metadata.insert(name.clone(), captured.text().to_string());
                     }
                 }
 
                 // Generate chunk ID
-                let id = generate_chunk_id(&file_name, &chunk_type, &metadata, chunk_idx);
+                let id = generate_chunk_id(file_name, &chunk_type, &metadata, chunk_idx);
 
                 // Extract docstring from the matched text
                 let matched_text = m.text();
@@ -135,7 +138,7 @@ pub fn chunk_code(
     }
 
     // Sort by line number
-    chunks.sort_by(|a, b| a.line_start.cmp(&b.line_start));
+    chunks.sort_by_key(|a| a.line_start);
 
     // Handle max_lines by splitting large chunks
     if max_lines > 0 {
@@ -160,7 +163,7 @@ fn detect_chunk_type(pattern: &str, idx: usize) -> String {
     } else if pattern.contains("fn $NAME") {
         "function".to_string()
     } else {
-        format!("chunk_{}", idx)
+        format!("chunk_{idx}")
     }
 }
 
@@ -172,9 +175,9 @@ fn generate_chunk_id(
     idx: usize,
 ) -> String {
     if let Some(name) = metadata.get("NAME") {
-        format!("{}_{}_{}", file_name, chunk_type, name)
+        format!("{file_name}_{chunk_type}_{name}")
     } else {
-        format!("{}_{}_{}", file_name, chunk_type, idx)
+        format!("{file_name}_{chunk_type}_{idx}")
     }
 }
 
@@ -201,7 +204,7 @@ fn split_chunk(chunk: &CodeChunk, max_lines: usize) -> Vec<CodeChunk> {
     }
 
     let lines: Vec<&str> = chunk.content.lines().collect();
-    let num_parts = (total_lines as f64 / max_lines as f64).ceil() as usize;
+    let num_parts = total_lines.div_ceil(max_lines);
     let mut parts = Vec::new();
 
     for i in 0..num_parts {

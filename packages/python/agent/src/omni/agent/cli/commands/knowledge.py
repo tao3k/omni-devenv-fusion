@@ -3,7 +3,7 @@
 Commands for managing project knowledge base.
 
 This module provides bridges between:
-- zk CLI tool for notebook management
+- link-graph backend for notebook graph management
 - Librarian for code indexing
 - Rust Knowledge Graph for entity extraction
 
@@ -15,6 +15,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,7 @@ console = Console()
 
 knowledge_app = typer.Typer(
     name="knowledge",
-    help="Manage knowledge base (zk notebook + Librarian + Knowledge Graph)",
+    help="Manage knowledge base (LinkGraph + Librarian + Knowledge Graph)",
 )
 
 
@@ -53,33 +54,29 @@ def _print_stats(stats: dict[str, Any]) -> None:
 
 @knowledge_app.command("stats")
 def knowledge_stats():
-    """Show knowledge base statistics from zk notebook.
+    """Show knowledge base statistics from configured LinkGraph backend.
 
     Examples:
         omni knowledge stats
     """
     try:
-        from omni.rag.zk_integration import ZkClient
-        from omni.foundation.config.zk import get_zk_notebook_dir
+        from omni.foundation.config.link_graph import get_link_graph_notebook_dir
+        from omni.foundation.utils.asyncio import run_async_blocking
+        from omni.rag.link_graph import get_link_graph_backend
 
-        knowledge_dir = get_zk_notebook_dir()
+        knowledge_dir = get_link_graph_notebook_dir()
 
-        if not knowledge_dir.exists():
-            console.print("[yellow]Knowledge notebook not found at:[/yellow]")
-            console.print(f"  {knowledge_dir}")
-            raise typer.Exit(1)
-
-        client = ZkClient(str(knowledge_dir))
-        stats = client.get_stats()
+        backend = get_link_graph_backend(notebook_dir=str(knowledge_dir))
+        stats = run_async_blocking(backend.stats())
 
         _print_stats(stats)
 
-    except ImportError:
-        console.print("[red]ZkClient not available[/red]")
-        raise typer.Exit(1)
+    except ImportError as e:
+        console.print("[red]LinkGraph backend is not available[/red]")
+        raise typer.Exit(1) from e
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @knowledge_app.command("ingest")
@@ -128,7 +125,57 @@ def knowledge_ingest(
 
     except Exception as e:
         console.print(f"[red]Ingestion failed: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
+
+
+@knowledge_app.command("recall")
+def knowledge_recall(
+    query: str = typer.Argument(..., help="Natural language query"),
+    limit: int = typer.Option(5, "--limit", "-l", help="Max results (1-10)"),
+    collection: str = typer.Option(
+        "knowledge_chunks", "--collection", "-c", help="Vector collection"
+    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output raw JSON only"),
+) -> None:
+    """Semantic recall over the knowledge vector store.
+
+    Delegates to skill runner (fast path or kernel). For full dual-core boost
+    the runner loads the knowledge skill.
+
+    Examples:
+        omni knowledge recall "RAG Anything"
+        omni knowledge recall "how does routing work" --limit 3 --json
+    """
+    from omni.core.skills import run_skill
+    from omni.foundation.utils.asyncio import run_async_blocking
+
+    limit = min(max(1, int(limit)), 10)
+    cmd_args = {"query": query, "limit": limit, "collection": collection}
+
+    try:
+        out = run_async_blocking(run_skill("knowledge", "recall", cmd_args))
+        if isinstance(out, dict):
+            out = json.dumps(out, indent=2, ensure_ascii=False)
+        out_str = out if isinstance(out, str) else json.dumps(out, indent=2)
+        if json_output:
+            console.print(out_str)
+            return
+        data = json.loads(out_str)
+        if data.get("status") == "unavailable":
+            console.print(f"[red]{data.get('message', 'Unavailable')}[/red]")
+            raise typer.Exit(1)
+        console.print(f"[bold]Recall[/bold] query={query!r} limit={limit}")
+        for i, r in enumerate(data.get("results", [])[:limit], 1):
+            src = r.get("source", "")
+            score = r.get("score", 0)
+            content = (r.get("content") or "")[:200]
+            if len(r.get("content") or "") > 200:
+                content += "..."
+            console.print(f"  [dim]{i}. [{score:.2f}] {src}[/dim]")
+            console.print(f"    {content}")
+    except Exception as e:
+        console.print(f"[red]Recall failed: {e}[/red]")
+        raise typer.Exit(1) from e
 
 
 @knowledge_app.command("analyze")
@@ -153,11 +200,14 @@ def knowledge_analyze():
 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 def register_knowledge_command(parent_app: typer.Typer) -> None:
     """Register the knowledge command with the parent app."""
+    from omni.agent.cli.load_requirements import register_requirements
+
+    register_requirements("knowledge", ollama=True, embedding_index=True)
     parent_app.add_typer(knowledge_app, name="knowledge")
 
 

@@ -1,0 +1,70 @@
+{
+  "scenarios": [
+    {
+      "id": "preference_recall",
+      "description": "Verify delayed preference recall across compact setup turns.",
+      "setup_prompts": [
+        "No tools needed. Remember this preference for future answers: use bullet points when summarizing action items.",
+        "No tools needed. Remember my stack preference: fast state goes to Valkey and durable storage goes to Postgres."
+      ],
+      "queries": [
+        {
+          "prompt": "No tools needed. What summary style and storage stack should you follow for me? Reply in one short sentence.",
+          "expected_keywords": ["bullet", "valkey", "postgres"],
+          "required_ratio": 0.67
+        },
+        {
+          "prompt": "No tools needed. Repeat only the two databases I prefer for fast and durable storage.",
+          "expected_keywords": ["valkey", "postgres"],
+          "required_ratio": 1.0
+        }
+      ],
+      "reset_before": true,
+      "reset_after": false
+    },
+    {
+      "id": "correction_adaptation",
+      "description": "Check memory correction persistence under an explicit contradiction.",
+      "setup_prompts": [
+        "No tools needed. Initial note: I used SQLite before.",
+        "No tools needed. Correction: stop using SQLite. I now use Valkey and Postgres."
+      ],
+      "queries": [
+        {
+          "prompt": "No tools needed. After the correction, which databases should you mention as my current stack?",
+          "expected_keywords": ["valkey", "postgres"],
+          "required_ratio": 1.0
+        },
+        {
+          "prompt": "No tools needed. Do not include old databases. What is my current stack now?",
+          "expected_keywords": ["valkey", "postgres"],
+          "required_ratio": 1.0
+        }
+      ],
+      "reset_before": true,
+      "reset_after": false
+    },
+    {
+      "id": "secret_phrase_retention",
+      "description": "Measure delayed exact-token retention with light distractor context.",
+      "setup_prompts": [
+        "No tools needed. Remember this phrase for later recall: atlas-echo-42.",
+        "No tools needed. Distractor fact: the meeting room name is comet-hall."
+      ],
+      "queries": [
+        {
+          "prompt": "No tools needed. What is the exact phrase I asked you to remember earlier?",
+          "expected_keywords": ["atlas-echo-42"],
+          "required_ratio": 1.0
+        },
+        {
+          "prompt": "No tools needed. Return only the remembered phrase, no extra words.",
+          "expected_keywords": ["atlas-echo-42"],
+          "required_ratio": 1.0
+        }
+      ],
+      "reset_before": true,
+      "reset_after": false
+    }
+  ]
+}

@@ -291,12 +291,14 @@ def print_result(result: Any, is_tty: bool = False, json_output: bool = False) -
             content = result["data"].get("content", result["data"].get("markdown", ""))
             metadata = result["data"].get("metadata", {})
         else:
-            # MCP canonical shape from @skill_command: content = [{ "type": "text", "text": "..." }]
+            # MCP canonical shape from @skill_command: content = [{ "type": "text", "text": "..." }] or plain string
             raw_content = result.get("content", result.get("markdown"))
-            if isinstance(raw_content, list) and raw_content and isinstance(raw_content[0], dict):
+            if isinstance(raw_content, str):
+                content = raw_content
+            elif isinstance(raw_content, list) and raw_content and isinstance(raw_content[0], dict):
                 content = raw_content[0].get("text", "")
             else:
-                content = raw_content
+                content = raw_content if raw_content is not None else ""
             metadata = result.get("metadata", {})
             if "isError" in result:
                 metadata["isError"] = result["isError"]
@@ -313,8 +315,9 @@ def print_result(result: Any, is_tty: bool = False, json_output: bool = False) -
 
     # [TTY Mode]
     if is_tty:
-        # Show metadata panel on stderr
-        if metadata:
+        # Show metadata panel only when there is something meaningful (error, timing, etc.)
+        # Skip when it would only show isError: false
+        if metadata and not (len(metadata) == 1 and metadata.get("isError") is False):
             err_console.print(
                 Panel(
                     JSON.from_data(metadata),
@@ -332,6 +335,7 @@ def print_result(result: Any, is_tty: bool = False, json_output: bool = False) -
             sys.stdout.write(content)
             if not content.endswith("\n"):
                 sys.stdout.write("\n")
+            sys.stdout.flush()
 
 
 __all__ = [

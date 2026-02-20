@@ -465,5 +465,34 @@ class TestOmniLoopSession:
         assert loop1.session_id != loop2.session_id
 
 
+class TestOmniLoopHarvesterIntegration:
+    """Integration tests: OmniLoop evolution cycle must not fail on Harvester API.
+
+    Prevents regression when Harvester.analyze_session or extract_lessons are
+    missing or have incompatible signatures (e.g. 'Harvester' object has no
+    attribute 'analyze_session').
+    """
+
+    @pytest.mark.asyncio
+    async def test_trigger_harvester_completes_without_attribute_error(self):
+        """_trigger_harvester must complete when Harvester has analyze_session and extract_lessons."""
+        loop = OmniLoop()
+        loop.history = [
+            {"role": "user", "content": "List files in current directory"},
+            {"role": "assistant", "content": "Here are the files: ..."},
+        ]
+        # Should not raise AttributeError or any exception
+        await loop._trigger_harvester()
+
+    @pytest.mark.asyncio
+    async def test_trigger_harvester_with_empty_history_returns_early(self):
+        """_trigger_harvester returns early when history is empty."""
+        loop = OmniLoop()
+        loop.history = []
+        await loop._trigger_harvester()
+        # No exception; Harvester is not invoked when history is empty
+        assert loop.history == []
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

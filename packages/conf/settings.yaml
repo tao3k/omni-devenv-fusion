@@ -96,6 +96,9 @@ inference:
   # Default model name (MiniMax model)
   model: "MiniMax-M2.5"
 
+  # MiniMax: set true to send extra_body.reasoning=false for faster structured output (may reduce latency)
+  minimax_disable_reasoning: false
+
   # Request timeout in seconds
   timeout: 120
 
@@ -110,13 +113,69 @@ mcp:
   # Main MCP configuration file
   config_file: ".mcp.json"
 
+  # Preferred port for MCP embedding (e.g. when running `omni mcp --port 3002`).
+  # Route test and other CLI flows try this port first for fast warm-path embedding.
+  # Omit or set null to use default order: 3002, 3001, 3000.
+  # preferred_embed_port: 3002
+
   # Server names
   orchestrator: "orchestrator"
   coder: "coder"
   executor: "executor"
 
-  # Default timeout (seconds)
-  timeout: 120
+  # Tool execution timeout. See docs/reference/mcp-timeout-spec.md for formal spec.
+  #
+  # timeout: Hard wall-clock cap (seconds). With heartbeat: allows long tasks (e.g. researcher);
+  #   prevents runaway programs. Without heartbeat: idle_timeout kills at 120s. 30 min = 1800.
+  timeout: 1800
+
+  # idle_timeout: Stuck detection. Tool cancelled when no heartbeat() for this long.
+  # No heartbeat → treat as stuck → kill at 120s. Tools must call heartbeat() during long work.
+  # Invariant: idle_timeout <= timeout when both > 0 (enforced by config loader).
+  idle_timeout: 120
+
+  # Memory monitoring for debugging leaks (e.g. embedding service). When true: logs RSS before/after
+  # each tools/call; if growth > threshold_mb, logs tracemalloc top allocations. Set via env or
+  # user settings to diagnose 1G→6G growth during embedding-heavy workloads.
+  memory_monitor_enabled: true
+  memory_monitor_threshold_mb: 100 # Log tracemalloc stats when single call grows RSS by this much
+
+  # omni-agent MCP pool startup/connect policy (Rust channel/gateway client side)
+  # - pool_size: concurrent MCP clients in pool
+  # - handshake_timeout_secs: timeout per handshake attempt
+  # - connect_retries: retry attempts before failing startup
+  # - connect_retry_backoff_ms: initial retry backoff (exponential, capped)
+  # - tool_timeout_secs: timeout for tools/list and tools/call (prevents silent hangs)
+  # - list_tools_cache_ttl_ms: Rust client-side tools/list snapshot cache TTL
+  agent_pool_size: 4
+  agent_handshake_timeout_secs: 30
+  agent_connect_retries: 3
+  agent_connect_retry_backoff_ms: 1000
+  agent_tool_timeout_secs: 180
+  agent_list_tools_cache_ttl_ms: 1000
+  # Distributed read-through cache for discover-like tool calls (e.g. skill.discover).
+  # Uses VALKEY_URL or session.valkey_url.
+  agent_discover_cache_enabled: true
+  agent_discover_cache_key_prefix: "omni-agent:discover"
+  agent_discover_cache_ttl_secs: 30
+
+  # Embedding HTTP endpoint guardrails (for /embed and /embed/batch):
+  # - embed_max_concurrency: max concurrent embedding calls accepted by SSE endpoint.
+  # - embed_queue_wait_timeout_secs: max wait to enter embedding queue before fail-fast 503.
+  # - embed_request_timeout_secs: max runtime of one embedding call before timeout 503.
+  # Tune these together based on observed p95 and upstream model throughput.
+  embed_max_concurrency: 24
+  embed_queue_wait_timeout_secs: 1.0
+  embed_request_timeout_secs: 20.0
+
+  # tools/list payload tuning:
+  # cap per-tool description length (chars) to improve high-frequency polling throughput.
+  # Range enforced in code: [80, 500].
+  # max_in_flight: handler-side concurrent tools/list gate. Excess requests queue in-process.
+  # Range enforced in code: [1, 512].
+  tools_list:
+    description_max_chars: 140
+    max_in_flight: 90
 
 # =============================================================================
 # Git Commit Settings
@@ -154,6 +213,50 @@ knowledge:
   gitops_file: "assets/how-to/gitops.md"
   gitops_cache: "assets/knowledge/gitops-cache.md"
   testing_workflows: "assets/how-to/testing-workflows.md"
+  # --- ingest_document pipeline (Step 1–5) ---
+  # Step 1: PDF fast path = pdfminer text-only (~2–5s); false = always Docling (~30–40s, better layout)
+  ingest_pdf_fast_path: true
+  # Step 1: Docling/BatchParser worker count (when fast path skipped or not PDF)
+  ingest_parse_max_workers: 8
+  # Step 2: Chunk size (larger = fewer chunks = faster Step 3/5; overlap between chunks)
+  ingest_chunk_target_tokens: 512
+  ingest_chunk_overlap_tokens: 50
+  # Step 1.5: Extract PDF page images (pymupdf) to cache; opt-in for multimodal downstream
+  ingest_extract_images: false
+  # Step 3: Model for extraction (null = use inference.model). LiteLLM only.
+  # Use MiniMax-M2.1 or MiniMax-M2.5 (highspeed/lightning may require higher plan tier).
+  entity_extraction_model: "MiniMax-M2.5"
+  # Step 3: Max chars per chunk sent to LLM (smaller = faster; 4000 ~40–80s per call)
+  entity_extraction_max_chars: 4000
+  # Step 3: Max chunks to run entity extraction on (rest get vectors only)
+  entity_extraction_max_chunks: 12
+  # Step 3: Max concurrent LLM calls (MiniMax: lower if 429/timeouts)
+  entity_extraction_concurrency: 8
+  # Step 3: Per-chunk timeout for LLM (MiniMax often 60–90s; 120 avoids false timeouts)
+  entity_extraction_timeout_seconds: 120
+  # Step 3: Extract from every Nth chunk before capping (1 = first N chunks; 2 = every other)
+  entity_extraction_sample_rate: 1
+  # Step 4: Run entity and relation writes in parallel (two threads; set false if backend not thread-safe)
+  ingest_graph_parallel_writes: true
+  # Step 5: Embedding batch size (larger = fewer round-trips; reduce if OOM)
+  ingest_embed_batch_size: 64
+  # Step 5: Max embedding batches in parallel (higher = faster; back off if rate limit)
+  ingest_embed_parallel_batches: 6
+  # Recall: embed timeout (seconds). Shorter = faster return when embedding server is slow; fallback to hash-vector on timeout (avoids CLI appearing to hang).
+  recall_embed_timeout_seconds: 5
+
+# =============================================================================
+# Researcher (git_repo_analyer)
+# =============================================================================
+researcher:
+  # Max concurrent shard processing (LLM calls). None = unbounded. Set to 6–8 if API rate limits (429).
+  max_concurrent: null
+
+# =============================================================================
+# LinkGraph/Wendao moved to dedicated config
+# =============================================================================
+# LinkGraph defaults are now in `packages/conf/wendao.yaml`.
+# User overrides should use `$PRJ_CONFIG_HOME/omni-dev-fusion/wendao.yaml`.
 
 # =============================================================================
 # Standards and References
@@ -182,44 +285,350 @@ memory:
   # Custom memory path (leave empty to use default prj-spec)
   # path: "/custom/path/.memory"
   path: ""
+  # Memory state persistence backend:
+  # - valkey: require Valkey (startup fails if unavailable)
+  # - auto/local are intentionally disabled for production defaults.
+  persistence_backend: "valkey"
+  # Dedicated Valkey URL for memory state snapshots.
+  # URL is unified: configure VALKEY_URL or session.valkey_url.
+  persistence_key_prefix: "omni-agent:memory"
+  # Strict startup for Valkey memory backend:
+  # - true: fail startup if initial Valkey load fails
+  # - false: continue startup with empty memory when Valkey is unavailable
+  persistence_strict_startup: true
+  # Post-turn adaptive credit updates for recalled episodes.
+  recall_credit_enabled: true
+  # Max recalled episodes (after filtering) that receive credit update per turn.
+  recall_credit_max_candidates: 4
+  # Periodic memory decay for long-running sessions.
+  decay_enabled: true
+  # Apply decay every N successfully stored turns.
+  decay_every_turns: 24
+  # Decay factor passed to omni-memory apply_decay (0 < factor < 1 recommended).
+  decay_factor: 0.985
+  # 3-in-1 memory gate policy (retain / obsolete / promote).
+  # Utility threshold for promote decision.
+  gate_promote_threshold: 0.78
+  # Utility threshold for obsolete decision.
+  gate_obsolete_threshold: 0.32
+  # Minimum usage before promote is allowed.
+  gate_promote_min_usage: 3
+  # Minimum usage before obsolete is allowed.
+  gate_obsolete_min_usage: 2
+  # Failure-rate ceiling for promote (lower is stricter).
+  gate_promote_failure_rate_ceiling: 0.25
+  # Failure-rate floor for obsolete (higher is stricter).
+  gate_obsolete_failure_rate_floor: 0.70
+  # Minimum ttl_score required for promote.
+  gate_promote_min_ttl_score: 0.50
+  # Maximum ttl_score allowed for obsolete.
+  gate_obsolete_max_ttl_score: 0.45
+  # Enable Valkey memory stream consumer (XREADGROUP on memory events).
+  stream_consumer_enabled: true
+  # Source stream name published by memory lifecycle hooks.
+  stream_name: "memory.events"
+  # Consumer group name for distributed memory-event processing.
+  stream_consumer_group: "omni-agent-memory"
+  # Consumer id prefix (runtime appends pid + timestamp suffix).
+  stream_consumer_name_prefix: "agent"
+  # Max events per XREADGROUP fetch.
+  stream_consumer_batch_size: 32
+  # BLOCK timeout for XREADGROUP poll loop in milliseconds.
+  stream_consumer_block_ms: 1000
+
+# =============================================================================
+# Telegram Channel (omni channel --rust)
+# =============================================================================
+# Production-ready: webhook mode, Valkey dedup, user/group allowlists.
+# Bot token: --bot-token or TELEGRAM_BOT_TOKEN env.
+#
+# --- allowed_users: Private chats + who can talk in groups ---
+#   - Empty: deny all (secure default)
+#   - "*": allow all users (testing only)
+#   - "123456789": allow by user_id (preferred; username often unset)
+#   - "telegram:123456789" / "tg:123456789": prefixed user_id (normalized)
+#   - "123,456,789": comma-separated allowlist
+#
+# --- allowed_groups: Group chats (any member can talk if group allowed) ---
+#   - Empty: no groups allowed
+#   - "*": allow all groups
+#   - "-200123": allow group by chat_id (negative = group)
+#   - "-200123,-200456": comma-separated group allowlist
+# --- group_policy: sender policy for group chats ---
+#   - "open": any sender in allowed groups may talk (default)
+#   - "allowlist": sender must match group_allow_from (or allowed_users fallback when unset)
+#   - "disabled": drop all group traffic
+#
+# How to get chat_id: Add @userinfobot to group, or check logs when unauthorized.
+telegram:
+  # Example: single user (user_id preferred)
+  # allowed_users: "123456789"
+  #
+  # Example: multiple users
+  # allowed_users: "123456789,987654321,555666777"
+  #
+  # Example: single group
+  # allowed_groups: "-200123456"
+  #
+  # Example: users + groups (private + team group)
+  # allowed_users: "123456789"
+  # allowed_groups: "-200123456"
+  #
+  # System default should be empty (deny all). Use user config override for local testing.
+  allowed_users: ""
+  allowed_groups: ""
+  # Group sender policy baseline.
+  group_policy: "open"
+  # Optional sender allowlist for group_policy=allowlist (numeric ids, supports telegram:/tg: prefixes).
+  # When unset and group_policy=allowlist, fallback uses allowed_users.
+  # group_allow_from: "123456789,987654321"
+  # Mention gating for groups: when true, only slash/reply/@mention triggers run the bot in groups.
+  require_mention: false
+  # Per-group and per-topic overrides (friendly YAML, no regex):
+  # Runtime can manage delegated admins per current group/topic via:
+  # `/session admin [list|set|add|remove|clear] [json]`
+  # Use `session_admin_persist: true` to write these runtime changes back into
+  # user override settings (`$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml`).
+  # Default (`false`): process-local override only; `clear` returns to inherited ACL behavior.
+  # session_admin_persist: false
+  # groups:
+  #   "*":
+  #     require_mention: true
+  #     admin_users: "123456789"
+  #   "-200123456":
+  #     group_policy: "allowlist"
+  #     allow_from: "123456789"
+  #     admin_users: "123456789,987654321"
+  #     topics:
+  #       "42":
+  #         group_policy: "open"
+  #         require_mention: false
+  #         admin_users: "987654321"
+  # Privileged control-command admins (e.g. /session partition ...).
+  # Empty: deny privileged commands.
+  # Unset: also deny privileged commands (no implicit fallback to allowed_users).
+  admin_users: ""
+  # Optional explicit allowlist override for privileged control commands.
+  # When set, this is the single authorization source for control commands.
+  # Empty string means deny all privileged control commands.
+  # control_command_allow_from: "123456789,987654321"
+  # Optional per-command admin authorization rules (command selector => users).
+  # When a rule matches a privileged command, only that rule's users are allowed.
+  # Unmatched commands fall back to admin_users.
+  # Ignored when control_command_allow_from is configured.
+  # Format: "<command-selector>=>user1,user2;..."
+  # Selectors:
+  # - exact path: "/session partition" or "session.partition"
+  # - multi-selector: "/reset,/clear"
+  # - wildcard prefix: "session.*"
+  # - global wildcard: "*"
+  # admin_command_rules: "/session partition=>123456789;/reset,/clear=>987654321;session.*=>555666777"
+
+  # Non-privileged managed slash command ACL (user-friendly fields; no selector expression).
+  # Priority:
+  # 1) slash_command_allow_from (global override for managed slash commands)
+  # 2) command-specific allowlists below
+  # 3) admin_users fallback
+  #
+  # Managed slash command scopes:
+  # - /session, /session status [json]
+  # - /session budget [json]
+  # - /session memory|recall [json]
+  # - /session feedback up|down [json], /feedback up|down [json]
+  # - /job <id> [json], /jobs [json]
+  # - /bg <prompt>
+  #
+  # slash_command_allow_from: "123456789,987654321"
+  # slash_session_status_allow_from: "123456789"
+  # slash_session_budget_allow_from: "123456789"
+  # slash_session_memory_allow_from: "123456789"
+  # slash_session_feedback_allow_from: "987654321"
+  # slash_job_allow_from: "987654321"
+  # slash_jobs_allow_from: "987654321"
+  # slash_bg_allow_from: "987654321"
+  #
+  # Example profile: group-open chat + partial slash grants + full admin control.
+  # - Any user in allowed groups can chat with the bot.
+  # - Only admins can run privileged control commands.
+  # - Selected non-admin users can run specific managed slash commands.
+  #
+  # allowed_users: "123456789"
+  # allowed_groups: "*"
+  # admin_users: "123456789"
+  # control_command_allow_from: "123456789"
+  # slash_session_memory_allow_from: "123456789,987654321"
+  # slash_job_allow_from: "123456789,987654321"
+  # slash_jobs_allow_from: "123456789,987654321"
+  # slash_bg_allow_from: "123456789,987654321"
+
+  # Channel mode: "webhook" (recommended) or "polling"
+  mode: "webhook"
+  webhook_bind: "127.0.0.1:8081"
+  webhook_path: "/telegram/webhook"
+  # Required in webhook mode (set via TELEGRAM_WEBHOOK_SECRET env or --webhook-secret-token)
+  # webhook_secret_token is intentionally not persisted in committed config files.
+
+  # Webhook dedup backend: "valkey" or "memory"
+  webhook_dedup_backend: "valkey"
+  webhook_dedup_ttl_secs: 600
+  webhook_dedup_key_prefix: "omni-agent:webhook-dedup"
+
+  # Session partition strategy:
+  # - chat (default): one shared session per chat
+  # - chat_user: isolate by chat+user
+  # - user: one shared session per user across chats
+  # - chat_thread_user: isolate by chat+thread+user
+  session_partition: "chat"
+
+  # Foreground runtime queues/concurrency/timeout
+  inbound_queue_capacity: 100
+  foreground_queue_capacity: 256
+  foreground_max_in_flight_messages: 16
+  foreground_turn_timeout_secs: 300
+  # Foreground session gate backend:
+  # - auto: use valkey when valkey url is configured, otherwise memory
+  # - memory: in-process only
+  # - valkey: distributed lease lock across instances
+  foreground_session_gate_backend: "auto"
+  # URL is unified: configure VALKEY_URL or session.valkey_url.
+  foreground_session_gate_key_prefix: "omni-agent:session-gate"
+  foreground_session_gate_lease_ttl_secs: 30
+  foreground_session_gate_acquire_timeout_secs: 120
+  # URL is unified: configure VALKEY_URL or session.valkey_url.
+  send_rate_limit_gate_key_prefix: "omni-agent:telegram:send-gate"
+
+  max_tool_rounds: 30 # Max tool-call rounds per user message. Env: OMNI_AGENT_MAX_TOOL_ROUNDS.
+
+# =============================================================================
+# Discord Channel (omni-agent channel --provider discord)
+# =============================================================================
+discord:
+  # Empty allowlists deny all inbound (safe default).
+  allowed_users: ""
+  allowed_guilds: ""
+  #
+  # Example profile: guild-open chat + admin-controlled privileged commands.
+  # - Any user in allowed guilds can talk to the bot.
+  # - Privileged control commands stay admin-restricted.
+  #
+  # allowed_users: "tao3k"
+  # allowed_guilds: "*"
+  # admin_users: "tao3k"
+  # control_command_allow_from: "tao3k"
+  # admin_command_rules: "/session partition=>tao3k;/reset,/clear=>tao3k"
+
+  # Privileged control-command admins.
+  # Empty: deny privileged commands.
+  # Unset: falls back to allowed_users.
+  admin_users: ""
+
+  # Optional explicit override for privileged control commands.
+  # Empty string means deny all privileged commands.
+  # control_command_allow_from: "owner,ops"
+
+  # Optional per-command admin authorization rules.
+  # Format: "<command-selector>=>user1,user2;..."
+  # admin_command_rules: "/session partition=>owner;/reset,/clear=>ops;session.*=>owner"
+
+  # Managed slash-command ACL (for `/session*`, `/job`, `/jobs`, `/bg`).
+  # Priority:
+  # 1) slash_command_allow_from (global override)
+  # 2) command-scoped allowlists below
+  # 3) admin_users fallback
+  # Empty string means deny all managed slash commands.
+  # slash_command_allow_from: "owner,ops"
+  # slash_session_status_allow_from: "auditor"
+  # slash_session_budget_allow_from: "auditor"
+  # slash_session_memory_allow_from: "auditor"
+  # slash_session_feedback_allow_from: "ops"
+  # slash_job_allow_from: "ops"
+  # slash_jobs_allow_from: "ops"
+  # slash_bg_allow_from: "runner"
+
+  # Ingress endpoint (Discord events forwarded by gateway/adapter).
+  ingress_bind: "0.0.0.0:8082"
+  ingress_path: "/discord/ingress"
+  # ingress_secret_token: "replace-with-shared-secret"
+
+  # Session partition strategy:
+  # - guild_channel_user (default): isolate by guild+channel+user
+  # - channel: one shared session per channel
+  # - user: one shared session per user across channels
+  # - guild_user: one shared session per user per guild
+  session_partition: "guild_channel_user"
+
+  # Foreground runtime queue/timeout.
+  inbound_queue_capacity: 512
+  turn_timeout_secs: 120
+
+# =============================================================================
+# Session (agent/gateway conversation window)
+# =============================================================================
+# Session window is Rust-only (omni-window via omni_core_rs.PySessionWindow).
+session:
+  window_max_turns: 2048
+  consolidation_take_turns: 32
+  # consolidation_threshold_turns: 1536
+  consolidation_async: true
+  context_budget_tokens: 6000
+  context_budget_reserve_tokens: 512
+  # Context budget strategy under tight token budget:
+  # - recent_first: keep recent dialogue before summary segments
+  # - summary_first: keep summary segments before older dialogue turns
+  context_budget_strategy: "recent_first"
+  summary_max_segments: 8
+  summary_max_chars: 480
+
+  # Distributed session persistence (Valkey). Non-secret config here; URL may include credentials,
+  # so prefer env for production if needed.
+  valkey_url: null
+  redis_prefix: "omni-agent:session"
+  # ttl_secs: 86400
 
 # =============================================================================
 # Embedding Configuration
 # =============================================================================
 # Configure embedding provider for vector storage (RAG, memory, skills)
-# Auto-detection: First MCP loads model + starts server, others auto-connect as clients
+#
+# When MCP is already running the embedding service (model loaded there), other
+# processes (CLI, skill run, etc.) should only connect as client — no local
+# server, no model load. Set provider: "client" and optionally client_url below.
+# Auto-detection: if provider is empty, code will try health check on http_port
+# and use client if server is healthy; otherwise it may start a server.
 embedding:
-  # Provider: empty=auto-detect (default), "client"=force HTTP client, "fallback"=hash only
-  # Override with: provider: "client" or provider: "fallback"
-  provider: ""
+  # All embeddings via LiteLLM (no in-process model). Local = run Ollama, then set provider=ollama.
+  # Provider: "ollama" | "xinference" | "litellm" = LiteLLM; "client" = HTTP; "" = auto; "fallback" = hash-only
+  provider: "ollama"
 
-  # Local model: Qwen3-Embedding-0.6B (1024 dimensions, lightweight for fast loading)
-  # Alternatives: Qwen/Qwen3-Embedding-4B (2560 dimensions, higher quality)
-  model: "Qwen/Qwen3-Embedding-0.6B"
+  # LiteLLM model and API. Qwen 0.6: ollama pull qwen3-embedding:0.6b → ollama/qwen3-embedding:0.6b, dimension 1024
+  # To store Ollama models under project: export OLLAMA_MODELS="${PRJ_DATA_HOME:-.data}/ollama/models" before ollama pull/serve
+  litellm_model: "ollama/qwen3-embedding:0.6b"
+  litellm_api_base: "http://127.0.0.1:11434"
 
-  # Embedding dimension (1024 for Qwen3-Embedding-0.6B, 2560 for Qwen3-Embedding-4B)
+  # Fallback when provider=litellm and litellm_model not set
+  model: "ollama/qwen3-embedding:0.6b"
+
+  # Dimension: 1024 (qwen3-embedding:0.6b), 768 (nomic-embed-text)
   dimension: 1024
+
+  # Request timeout (seconds) for LiteLLM embedding calls. Prevents indefinite hang when Ollama is slow or unreachable.
+  timeout: 60
+
+  # LiteLLM transient connection handling. Applies to provider=ollama/xinference/litellm.
+  # Retries are for transient network failures only (connection refused/reset/timeout).
+  litellm_connect_retries: 2
+  litellm_retry_backoff_ms: 250
+  litellm_circuit_open_secs: 5
 
   # Auto rebuild skills/router vector indexes when embedding model or dimension changes.
   auto_reindex_on_change: true
 
-  # HTTP server port
+  # HTTP server port (for client mode: connect to existing embedding API on this port)
   http_port: 18501
 
-  # Memory optimization settings
-  # device: "auto"=detect (MPS on Apple Silicon), "cpu", "mps"
-  device: "auto"
-  # torch_dtype: "auto", "float32", "float16" (float16 only effective with MPS)
-  torch_dtype: "float16"
-  # quantize: null=disabled, "int8"=8-bit, "int4"=4-bit (requires bitsandbytes)
-  quantize: null
-  # truncate_dim: null=disabled, 256/512/768=truncate to target dimension
-  # MRL (Matryoshka): reduces output by 75% (1024->256), speeds up ~4x
-  # WARNING: Lower dimension = slight precision loss. 256 recommended for speed.
-  truncate_dim: 256
-
-  # HTTP client URL (only needed when forcing client mode)
-  # client_url: "http://127.0.0.1:18501"
+  # When MCP provides embedding (omni mcp --transport sse --port 3002), client connects here.
+  # MCP exposes /embed/batch and /embed/single for embedding_client compatibility.
+  client_url: "http://127.0.0.1:3002"
 
 # =============================================================================
 # RAG Module Configuration
@@ -322,223 +731,7 @@ cache:
 # =============================================================================
 # Skill Management
 # =============================================================================
-skills:
-  # =============================================================================
-  # Core Preload (Base Layer) - Loaded in ALL modes
-  # =============================================================================
-  # Keep this minimal to reduce LLM context noise
-  preload:
-    - knowledge
-    - memory
-    - git
-    - code_tools
-    - skill
-
-  # =============================================================================
-  # CLI / Omni Run Extensions
-  # =============================================================================
-  # Skills to ADD when running via 'omni run' (CLI mode).
-  # This inherits from 'preload' and adds the tools below.
-  cli:
-    extend:
-      - writer
-      - testing_protocol
-
-  # =============================================================================
-  # Filter Commands (Pattern Matching)
-  # =============================================================================
-  # Use glob patterns to hide tools from the LLM (MCP Server).
-  # Syntax:
-  #   "pattern"   -> Filter matching commands
-  #   "!pattern"  -> Whitelist (Keep these even if they match a filter)
-  filter_commands:
-    # --- Terminal: Hide noisy ops, keep safe ones for LLM ---
-    - "terminal.*" # Filter ALL terminal commands
-    # - "!terminal.run_task"        # Exception: Allow task runner
-
-    # - "!filesystem.apply_changes"  # Exception: Keep batch operations
-
-    # --- Git: Hide raw plumbing commands ---
-    - "git.raw_*" # Hide internal raw commands
-
-  # LRU + TTL eviction settings
-  ttl:
-    timeout: 1800 # Skill eviction timeout in seconds (30 minutes)
-    check_interval: 300 # TTL cleanup check interval (5 minutes)
-
-  max_loaded: 15 # Maximum loaded skills limit
-
-  # Reload behavior
-  reload:
-    enabled: true
-    auto_confirm: false
-
-  # =============================================================================
-  # Dynamic Tool Loading Limits
-  # =============================================================================
-  limits:
-    dynamic_tools: 100 # Max dynamic tools per request
-    core_min: 3 # Minimum guaranteed tools
-    rerank_threshold: 20 # If tools found > this, re-rank by score
-    schema_cache_ttl: 300 # Tool schema cache TTL (seconds)
-    auto_optimize: true # Enable automatic context optimization
-
-  # =============================================================================
-  # Skill Architecture Standards (ODF-EP v7.0)
-  # =============================================================================
-  # Defines the canonical structure for all Omni skills.
-  # Aligned with Anthropic's Skill Standard but extended for Omni's MCP features.
-  # Used by StructureValidator to enforce skill structure integrity.
-
-  architecture:
-    version: "v2.0"
-
-    # Source of truth for skill definition
-    definition_file: "SKILL.md"
-
-    # Directory structure specification
-    structure:
-      # Required files for every skill (ODF-EP v7.0 Core)
-      required:
-        # Core definition (Trinity: State)
-        - path: "SKILL.md"
-          description: "Skill metadata (YAML frontmatter) and system prompts"
-          type: "file"
-
-      # Default files/directories (auto-generated if not exists)
-      # Validation ignores these - they can exist or not
-      default:
-        - path: "scripts/"
-          description: "Standalone executables (Python workflows, state management)"
-          type: "dir"
-
-        # Extensions directory: Stateful modules, lifecycle hooks, complex logic (Meta-Agent, Watchers)
-        - path: "extensions/"
-          description: "Internal modules and plugins (Meta-Agent, Factory, Watchers)"
-          type: "dir"
-
-        - path: "templates/"
-          description: "Jinja2 templates for skill output (Cascading loader)"
-          type: "dir"
-
-        - path: "references/"
-          description: "Markdown documentation for RAG ingestion"
-          type: "dir"
-
-        - path: "assets/"
-          description: "Static resources, templates, guides"
-          type: "dir"
-
-        - path: "data/"
-          description: "Data files (JSON, CSV, etc.) for skill operations"
-          type: "dir"
-
-        - path: "tests/"
-          description: "Pytest tests specifically for this skill"
-          type: "dir"
-
-        - path: "repomix.json"
-          description: "Repomix configuration (auto-generated if missing)"
-          type: "file"
-
-        # Sidecar Execution Pattern support
-        - path: "pyproject.toml"
-          description: "Skill dependencies for subprocess mode (crawl4ai, playwright, etc.)"
-          type: "file"
-
-        - path: "README.md"
-          description: "Developer documentation (human-readable, not for LLM)"
-          type: "file"
-
-      # Optional structure examples (for documentation and validation)
-      # These show common patterns but are not required
-      optional:
-        # Example: Cascading template structure
-        - path: "templates/"
-          description: "Skill-local Jinja2 templates (defaults)"
-          example: |
-            assets/skills/git/templates/
-            ├── commit_message.j2
-            ├── workflow_result.j2
-            └── error_message.j2
-          validation: "Optional - if present, enables cascading template loading"
-
-        # Example: Scripts directory with atomic implementations
-        - path: "scripts/"
-          description: "Atomic implementations (Router-Controller pattern)"
-          example: |
-            assets/skills/git/scripts/
-            ├── __init__.py
-            ├── rendering.py    # Template rendering layer
-            ├── workflow.py     # Git workflow logic
-            └── status.py       # Git status implementation
-          validation: "Optional - recommended for complex skills"
-
-        # Example: User template overrides directory
-        - path: "assets/templates/{skill}/"
-          description: "User-level template overrides (cascading pattern)"
-          example: |
-            assets/templates/git/
-            ├── commit_message.j2  # Overrides skill default
-            └── workflow_result.j2
-          validation: "Optional - if exists, takes precedence over skill defaults"
-
-    # Jinja2 template configuration
-    templates:
-      # Centralized templates directory
-      source_dir: "assets/templates/skill"
-
-      # Auto-generate templates
-      auto_generate:
-        - source: "SKILL.md.j2"
-          target: "SKILL.md"
-        - source: "scripts/commands.py.j2"
-          target: "scripts/commands.py"
-
-    # Validation rules
-    validation:
-      # Block commit if skill structure is invalid
-      block_on_invalid: true
-
-      # Allow non-standard files (warning only)
-      allow_ghost_files: false
-
-      # Disallowed files (must not exist - causes LLM confusion)
-      disallowed_files:
-        - "state.py" # Legacy - inline state in scripts/commands.py
-
-  # =============================================================================
-  # Configuration-Driven Tool Aliasing (Native Mimicry)
-  # =============================================================================
-  # Defines how skill commands are presented to Claude (aliasing and behavioral hints).
-  # This enables "Configuration over Convention" - no Python code changes needed.
-  #
-  # Format:
-  #   skill.command:
-  #     alias: "native_name"          # Rename the tool (optional)
-  #     append_doc: "..."             # Behavioral instructions (optional)
-  #
-  # The append_doc content is injected into the tool description and serves as
-  # a context-embedded prompt that Claude reads when deciding which tool to use.
-
-  overrides:
-    # Web Fetching - Critical override to prevent curl/wget usage
-    crawl4ai.crawl_url:
-      alias: "webCrawl"
-      append_doc: |
-
-        ## ⚡️ OPERATIONAL RULE
-        - **PRIMARY TOOL**: Use this tool for ALL web content retrieval.
-        - **FORBIDDEN**: Do NOT use `curl`, `wget`, or shell requests.
-        - **OUTPUT**: Returns structured Markdown, optimized for reading.
-
-    # Memory Operations
-    memory.get_memory_stats:
-      alias: "get_memory_stats_rename"
-      append_doc: "\n\nSemantic search across your project's memory/knowledge base."
-    memory.save_memory:
-      alias: "save_memory"
-      append_doc: "\n\nPersist important context for future sessions."
+# See packages/conf/skills.yaml. User overrides: "skills:" in user settings.yaml.
 
 # =============================================================================
 # Claude Code Symbiosis - Context Compression

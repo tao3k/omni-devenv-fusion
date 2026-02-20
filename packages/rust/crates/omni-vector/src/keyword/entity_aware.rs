@@ -28,7 +28,7 @@ pub struct EntityMatch {
     pub entity_type: String,
     /// Confidence score of the match
     pub confidence: f32,
-    /// How the entity was matched (name_match, metadata_match, etc.)
+    /// How the entity was matched (`name_match`, `metadata_match`, etc.)
     pub match_type: EntityMatchType,
 }
 
@@ -63,6 +63,9 @@ struct CachedEntity<'a> {
 /// # Returns
 ///
 /// Entity-aware results with boosted scores
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+#[allow(clippy::too_many_lines)]
 pub fn apply_entity_boost(
     results: Vec<HybridSearchResult>,
     entities: Vec<EntityMatch>,
@@ -158,13 +161,15 @@ pub fn apply_entity_boost(
         }
 
         // Calculate entity boost
-        let entity_boost: f32 = if !matched_entities.is_empty() {
-            let avg_confidence: f32 = matched_entities.iter().map(|e| e.confidence).sum::<f32>()
-                / matched_entities.len() as f32;
-            let match_bonus = (matched_entities.len() as f32) * entity_weight * 0.5;
-            avg_confidence * entity_weight + match_bonus
-        } else {
+        let entity_boost: f32 = if matched_entities.is_empty() {
             0.0
+        } else {
+            let match_count_f32 =
+                u16::try_from(matched_entities.len()).map_or(f32::from(u16::MAX), f32::from);
+            let avg_confidence: f32 =
+                matched_entities.iter().map(|e| e.confidence).sum::<f32>() / match_count_f32;
+            let match_bonus = match_count_f32 * entity_weight * 0.5;
+            avg_confidence * entity_weight + match_bonus
         };
 
         // Apply boost to RRF score
@@ -190,6 +195,7 @@ pub fn apply_entity_boost(
 /// Apply triple RRF fusion with entity awareness
 ///
 /// Combines semantic, keyword, and entity signals using RRF fusion
+#[must_use]
 pub fn apply_triple_rrf(
     semantic_results: Vec<(String, f32)>,
     keyword_results: Vec<ToolSearchResult>,
@@ -249,7 +255,7 @@ pub fn apply_triple_rrf(
         let name = result.base.tool_name.clone();
         if let Some(existing) = fusion_map.get_mut(&name) {
             // Blend with existing
-            existing.base.rrf_score = (existing.base.rrf_score + result.boosted_score) / 2.0;
+            existing.base.rrf_score = existing.base.rrf_score.midpoint(result.boosted_score);
             existing.entity_matches.extend(result.entity_matches);
         } else {
             fusion_map.insert(name, result);

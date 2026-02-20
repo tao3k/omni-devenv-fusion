@@ -237,6 +237,8 @@ def _setup_log_filters(level: int) -> None:
         ("uvicorn", logging.WARNING),
         ("uvicorn.access", logging.WARNING),
         ("starlette", logging.WARNING),
+        ("litellm", logging.WARNING if level > logging.DEBUG else logging.INFO),
+        ("LiteLLM", logging.WARNING if level > logging.DEBUG else logging.INFO),
         ("httpx", logging.WARNING if level > logging.DEBUG else logging.INFO),
         ("httpcore", logging.WARNING if level > logging.DEBUG else logging.INFO),
     ]

@@ -189,3 +189,59 @@ pub fn get_encoding_name(model: &str) -> &'static str {
         _ => "cl100k_base",
     }
 }
+
+/// Chunk text by token boundaries with overlap (single pass, no duplicate indices).
+///
+/// Uses `cl100k_base`. Returns `(chunk_text, chunk_index)` so ingest can store
+/// `source` + `chunk_index` for full-document recall.
+///
+/// # Arguments
+///
+/// * `text` - Full document text
+/// * `chunk_size_tokens` - Target size per chunk (must be > 0)
+/// * `overlap_tokens` - Overlap between consecutive chunks (clamped to < `chunk_size`)
+///
+/// # Returns
+///
+/// Vector of (chunk text, chunk index starting at 0).
+#[must_use]
+pub fn chunk_text(
+    text: &str,
+    chunk_size_tokens: usize,
+    overlap_tokens: usize,
+) -> Vec<(String, u32)> {
+    if text.is_empty() {
+        return vec![];
+    }
+    let chunk_size = chunk_size_tokens.max(1);
+    let overlap = overlap_tokens.min(chunk_size.saturating_sub(1));
+
+    let bpe = get_cl100k_base();
+    let tokens = bpe.encode_with_special_tokens(text);
+    let n = tokens.len();
+
+    if n <= chunk_size {
+        return vec![(text.to_string(), 0)];
+    }
+
+    let step = chunk_size.saturating_sub(overlap).max(1);
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    let mut chunk_index = 0u32;
+
+    while start < n {
+        let end = (start + chunk_size).min(n);
+        let slice: Vec<_> = tokens[start..end].to_vec();
+        let decoded = bpe
+            .decode(slice)
+            .unwrap_or_else(|_| text.get(..).unwrap_or("").to_string());
+        out.push((decoded, chunk_index));
+        chunk_index += 1;
+        if end >= n {
+            break;
+        }
+        start += step;
+    }
+
+    out
+}

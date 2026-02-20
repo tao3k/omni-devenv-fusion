@@ -1,4 +1,4 @@
-//! Project Directory Standards (PRJ_SPEC) for Rust
+//! Project Directory Standards (`PRJ_SPEC`) for Rust
 //!
 //! Matches `python/foundation/src/omni/foundation/config/dirs.py`
 //!
@@ -16,7 +16,7 @@ static CACHE_HOME: OnceLock<PathBuf> = OnceLock::new();
 static RUNTIME_DIR: OnceLock<PathBuf> = OnceLock::new();
 static PROJECT_ROOT: OnceLock<PathBuf> = OnceLock::new();
 
-/// Project Directory Resolver (PRJ_SPEC Compliant)
+/// Project Directory Resolver (`PRJ_SPEC` Compliant)
 ///
 /// This struct provides methods to resolve project-standard directories.
 /// It respects environment variables set by the Python Agent Bootstrap layer,
@@ -73,9 +73,10 @@ impl PrjDirs {
     pub fn project_root() -> PathBuf {
         PROJECT_ROOT
             .get_or_init(|| {
-                env::var("PRJ_ROOT")
-                    .map(PathBuf::from)
-                    .unwrap_or_else(|_| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+                env::var("PRJ_ROOT").map_or_else(
+                    |_| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+                    PathBuf::from,
+                )
             })
             .clone()
     }
@@ -95,27 +96,31 @@ fn resolve_dir(env_key: &str, default: &str) -> PathBuf {
         return path;
     }
 
-    let root = env::var("PRJ_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    let root = env::var("PRJ_ROOT").map_or_else(
+        |_| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+        PathBuf::from,
+    );
 
     root.join(path)
 }
 
 /// Get config home as a String (convenience for FFI)
 #[inline]
+#[must_use]
 pub fn get_config_home() -> String {
     PrjDirs::config_home().to_string_lossy().to_string()
 }
 
 /// Get data home as a String (convenience for FFI)
 #[inline]
+#[must_use]
 pub fn get_data_home() -> String {
     PrjDirs::data_home().to_string_lossy().to_string()
 }
 
 /// Get cache home as a String (convenience for FFI)
 #[inline]
+#[must_use]
 pub fn get_cache_home() -> String {
     PrjDirs::cache_home().to_string_lossy().to_string()
 }

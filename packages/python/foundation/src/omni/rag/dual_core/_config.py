@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("omni.rag.dual_core")
 
@@ -15,17 +16,26 @@ logger = logging.getLogger("omni.rag.dual_core")
 # Constants
 # ---------------------------------------------------------------------------
 
-# Score boost for recall results whose source docs are ZK-linked
-ZK_LINK_PROXIMITY_BOOST = 0.12
+# Score boost for recall results whose source docs are link-graph linked.
+LINK_GRAPH_LINK_PROXIMITY_BOOST = 0.12
 
-# Score boost for recall results in same ZK tag group
-ZK_TAG_PROXIMITY_BOOST = 0.08
+# Score boost for recall results sharing link-graph metadata tags.
+LINK_GRAPH_TAG_PROXIMITY_BOOST = 0.08
 
-# Score boost for router tools connected via ZK entity graph
-ZK_ENTITY_GRAPH_BOOST = 0.10
+# Score boost for router tools connected via graph entity relations.
+LINK_GRAPH_ENTITY_BOOST = 0.10
 
-# Maximum ZK link hops to consider for proximity
-MAX_ZK_LINK_HOPS = 2
+# Maximum link-graph hops to consider for proximity.
+MAX_LINK_GRAPH_HOPS = 2
+
+# Timeout (seconds) for link-graph neighbor/tag fetch.
+LINK_GRAPH_PROXIMITY_TIMEOUT = 5
+
+# Max stems to fetch link-graph context for (top by result order).
+LINK_GRAPH_MAX_STEMS = 8
+
+# TTL (seconds) for in-memory link-graph stem cache; 0 = disabled.
+LINK_GRAPH_STEM_CACHE_TTL_SEC = 60
 
 # Score boost per unit of KG relevance (tool relevance from multi-hop graph walk)
 KG_QUERY_RERANK_SCALE = 0.08
@@ -60,34 +70,37 @@ def _resolve_lance_dir(lance_dir: str | Path | None = None) -> Path:
 def _load_kg(
     *,
     lance_dir: str | Path | None = None,
-) -> "PyKnowledgeGraph | None":
+) -> Any | None:
     """Load KnowledgeGraph from Lance tables.
 
+    Uses Rust-side cache (load_kg_from_lance_cached) to avoid repeated disk
+    reads during recall. Cache is invalidated on save_to_lance.
+
     Returns:
-        Loaded PyKnowledgeGraph, or None if tables don't exist yet.
+        Loaded PyKnowledgeGraph, or None if tables don't exist or import fails.
     """
     try:
-        from omni_core_rs import PyKnowledgeGraph
+        from omni_core_rs import load_kg_from_lance_cached
     except ImportError:
         return None
 
     lance_path = _resolve_lance_dir(lance_dir)
-    entity_table = lance_path / "kg_entities"
-    if not entity_table.exists():
+    result = load_kg_from_lance_cached(str(lance_path))
+    if result is None:
         return None
-
-    kg = PyKnowledgeGraph()
-    kg.load_from_lance(str(lance_path))
-    logger.debug("KG loaded from Lance: %s", lance_path)
-    return kg
+    logger.debug("KG loaded from Lance (cached): %s", lance_path)
+    return result
 
 
 def _save_kg(
-    kg: "PyKnowledgeGraph",
+    kg: Any,
     *,
     lance_dir: str | Path | None = None,
 ) -> None:
-    """Save KnowledgeGraph to Lance tables."""
+    """Save KnowledgeGraph to Lance tables.
+
+    Rust save_to_lance invalidates the KG cache for this path automatically.
+    """
     lance_path = _resolve_lance_dir(lance_dir)
     lance_path.mkdir(parents=True, exist_ok=True)
     kg.save_to_lance(str(lance_path))

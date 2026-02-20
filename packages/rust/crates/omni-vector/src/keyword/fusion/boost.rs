@@ -82,17 +82,14 @@ pub fn file_discovery_boost(meta: &ToolSearchResult) -> bool {
         return true;
     }
 
-    let ac = match aho_corasick::AhoCorasick::new(FILE_DISCOVERY_TERMS) {
-        Ok(ac) => ac,
-        Err(_) => {
-            return meta.routing_keywords.iter().any(|k| {
-                let kl = k.to_lowercase();
-                FILE_DISCOVERY_TERMS.iter().any(|t| kl.contains(t))
-            }) || meta.intents.iter().any(|i| {
-                let il = i.to_lowercase();
-                FILE_DISCOVERY_TERMS.iter().any(|t| il.contains(t))
-            });
-        }
+    let Ok(ac) = aho_corasick::AhoCorasick::new(FILE_DISCOVERY_TERMS) else {
+        return meta.routing_keywords.iter().any(|k| {
+            let kl = k.to_lowercase();
+            FILE_DISCOVERY_TERMS.iter().any(|t| kl.contains(t))
+        }) || meta.intents.iter().any(|i| {
+            let il = i.to_lowercase();
+            FILE_DISCOVERY_TERMS.iter().any(|t| il.contains(t))
+        });
     };
 
     if ac.is_match(&category) || ac.is_match(&description) || ac.is_match(&tool_name) {

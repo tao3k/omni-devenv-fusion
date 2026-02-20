@@ -3,14 +3,13 @@
 //! Contains: search_optimized, search_hybrid, create_index,
 //!           search_tools, load_tool_registry, scan_skill_tools_raw
 
-use omni_vector::{
-    AgenticSearchConfig, QueryIntent, SearchOptions, ToolSearchOptions, VectorStore,
-};
+use omni_vector::{AgenticSearchConfig, QueryIntent, SearchOptions, ToolSearchOptions};
 use pyo3::{
     prelude::*,
     types::{PyAny, PyDict, PyList},
 };
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
@@ -163,6 +162,68 @@ fn calibrate_confidence_with_attributes(
     (conf, final_score)
 }
 
+fn canonicalize_json_value(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut entries = map.iter().collect::<Vec<_>>();
+            entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+            let mut out = serde_json::Map::with_capacity(entries.len());
+            for (key, child) in entries {
+                out.insert(key.clone(), canonicalize_json_value(child));
+            }
+            serde_json::Value::Object(out)
+        }
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.iter().map(canonicalize_json_value).collect())
+        }
+        _ => value.clone(),
+    }
+}
+
+fn build_input_schema_digest(input_schema: &serde_json::Value) -> String {
+    let normalized = omni_vector::skill::normalize_input_schema_value(input_schema);
+    if normalized
+        .as_object()
+        .map(|object| object.is_empty())
+        .unwrap_or(true)
+    {
+        return "sha256:empty".to_string();
+    }
+    let canonical = canonicalize_json_value(&normalized);
+    let mut hasher = Sha256::new();
+    hasher.update(canonical.to_string().as_bytes());
+    format!("sha256:{}", hex::encode(hasher.finalize()))
+}
+
+fn build_ranking_reason(
+    score: f32,
+    final_score: f32,
+    confidence: &str,
+    vector_score: Option<f32>,
+    keyword_score: Option<f32>,
+    category: &str,
+    intents: &[String],
+) -> String {
+    let mut parts = Vec::new();
+    if let Some(vector_score) = vector_score {
+        parts.push(format!("vector={vector_score:.3}"));
+    }
+    if let Some(keyword_score) = keyword_score {
+        parts.push(format!("keyword={keyword_score:.3}"));
+    }
+    if !category.is_empty() {
+        parts.push(format!("category={category}"));
+    }
+    if !intents.is_empty() {
+        let top_intents = intents.iter().take(3).cloned().collect::<Vec<_>>();
+        parts.push(format!("intents={}", top_intents.join(",")));
+    }
+    parts.push(format!("confidence={confidence}"));
+    parts.push(format!("raw={score:.3}"));
+    parts.push(format!("final={final_score:.3}"));
+    parts.join(" | ")
+}
+
 #[derive(Debug, Deserialize, Default)]
 struct PySearchOptions {
     where_filter: Option<String>,
@@ -186,21 +247,30 @@ pub(crate) fn search_optimized_async(
     limit: usize,
     options_json: Option<String>,
 ) -> PyResult<Vec<String>> {
+    if let Some(cached) = omni_vector::search_cache::get_cached(
+        path,
+        table_name,
+        limit,
+        options_json.as_deref(),
+        &query,
+    ) {
+        return Ok(cached);
+    }
+
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(
+        let store = super::store::get_or_create_store(
             path,
-            Some(dimension),
+            dimension,
             enable_kw,
             index_cache_size_bytes,
-            super::store::cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        .await?;
         let py_options = options_json
             .as_deref()
             .map(serde_json::from_str::<PySearchOptions>)
@@ -218,10 +288,10 @@ pub(crate) fn search_optimized_async(
         };
 
         let results = store
-            .search_optimized(table_name, query, limit, options)
+            .search_optimized(table_name, query.clone(), limit, options)
             .await
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        Ok(results
+        let json_results: Vec<String> = results
             .into_iter()
             .map(|r| {
                 let score = 1.0f64 / (1.0f64 + r.distance.max(0.0));
@@ -235,7 +305,16 @@ pub(crate) fn search_optimized_async(
                 })
                 .to_string()
             })
-            .collect())
+            .collect();
+        omni_vector::search_cache::set_cached(
+            path,
+            table_name,
+            limit,
+            options_json.as_deref(),
+            &query,
+            json_results.clone(),
+        );
+        Ok(json_results)
     })
 }
 
@@ -258,16 +337,14 @@ pub(crate) fn search_optimized_ipc_async(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(
+        let store = super::store::get_or_create_store(
             path,
-            Some(dimension),
+            dimension,
             enable_kw,
             index_cache_size_bytes,
-            super::store::cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
+        .await?;
         let py_options = options_json
             .as_deref()
             .map(serde_json::from_str::<PySearchOptions>)
@@ -303,21 +380,26 @@ pub(crate) fn search_hybrid_async(
     query_text: String,
     limit: usize,
 ) -> PyResult<Vec<String>> {
+    if let Some(cached) =
+        omni_vector::search_cache::get_cached_hybrid(path, table_name, limit, &query, &query_text)
+    {
+        return Ok(cached);
+    }
+
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(
+        let store = super::store::get_or_create_store(
             path,
-            Some(dimension),
+            dimension,
             enable_kw,
             index_cache_size_bytes,
-            super::store::cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        .await?;
         let vector_rows = store
             .search_optimized(
                 table_name,
@@ -333,10 +415,10 @@ pub(crate) fn search_hybrid_async(
         }
 
         let results = store
-            .hybrid_search(table_name, &query_text, query, limit)
+            .hybrid_search(table_name, &query_text, query.clone(), limit)
             .await
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        Ok(results
+        let json_results: Vec<String> = results
             .into_iter()
             .map(|r| {
                 let (content, metadata) = by_id
@@ -355,7 +437,16 @@ pub(crate) fn search_hybrid_async(
                 })
                 .to_string()
             })
-            .collect())
+            .collect();
+        omni_vector::search_cache::set_cached_hybrid(
+            path,
+            table_name,
+            limit,
+            &query,
+            &query_text,
+            json_results.clone(),
+        );
+        Ok(json_results)
     })
 }
 
@@ -373,15 +464,14 @@ pub(crate) fn create_index_async(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(
+        let store = super::store::get_or_create_store(
             path,
-            Some(dimension),
+            dimension,
             enable_kw,
             index_cache_size_bytes,
-            super::store::cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        .await?;
         store
             .create_index(table_name)
             .await
@@ -409,16 +499,14 @@ pub(crate) fn search_tools_async(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(
+        let store = super::store::get_or_create_store(
             path,
-            Some(dimension),
+            dimension,
             enable_kw,
             index_cache_size_bytes,
-            super::store::cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
+        .await?;
         let results = store
             .search_tools_with_options(
                 table_name,
@@ -469,6 +557,22 @@ pub(crate) fn search_tools_async(
                 }
                 dict.set_item("final_score", final_score)?;
                 dict.set_item("confidence", confidence)?;
+                dict.set_item(
+                    "ranking_reason",
+                    build_ranking_reason(
+                        r.score,
+                        final_score,
+                        confidence,
+                        r.vector_score,
+                        r.keyword_score,
+                        &r.category,
+                        &r.intents,
+                    ),
+                )?;
+                dict.set_item(
+                    "input_schema_digest",
+                    build_input_schema_digest(&r.input_schema),
+                )?;
                 dict.set_item("skill_name", r.skill_name.clone())?;
                 dict.set_item("tool_name", r.tool_name.clone())?;
                 dict.set_item("file_path", r.file_path.clone())?;
@@ -503,16 +607,14 @@ pub(crate) fn search_tools_ipc_async(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(
+        let store = super::store::get_or_create_store(
             path,
-            Some(dimension),
+            dimension,
             enable_kw,
             index_cache_size_bytes,
-            super::store::cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
+        .await?;
         let bytes = store
             .search_tools_ipc(
                 table_name,
@@ -559,16 +661,14 @@ pub(crate) fn agentic_search_async(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(
+        let store = super::store::get_or_create_store(
             path,
-            Some(dimension),
+            dimension,
             enable_kw,
             index_cache_size_bytes,
-            super::store::cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
+        .await?;
         let intent_parsed = intent
             .as_deref()
             .and_then(|s| QueryIntent::from_str(s).ok());
@@ -623,6 +723,22 @@ pub(crate) fn agentic_search_async(
                 }
                 dict.set_item("final_score", final_score)?;
                 dict.set_item("confidence", confidence)?;
+                dict.set_item(
+                    "ranking_reason",
+                    build_ranking_reason(
+                        r.score,
+                        final_score,
+                        confidence,
+                        r.vector_score,
+                        r.keyword_score,
+                        &r.category,
+                        &r.intents,
+                    ),
+                )?;
+                dict.set_item(
+                    "input_schema_digest",
+                    build_input_schema_digest(&r.input_schema),
+                )?;
                 dict.set_item("skill_name", r.skill_name.clone())?;
                 dict.set_item("tool_name", r.tool_name.clone())?;
                 dict.set_item("file_path", r.file_path.clone())?;
@@ -652,16 +768,14 @@ pub(crate) fn load_tool_registry_async(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
     rt.block_on(async {
-        let store = VectorStore::new_with_keyword_index(
+        let store = super::store::get_or_create_store(
             path,
-            Some(dimension),
+            dimension,
             enable_kw,
             index_cache_size_bytes,
-            super::store::cache_config_from_max(max_cached_tables),
+            max_cached_tables,
         )
-        .await
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
+        .await?;
         let results = store
             .load_tool_registry(table_name)
             .await
@@ -693,6 +807,22 @@ pub(crate) fn load_tool_registry_async(
                 }
                 dict.set_item("final_score", final_score)?;
                 dict.set_item("confidence", confidence)?;
+                dict.set_item(
+                    "ranking_reason",
+                    build_ranking_reason(
+                        r.score,
+                        final_score,
+                        confidence,
+                        r.vector_score,
+                        r.keyword_score,
+                        &r.category,
+                        &r.intents,
+                    ),
+                )?;
+                dict.set_item(
+                    "input_schema_digest",
+                    build_input_schema_digest(&r.input_schema),
+                )?;
                 dict.set_item("skill_name", r.skill_name)?;
                 dict.set_item("tool_name", r.tool_name)?;
                 dict.set_item("file_path", r.file_path)?;

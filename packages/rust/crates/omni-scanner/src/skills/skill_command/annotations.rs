@@ -1,12 +1,12 @@
 //! Tool annotations builder.
 //!
-//! Provides heuristics for inferring tool annotations (read_only, destructive, etc.)
+//! Provides heuristics for inferring tool annotations (`read_only`, `destructive`, etc.)
 //! from function naming patterns.
 
 use crate::skills::metadata::{DecoratorArgs, ToolAnnotations};
 use crate::skills::skill_command::parser::ParsedParameter;
 
-/// Build ToolAnnotations from decorator args and naming heuristics.
+/// Build `ToolAnnotations` from decorator args and naming heuristics.
 #[must_use]
 pub fn build_annotations(
     args: &DecoratorArgs,

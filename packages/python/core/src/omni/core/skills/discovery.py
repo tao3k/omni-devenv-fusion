@@ -59,8 +59,26 @@ def get_vector_store() -> "RustVectorStore":
     return _get_vector_store()
 
 
+def _infer_skill_name_from_file_path(file_path: str) -> str | None:
+    """Infer skill name from file path (e.g. assets/skills/git/scripts/foo.py -> git).
+    Used only when resolving path; Rust guarantees skill_name in validated records.
+    """
+    if not file_path:
+        return None
+    normalized = file_path.replace("\\", "/")
+    for marker in ("/skills/", "skills/"):
+        if marker in normalized:
+            remainder = normalized.split(marker, 1)[-1]
+            extracted = remainder.split("/", 1)[0].strip()
+            if extracted:
+                return extracted
+    return None
+
+
 def _resolve_skill_path(skill_name: str, file_path: str) -> str:
-    """Resolve configured skill path from a tool record path."""
+    """Resolve configured skill path from a tool record path.
+    skill_name is guaranteed non-empty by Rust contract (validated in list_all_tools).
+    """
     configured_skills_dir = get_skills_dir()
     default_path = configured_skills_dir / skill_name
 
@@ -85,10 +103,12 @@ def _resolve_skill_path(skill_name: str, file_path: str) -> str:
 
 
 def _infer_skill_name(tool_name: str, fallback: str = "") -> str:
-    """Infer skill name from canonical tool name."""
+    """Infer skill name from canonical tool name (e.g. git.status -> git).
+    Used for search results (Rust search_tools); list_all_tools data is validated.
+    """
     if fallback:
         return fallback
-    if "." in tool_name:
+    if tool_name and "." in tool_name:
         return tool_name.split(".", 1)[0]
     return "unknown"
 
@@ -622,8 +642,9 @@ class SkillDiscoveryService:
         # Group tools by skill and convert to DiscoveredSkill
         skills_by_name: dict[str, dict[str, Any]] = {}
         for tool in tools:
-            skill_name = tool.get("skill_name", "unknown")
-            file_path = tool.get("file_path", "")
+            # Rust contract: skill_name, tool_name are validated non-empty in list_all_tools
+            skill_name = tool["skill_name"]
+            file_path = tool.get("file_path") or ""
 
             skill_path = _resolve_skill_path(skill_name, file_path)
 

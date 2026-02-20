@@ -18,13 +18,13 @@ See also: [Python Arrow Integration Plan](python-arrow-integration-plan.md), [Ve
 
 **Conclusion:** Router remains JSON/dict until Rust exposes a tool-search IPC API (e.g. `search_tools_ipc` returning a RecordBatch). Then we can wire `ToolSearchPayload.from_arrow_table` / `from_arrow_columns` in hybrid_search and indexer.
 
-### 1.2 RAG (librarian, dual_core, zk)
+### 1.2 RAG (librarian, dual_core, link_graph)
 
-| Component                               | Data path                                                                                                                                                                             | Arrow support                                                     |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| **librarian.py**                        | `vector_search` uses `VectorStoreService.search()` which **prefers `search_optimized_ipc`**; builds list of dicts via `VectorPayload.from_arrow_table`; fallback JSON path on failure | **Yes**. Vector path is already Arrow when store has IPC.         |
-| **dual_core** (fusion, kg_recall, etc.) | Consumes search results (list of dicts or payloads); no direct Arrow input                                                                                                            | **Partial**. Input is still list-based; could accept Table later. |
-| **zk_search, zk_enhancer**              | Use librarian or vector store; benefit from IPC where vector search is used                                                                                                           | Same as librarian.                                                |
+| Component                                  | Data path                                                                                                                                                                             | Arrow support                                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **librarian.py**                           | `vector_search` uses `VectorStoreService.search()` which **prefers `search_optimized_ipc`**; builds list of dicts via `VectorPayload.from_arrow_table`; fallback JSON path on failure | **Yes**. Vector path is already Arrow when store has IPC.         |
+| **dual_core** (fusion, kg_recall, etc.)    | Consumes search results (list of dicts or payloads); no direct Arrow input                                                                                                            | **Partial**. Input is still list-based; could accept Table later. |
+| **link_graph_search, link_graph_enhancer** | Use librarian or vector store; benefit from IPC where vector search is used                                                                                                           | Same as librarian.                                                |
 
 **Conclusion:** RAG vector search is already on the Arrow path where the store supports IPC. Dual-core and other RAG layers can be refactored to accept `pa.Table` or Arrow columns when we want to avoid building intermediate lists.
 
@@ -41,7 +41,7 @@ See also: [Python Arrow Integration Plan](python-arrow-integration-plan.md), [Ve
 ### 2.2 RAG (optional)
 
 - **Dual-core:** Add overloads or helpers that accept `pa.Table` (e.g. for fusion input) and build in-memory structures from columns instead of list-of-dicts.
-- **Knowledge graph / ZK:** Already benefit from librarian’s vector IPC path; no change required for current behavior.
+- **Knowledge graph / LinkGraph:** Already benefit from librarian’s vector IPC path; no change required for current behavior.
 
 ---
 

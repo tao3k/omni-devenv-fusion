@@ -657,10 +657,10 @@ async fn snapshot_keyword_backend_quality_scenarios_v3_skill_based() {
             vec!["inspect external api", "crate symbol lookup"],
         ),
         (
-            "knowledge.zk_hybrid_search",
-            "Hybrid knowledge search combining ZK links and vector fallback.",
+            "knowledge.link_graph_hybrid_search",
+            "Hybrid knowledge search combining LinkGraph links and vector fallback.",
             "knowledge",
-            vec!["knowledge", "zk", "hybrid", "notes"],
+            vec!["knowledge", "link_graph", "hybrid", "notes"],
             vec!["find related notes", "semantic notebook search"],
         ),
         (
@@ -752,7 +752,7 @@ async fn snapshot_keyword_backend_quality_scenarios_v3_skill_based() {
             query: "升级依赖后 查 crate symbol api",
             relevant: &[
                 ("knowledge.dependency_search", 3),
-                ("knowledge.zk_hybrid_search", 1),
+                ("knowledge.link_graph_hybrid_search", 1),
             ],
         },
         ScenarioQueryV2 {
@@ -784,10 +784,10 @@ async fn snapshot_keyword_backend_quality_scenarios_v3_skill_based() {
         },
         ScenarioQueryV2 {
             name: "memory_and_knowledge_lookup",
-            query: "找历史经验 zk 笔记 hybrid search",
+            query: "找历史经验 link_graph 笔记 hybrid search",
             relevant: &[
                 ("memory.search_memory", 3),
-                ("knowledge.zk_hybrid_search", 2),
+                ("knowledge.link_graph_hybrid_search", 2),
             ],
         },
         ScenarioQueryV2 {
@@ -920,10 +920,10 @@ async fn snapshot_keyword_backend_quality_scenarios_v4_large() {
             vec!["inspect external api", "crate symbol lookup"],
         ),
         (
-            "knowledge.zk_hybrid_search",
-            "Hybrid knowledge search combining ZK links and vector fallback.",
+            "knowledge.link_graph_hybrid_search",
+            "Hybrid knowledge search combining LinkGraph links and vector fallback.",
             "knowledge",
-            vec!["knowledge", "zk", "hybrid", "notes"],
+            vec!["knowledge", "link_graph", "hybrid", "notes"],
             vec!["find related notes", "semantic notebook search"],
         ),
         (

@@ -66,15 +66,12 @@ Resolved X packages in ...ms
 In the v2.0 architecture, Python does not scan files. We must generate the **Single Source of Truth** (`skill_index.json`) using Rust.
 
 ```bash
-# Run the Rust Scanner
+# Run skill sync (Python CLI uses Rust omni-scanner under the hood)
 omni skill sync
 
-# OR using cargo directly if alias is not set:
-cargo run -p skills-scanner --bin omni-skill-sync
-
-# Expected Output:
-✅ Scanned 12 skills
-📜 Generated assets/skills/skill_index.json (Fast!)
+# Expected Output (example):
+# ✅ Scanned N skills
+# 📜 Updated skill index / LanceDB (skills table)
 
 ```
 

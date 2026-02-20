@@ -42,6 +42,19 @@ The **MCP-Server** (L3 - Transport) provides the Model Context Protocol implemen
 | **Unified Logging** | All logs via Foundation layer (stderr only, no stdout interference)       |
 | **Zero-Copy Tools** | Tools served directly from Rust Registry                                  |
 
+### Two Execution Modes
+
+| Mode           | Entry                                 | Per-request work                                                                                                              | Use case                                                   |
+| -------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **Via MCP**    | Client → MCP transport → `call_tool`  | Protocol decode → validate (2s timeout) → `kernel.execute_tool`. **No kernel init**; kernel is already up in the MCP process. | Cursor/Claude Desktop, any MCP client. Optimized hot path. |
+| **Standalone** | `omni run`, CLI, or skill without MCP | Full kernel init, skill context, then execute. Different code path (e.g. `runner.run_skill`).                                 | One-off commands, scripts, CI.                             |
+
+MCP-path optimizations: validation runs in a thread with a 2s timeout (skip on slow Rust scanner); schema cache is warmed at lifespan so validation is usually fast.
+
+### Future: Pure Rust MCP Server
+
+For an audit of moving the MCP server to pure Rust (impact on architecture, Python’s role, and migration options), see **[Pure Rust MCP Server Audit](../../plans/pure-rust-mcp-server-audit.md)**.
+
 ---
 
 ## Architecture
@@ -95,6 +108,16 @@ await server.run_sse_server(port=8080, verbose=False)
 | `read_resource()`  | `resources/read` | Reads resource data             |
 | `list_prompts()`   | `prompts/list`   | Returns available prompts       |
 | `get_prompt()`     | `prompts/get`    | Returns prompt content          |
+
+### Tool execution timeout (progress-aware)
+
+Tool runs use a **unified timeout framework** so long-running work is only cancelled when there is no progress, not on a fixed wall clock. See [MCP Timeout Spec](../reference/mcp-timeout-spec.md) for the formal specification.
+
+- **Config** (`settings.yaml`): `mcp.timeout` (wall-clock cap, default 1800s/30min; 0 = no cap), `mcp.idle_timeout` (cancel when no heartbeat for this many seconds; default 120; 0 = no idle check).
+- **Runner**: `omni.foundation.api.tool_context.run_with_idle_timeout(coro, total_timeout_s, idle_timeout_s)` sets tool context, runs the coroutine, and enforces both limits; it clears context in `finally`.
+- **Skills**: During long work (e.g. repomix, LLM wait), call `heartbeat()` from `omni.foundation.api.tool_context` so the runner does not treat the tool as idle.
+
+All MCP tool invocations (kernel path) go through this single entry point; heartbeat setup and idle/total checks live in one place.
 
 ---
 

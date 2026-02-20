@@ -426,7 +426,7 @@ pub fn diff_skills(scanned_tools_json: &str, existing_tools_json: &str) -> PyRes
         ))
     })?;
 
-    let report = calculate_sync_ops(scanned, existing);
+    let report = calculate_sync_ops(scanned, &existing);
 
     Ok(report.into())
 }

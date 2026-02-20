@@ -13,6 +13,7 @@ use super::SandboxExecutor;
 use super::execute_with_limits;
 
 /// Nsjail-specific configuration (from JSON export)
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct NsJailJsonConfig {
     pub name: String,
@@ -75,10 +76,9 @@ pub struct NsJailExecutor {
 impl NsJailExecutor {
     #[new]
     #[pyo3(signature = (nsjail_path=None, default_timeout=60))]
+    /// Create a new `NsJailExecutor`.
     pub fn new(nsjail_path: Option<String>, default_timeout: u64) -> Self {
-        let path = nsjail_path
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("nsjail"));
+        let path = nsjail_path.map_or_else(|| PathBuf::from("nsjail"), PathBuf::from);
 
         Self {
             nsjail_path: path,
@@ -87,30 +87,36 @@ impl NsJailExecutor {
     }
 
     /// Get executor name
-    pub fn name(&self) -> &str {
+    #[allow(clippy::unused_self)]
+    #[must_use]
+    pub fn name(&self) -> &'static str {
         "nsjail"
     }
 }
 
 impl NsJailExecutor {
     /// Load configuration from NCL-exported JSON
-    pub fn load_config(&self, config_path: &Path) -> Result<NsJailJsonConfig, String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the configuration file cannot be read or parsed as JSON.
+    pub fn load_config(config_path: &Path) -> Result<NsJailJsonConfig, String> {
         let content = std::fs::read_to_string(config_path)
-            .map_err(|e| format!("Failed to read config: {}", e))?;
+            .map_err(|e| format!("Failed to read config: {e}"))?;
 
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse config JSON: {}", e))
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse config JSON: {e}"))
     }
 }
 
 #[async_trait::async_trait]
 impl SandboxExecutor for NsJailExecutor {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "nsjail"
     }
 
     async fn execute(&self, config_path: &Path, _input: &str) -> Result<ExecutionResult, String> {
         // Load pre-generated configuration
-        let config = self.load_config(config_path)?;
+        let config = Self::load_config(config_path)?;
 
         // Build nsjail command
         let mut cmd = AsyncCommand::new(&self.nsjail_path);

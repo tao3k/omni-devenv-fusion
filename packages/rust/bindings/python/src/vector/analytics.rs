@@ -61,7 +61,7 @@ pub(crate) fn get_analytics_table_async(
         .await
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         store
-            .list_all_tools(table_name)
+            .list_all_tools(table_name, None)
             .await
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     })?;

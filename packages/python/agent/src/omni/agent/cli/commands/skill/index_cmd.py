@@ -25,16 +25,8 @@ def _reindex_with_embeddings() -> int:
 
     skills_path = str(SKILLS_DIR())
 
-    # Drop existing table for full reindex
-    print("Dropping existing index table...")
-    try:
-        store = RustVectorStore(enable_keyword_index=True)
-        run_async_blocking(store.drop_table("skills"))
-    except Exception:
-        pass  # Table may not exist
-
-    # Re-create store and use Rust's built-in indexing (fast, no LLM)
-    print("Indexing skills...")
+    # Do NOT drop here: Rust index_skill_tools scans first, drops only when it has tools.
+    # Pre-dropping would leave empty table if scan fails.
     store = RustVectorStore(enable_keyword_index=True)
     count = run_async_blocking(store.index_skill_tools(skills_path))
     return count
@@ -179,12 +171,13 @@ def skill_sync(
             # Transform to IndexToolEntry format: tool_name -> name
             existing_entries = []
             for tool in existing_tools:
+                # Coerce None to "" so Rust IndexToolEntry (expects String) parses
                 entry = {
-                    "name": tool.get("tool_name", ""),
-                    "description": tool.get("description", ""),
-                    "category": tool.get("category", ""),
-                    "input_schema": tool.get("input_schema", ""),
-                    "file_hash": tool.get("file_hash", ""),
+                    "name": tool.get("tool_name") or "",
+                    "description": tool.get("description") or "",
+                    "category": tool.get("category") or "",
+                    "input_schema": tool.get("input_schema") or "",
+                    "file_hash": tool.get("file_hash") or "",
                 }
                 existing_entries.append(entry)
             existing_data_str = json.dumps(existing_entries)

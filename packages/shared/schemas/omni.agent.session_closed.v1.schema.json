@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "omni.agent.session_closed.v1.schema.json",
+  "title": "Omni Agent session closed (DELETE /mcp) v1",
+  "description": "Canonical shape for MCP Streamable HTTP session close response. Returned on DELETE /mcp when client closes the session.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "message"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "description": "Status indicator (e.g. ok)."
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable message (e.g. Session closed)."
+    }
+  }
+}

@@ -38,49 +38,59 @@ class TestEmbeddingService:
 
     def test_embed_returns_list(self):
         """embed() should return a list of vectors."""
+        from omni.foundation.config.settings import get_setting
         from omni.foundation.services.embedding import EmbeddingService
+
+        # Get dimension from settings
+        dimension = int(get_setting("embedding.dimension", 1024))
 
         # Mock to avoid backend dependencies
         EmbeddingService._instance = None
         with patch.object(EmbeddingService, "initialize", lambda self: None):
             service = EmbeddingService()
             service._backend = "mock"
-            service._dimension = 1536
+            service._dimension = dimension
             service._model = None
             service._initialized = True
             service._model_loaded = True
 
             # Patch _embed_local to return known output
-            with patch.object(service, "_embed_local", return_value=[[0.1] * 1536]):
+            with patch.object(service, "_embed_local", return_value=[[0.1] * dimension]):
                 result = service.embed("test text")
                 assert isinstance(result, list)
                 assert len(result) == 1
-                assert len(result[0]) == 1536
+                assert len(result[0]) == dimension
 
     def test_embed_batch(self):
         """embed_batch() should return list of vectors."""
+        from omni.foundation.config.settings import get_setting
         from omni.foundation.services.embedding import EmbeddingService
+
+        # Get dimension from settings
+        dimension = int(get_setting("embedding.dimension", 1024))
 
         # Mock to avoid backend dependencies
         EmbeddingService._instance = None
         with patch.object(EmbeddingService, "initialize", lambda self: None):
             service = EmbeddingService()
             service._backend = "mock"
-            service._dimension = 1536
+            service._dimension = dimension
             service._model = None
             service._initialized = True
             service._model_loaded = True
 
             # Return 3 vectors for 3 texts
             with patch.object(
-                service, "_embed_local", return_value=[[0.1] * 1536, [0.2] * 1536, [0.3] * 1536]
+                service,
+                "_embed_local",
+                return_value=[[0.1] * dimension, [0.2] * dimension, [0.3] * dimension],
             ):
                 texts = ["text1", "text2", "text3"]
                 result = service.embed_batch(texts)
                 assert isinstance(result, list)
                 assert len(result) == 3
                 for vec in result:
-                    assert len(vec) == 1536
+                    assert len(vec) == dimension
 
     def test_deterministic_embedding(self):
         """Same text should produce same embedding."""
@@ -125,10 +135,9 @@ class TestVectorStoreClient:
         """search() should return empty list when store not initialized."""
         from omni.foundation.services.vector import VectorStoreClient
 
-        client = VectorStoreClient()
-        client._store = None  # Simulate unavailable store
-
-        with patch("omni.foundation.services.vector._get_omni_vector", return_value=None):
+        # Mock get_vector_store to return None (simulating unavailable store)
+        with patch("omni.foundation.bridge.rust_vector.get_vector_store", return_value=None):
+            client = VectorStoreClient()
             result = await client.search("test query")
             assert result == []
 
@@ -137,10 +146,8 @@ class TestVectorStoreClient:
         """add() should return False when store not initialized."""
         from omni.foundation.services.vector import VectorStoreClient
 
-        client = VectorStoreClient()
-        client._store = None
-
-        with patch("omni.foundation.services.vector._get_omni_vector", return_value=None):
+        with patch("omni.foundation.bridge.rust_vector.get_vector_store", return_value=None):
+            client = VectorStoreClient()
             result = await client.add("test content")
             assert result is False
 
@@ -149,10 +156,8 @@ class TestVectorStoreClient:
         """count() should return 0 when store not initialized."""
         from omni.foundation.services.vector import VectorStoreClient
 
-        client = VectorStoreClient()
-        client._store = None
-
-        with patch("omni.foundation.services.vector._get_omni_vector", return_value=None):
+        with patch("omni.foundation.bridge.rust_vector.get_vector_store", return_value=None):
+            client = VectorStoreClient()
             result = await client.count()
             assert result == 0
 
@@ -188,12 +193,12 @@ class TestConvenienceFunctions:
     @pytest.mark.asyncio
     async def test_search_knowledge(self):
         """search_knowledge() should search default collection."""
-        from omni.foundation.services.vector import search_knowledge
-
-        with patch("omni.foundation.services.vector.get_vector_store") as mock_get:
+        with patch("omni.foundation.services.vector.knowledge.get_vector_store") as mock_get:
             mock_store = AsyncMock()
             mock_store.search = AsyncMock(return_value=[])
             mock_get.return_value = mock_store
+
+            from omni.foundation.services.vector import search_knowledge
 
             result = await search_knowledge("test query", n_results=5)
             mock_store.search.assert_called_once_with("test query", 5, collection="knowledge")
@@ -201,12 +206,12 @@ class TestConvenienceFunctions:
     @pytest.mark.asyncio
     async def test_add_knowledge(self):
         """add_knowledge() should add to default collection."""
-        from omni.foundation.services.vector import add_knowledge
-
-        with patch("omni.foundation.services.vector.get_vector_store") as mock_get:
+        with patch("omni.foundation.services.vector.knowledge.get_vector_store") as mock_get:
             mock_store = AsyncMock()
             mock_store.add = AsyncMock(return_value=True)
             mock_get.return_value = mock_store
+
+            from omni.foundation.services.vector import add_knowledge
 
             result = await add_knowledge("test content", {"key": "value"})
             mock_store.add.assert_called_once_with(

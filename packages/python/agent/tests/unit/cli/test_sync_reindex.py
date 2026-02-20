@@ -17,17 +17,21 @@ class TestSyncCommand:
         assert result.exit_code == 0
         assert "Synchronize system state" in result.output
 
-    @patch("omni.agent.cli.commands.sync._sync_skills")
-    @patch("omni.agent.cli.commands.sync._sync_knowledge")
-    @patch("omni.agent.cli.commands.sync._sync_memory")
-    def test_sync_all(self, mock_memory, mock_knowledge, mock_skills, runner):
+    @patch("omni.agent.services.sync.sync_memory", new_callable=AsyncMock)
+    @patch("omni.agent.services.sync.sync_knowledge", new_callable=AsyncMock)
+    @patch("omni.agent.services.sync.sync_router_init", new_callable=AsyncMock)
+    @patch("omni.agent.services.sync.sync_skills", new_callable=AsyncMock)
+    @patch("omni.agent.services.sync.sync_symbols", new_callable=AsyncMock)
+    def test_sync_all(
+        self, mock_symbols, mock_skills, mock_router, mock_knowledge, mock_memory, runner
+    ):
         """Test 'omni sync' runs all sync operations."""
+        mock_symbols.return_value = {"status": "success", "details": "symbols"}
         mock_skills.return_value = {"status": "success", "details": "60 skills"}
+        mock_router.return_value = {"status": "success", "details": "router"}
         mock_knowledge.return_value = {"status": "success", "details": "10 docs"}
-        mock_memory.return_value = AsyncMock()
         mock_memory.return_value = {"status": "success", "details": "optimized"}
 
-        # For unit test, we only verify sub-sync handlers are invoked.
         result = runner.invoke(app, ["sync"])
         assert result.exit_code == 0
         assert mock_skills.called
@@ -40,7 +44,6 @@ class TestSyncCommand:
         mock_run_async_blocking.side_effect = lambda coro: (coro.close(), {"status": "success"})[1]
 
         result = runner.invoke(app, ["sync", "knowledge"])
-
         assert result.exit_code == 0
         assert mock_run_async_blocking.called
 
@@ -56,7 +59,7 @@ class TestReindexCommand:
         assert result.exit_code == 0
         assert "Reindex vector databases" in result.output
 
-    @patch("omni.agent.cli.commands.reindex._reindex_skills_only")
+    @patch("omni.agent.cli.commands.reindex.reindex_skills_only")
     def test_reindex_skills(self, mock_reindex, runner):
         """Test 'omni reindex skills'."""
         mock_reindex.return_value = {
@@ -86,20 +89,32 @@ class TestReindexCommand:
         assert result.exit_code != 0
 
     def test_sync_router_command_removed(self, runner):
-        """`omni sync router` no longer exists; use `omni sync skills`."""
+        """`omni sync router` does not exist; use `omni sync route`."""
         result = runner.invoke(app, ["sync", "router"])
         assert result.exit_code != 0
 
-    @patch("omni.agent.cli.commands.reindex.get_setting")
-    @patch("omni.agent.cli.commands.reindex._read_embedding_signature")
-    @patch("omni.agent.cli.commands.reindex._write_embedding_signature")
+    @patch("omni.agent.cli.commands.sync.run_async_blocking")
+    def test_sync_route_command_exists(self, mock_run_async_blocking, runner):
+        """`omni sync route` initializes router DB."""
+        mock_run_async_blocking.return_value = {
+            "status": "success",
+            "details": "Router DB (scores) initialized",
+        }
+        result = runner.invoke(app, ["sync", "route"])
+        assert result.exit_code == 0
+        mock_run_async_blocking.assert_called_once()
+        assert "Router DB" in result.output
+
+    @patch("omni.agent.services.reindex.get_setting")
+    @patch("omni.agent.services.reindex._read_embedding_signature")
+    @patch("omni.agent.services.reindex._write_embedding_signature")
     def test_embedding_signature_initialized_without_reindex(
         self,
         mock_write_sig,
         mock_read_sig,
         mock_get_setting,
     ):
-        from omni.agent.cli.commands.reindex import ensure_embedding_index_compatibility
+        from omni.agent.services import ensure_embedding_index_compatibility
 
         mock_read_sig.return_value = None
         mock_get_setting.side_effect = lambda key, default=None: {
@@ -114,10 +129,10 @@ class TestReindexCommand:
         assert result["status"] == "initialized"
         mock_write_sig.assert_called_once()
 
-    @patch("omni.agent.cli.commands.reindex._reindex_skills_only")
-    @patch("omni.agent.cli.commands.reindex.get_setting")
-    @patch("omni.agent.cli.commands.reindex._read_embedding_signature")
-    @patch("omni.agent.cli.commands.reindex._write_embedding_signature")
+    @patch("omni.agent.services.reindex.reindex_skills_only")
+    @patch("omni.agent.services.reindex.get_setting")
+    @patch("omni.agent.services.reindex._read_embedding_signature")
+    @patch("omni.agent.services.reindex._write_embedding_signature")
     def test_embedding_signature_mismatch_triggers_reindex(
         self,
         mock_write_sig,
@@ -125,7 +140,7 @@ class TestReindexCommand:
         mock_get_setting,
         mock_reindex_skills,
     ):
-        from omni.agent.cli.commands.reindex import ensure_embedding_index_compatibility
+        from omni.agent.services import ensure_embedding_index_compatibility
 
         mock_read_sig.return_value = {
             "embedding_model": "old",
@@ -159,8 +174,8 @@ class TestSyncReindexUnifiedPath:
 
     @pytest.mark.asyncio
     async def test_sync_skills_uses_get_database_path_skills(self):
-        """_sync_skills must use get_database_path('skills') so it writes to the same DB as reindex."""
-        from omni.agent.cli.commands.sync import _sync_skills
+        """sync_skills must use get_database_path('skills') so it writes to the same DB as reindex."""
+        from omni.agent.services.sync import sync_skills
 
         with (
             patch(
@@ -176,7 +191,7 @@ class TestSyncReindexUnifiedPath:
 
             with (
                 patch(
-                    "omni.agent.cli.commands.reindex._build_relationship_graph_after_skills_reindex",
+                    "omni.agent.services.reindex._build_relationship_graph_after_skills_reindex",
                 ) as mock_build_graph,
                 patch(
                     "omni.foundation.services.index_dimension.ensure_embedding_signature_written",
@@ -187,7 +202,7 @@ class TestSyncReindexUnifiedPath:
             ):
                 mock_discovery_cls.return_value.discover_all = AsyncMock(return_value=[MagicMock()])
 
-                await _sync_skills()
+                await sync_skills()
 
         mock_get_path.assert_called_once_with("skills")
         mock_get_store.assert_called_once_with("/cache/omni-vector/skills.lance")
@@ -195,8 +210,8 @@ class TestSyncReindexUnifiedPath:
 
     @pytest.mark.asyncio
     async def test_sync_skills_uses_index_skill_tools_dual(self):
-        """_sync_skills must use index_skill_tools_dual(skills_path, 'skills', 'skills') like reindex."""
-        from omni.agent.cli.commands.sync import _sync_skills
+        """sync_skills must use index_skill_tools_dual(skills_path, 'skills', 'skills') like reindex."""
+        from omni.agent.services.sync import sync_skills
 
         with (
             patch(
@@ -213,7 +228,7 @@ class TestSyncReindexUnifiedPath:
 
             with (
                 patch(
-                    "omni.agent.cli.commands.reindex._build_relationship_graph_after_skills_reindex",
+                    "omni.agent.services.reindex._build_relationship_graph_after_skills_reindex",
                 ),
                 patch(
                     "omni.foundation.services.index_dimension.ensure_embedding_signature_written",
@@ -224,7 +239,7 @@ class TestSyncReindexUnifiedPath:
             ):
                 mock_discovery_cls.return_value.discover_all = AsyncMock(return_value=[])
 
-                await _sync_skills()
+                await sync_skills()
 
         mock_dual.assert_called_once()
         call_args = mock_dual.call_args
@@ -233,8 +248,8 @@ class TestSyncReindexUnifiedPath:
 
     @pytest.mark.asyncio
     async def test_sync_skills_builds_relationship_graph(self):
-        """_sync_skills must build the relationship graph after indexing (same as reindex)."""
-        from omni.agent.cli.commands.sync import _sync_skills
+        """sync_skills must build the relationship graph after indexing (same as reindex)."""
+        from omni.agent.services.sync import sync_skills
 
         with (
             patch(
@@ -250,7 +265,7 @@ class TestSyncReindexUnifiedPath:
 
             with (
                 patch(
-                    "omni.agent.cli.commands.reindex._build_relationship_graph_after_skills_reindex",
+                    "omni.agent.services.reindex._build_relationship_graph_after_skills_reindex",
                 ) as mock_build_graph,
                 patch(
                     "omni.foundation.services.index_dimension.ensure_embedding_signature_written",
@@ -261,27 +276,27 @@ class TestSyncReindexUnifiedPath:
             ):
                 mock_discovery_cls.return_value.discover_all = AsyncMock(return_value=[])
 
-                await _sync_skills()
+                await sync_skills()
 
         mock_build_graph.assert_called_once_with("/cache/omni-vector/skills.lance")
 
     def test_reindex_skills_only_uses_get_database_path_skills(self):
-        """_reindex_skills_only must use get_database_path('skills') for the store path."""
-        from omni.agent.cli.commands.reindex import _reindex_skills_only
+        """reindex_skills_only must use get_database_path('skills') for the store path."""
+        from omni.agent.services.reindex import reindex_skills_only
 
         with (
             patch(
-                "omni.agent.cli.commands.reindex.get_database_path",
+                "omni.agent.services.reindex.get_database_path",
                 return_value="/cache/omni-vector/skills.lance",
             ) as mock_get_path,
             patch(
                 "omni.foundation.bridge.RustVectorStore",
             ) as mock_store_cls,
             patch(
-                "omni.agent.cli.commands.reindex._reindex_lock",
+                "omni.agent.services.reindex._reindex_lock",
             ) as mock_lock,
             patch(
-                "omni.agent.cli.commands.reindex._build_relationship_graph_after_skills_reindex",
+                "omni.agent.services.reindex._build_relationship_graph_after_skills_reindex",
             ),
         ):
             mock_lock.return_value.__enter__ = lambda self: None
@@ -294,7 +309,7 @@ class TestSyncReindexUnifiedPath:
             mock_store.list_all = AsyncMock(return_value=[])  # for _validate_skills_schema
             mock_store_cls.return_value = mock_store
 
-            result = _reindex_skills_only(clear=False)
+            result = reindex_skills_only(clear=False)
 
         assert result.get("status") == "success"
         mock_get_path.assert_called_with("skills")

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "xiuxian_wendao.link_graph.saliency.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "node_id",
+    "saliency_base",
+    "decay_rate",
+    "activation_count",
+    "last_accessed_unix",
+    "current_saliency",
+    "updated_at_unix"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "xiuxian_wendao.link_graph.saliency.v1"
+    },
+    "node_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "saliency_base": {
+      "type": "number",
+      "minimum": 0
+    },
+    "decay_rate": {
+      "type": "number",
+      "minimum": 0
+    },
+    "activation_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "last_accessed_unix": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "current_saliency": {
+      "type": "number"
+    },
+    "updated_at_unix": {
+      "type": "number",
+      "minimum": 0
+    }
+  }
+}

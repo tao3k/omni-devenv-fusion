@@ -1,7 +1,7 @@
 //! Rust-Native File Watcher with Event Bus Integration
 //!
 //! Uses `notify` crate for cross-platform file system monitoring.
-//! Publishes file events to the global `omni-events` EventBus for reactive architecture.
+//! Publishes file events to the global `omni-events` `EventBus` for reactive architecture.
 
 use std::path::Path;
 use std::time::Duration;
@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 #[cfg(feature = "notify")]
 use omni_events::{GLOBAL_BUS, OmniEvent, topics};
 
-/// Configuration for file watcher
+/// Configuration for file watcher.
 #[derive(Debug, Clone)]
 pub struct WatcherConfig {
     /// Paths to watch
@@ -45,50 +45,71 @@ impl Default for WatcherConfig {
     }
 }
 
-/// File system event types matching notify crate
+/// File system event types matching `notify` crate.
 #[derive(Debug, Clone)]
 pub enum FileEvent {
-    Created { path: String, is_dir: bool },
-    Modified { path: String },
-    Deleted { path: String, is_dir: bool },
-    Error { path: String, error: String },
+    /// File was created.
+    Created {
+        /// Path to the created file or directory.
+        path: String,
+        /// Whether the path is a directory.
+        is_dir: bool,
+    },
+    /// File was modified.
+    Modified {
+        /// Path to the modified file.
+        path: String,
+    },
+    /// File was deleted.
+    Deleted {
+        /// Path to the deleted file or directory.
+        path: String,
+        /// Whether the path is a directory.
+        is_dir: bool,
+    },
+    /// Error occurred while processing watcher events.
+    Error {
+        /// Path associated with the error when available.
+        path: String,
+        /// Error message.
+        error: String,
+    },
 }
 
 /// Result from file watcher
 pub type WatcherResult = (FileEvent, Option<OmniEvent>);
 
-/// Handle to control the file watcher
+/// Handle to control the file watcher.
 #[derive(Clone)]
 pub struct FileWatcherHandle {
     tx: mpsc::Sender<()>,
 }
 
 impl FileWatcherHandle {
-    /// Stop the watcher
+    /// Stop the watcher.
     pub async fn stop(&self) {
         let _ = self.tx.send(()).await;
     }
 }
 
-/// Convert notify event kind to topic and handle macOS edge cases
+/// Convert `notify` event kind to topic and handle macOS edge cases.
 #[cfg(feature = "notify")]
-fn event_to_topic_and_path(kind: &notify::EventKind, path: &Path) -> (&'static str, String) {
+fn event_to_topic_and_path(kind: notify::EventKind, path: &Path) -> (&'static str, String) {
     let path_str = path.to_string_lossy().to_string();
 
     // Handle macOS edge case: some editors may send Create/Modify instead of Remove
     // when a file is deleted. We check if the file actually exists.
-    if matches!(kind, notify::EventKind::Create(_)) || matches!(kind, notify::EventKind::Modify(_))
+    if (matches!(kind, notify::EventKind::Create(_))
+        || matches!(kind, notify::EventKind::Modify(_)))
+        && !path.exists()
     {
-        if !path.exists() {
-            // File was reported as created/modified but doesn't exist -> it was deleted
-            return (topics::FILE_DELETED, path_str);
-        }
+        // File was reported as created/modified but doesn't exist -> it was deleted
+        return (topics::FILE_DELETED, path_str);
     }
 
     (
         match kind {
             notify::EventKind::Create(_) => topics::FILE_CREATED,
-            notify::EventKind::Modify(_) => topics::FILE_CHANGED,
             notify::EventKind::Remove(_) => topics::FILE_DELETED,
             _ => topics::FILE_CHANGED,
         },
@@ -96,12 +117,14 @@ fn event_to_topic_and_path(kind: &notify::EventKind, path: &Path) -> (&'static s
     )
 }
 
-/// Check if path matches any pattern using high-performance GlobSet
+/// Check if path matches any pattern using high-performance `GlobSet`.
 fn matches_patterns(path: &Path, patterns: &[String], exclude: &[String]) -> bool {
     let path_str = path.to_string_lossy();
 
     // Build exclude set
-    let exclude_set = if !exclude.is_empty() {
+    let exclude_set = if exclude.is_empty() {
+        None
+    } else {
         let mut builder = GlobSetBuilder::new();
         for ex in exclude {
             if let Ok(glob) = Glob::new(ex) {
@@ -109,13 +132,13 @@ fn matches_patterns(path: &Path, patterns: &[String], exclude: &[String]) -> boo
             }
         }
         Some(builder.build())
-    } else {
-        None
     };
 
     // Check exclude patterns first
     if let Some(Ok(set)) = exclude_set {
-        if !set.matches(&*path_str).is_empty() {
+        if set.matches(&*path_str).is_empty() {
+            // Continue include matching.
+        } else {
             return false;
         }
     }
@@ -136,7 +159,11 @@ fn matches_patterns(path: &Path, patterns: &[String], exclude: &[String]) -> boo
     patterns.is_empty()
 }
 
-/// Start a file watcher that publishes events to the global EventBus.
+/// Start a file watcher that publishes events to the global `EventBus`.
+///
+/// # Errors
+///
+/// Returns an error if watcher initialization fails or any configured path cannot be watched.
 #[cfg(feature = "notify")]
 pub async fn start_file_watcher<F>(
     config: WatcherConfig,
@@ -197,9 +224,8 @@ where
                     match result {
                         Some(Ok(event)) => {
                             // Get first path
-                            let path = match event.paths.first() {
-                                Some(p) => p,
-                                None => continue,
+                            let Some(path) = event.paths.first() else {
+                                continue;
                             };
 
                             // Filter by patterns
@@ -216,17 +242,17 @@ where
                             if should_debounce {
                                 let mut debounce = debounce_map.lock().await;
                                 let now = Instant::now();
-                                if let Some(last) = debounce.get(&path_str) {
-                                    if now.duration_since(*last) < debounce_duration {
-                                        continue; // Skip debounced event
-                                    }
+                                if let Some(last) = debounce.get(&path_str)
+                                    && now.duration_since(*last) < debounce_duration
+                                {
+                                    continue; // Skip debounced event
                                 }
                                 debounce.insert(path_str.clone(), now);
                             }
 
                             // Handle macOS edge case: check if file exists for Create/Modify events
                             // If file doesn't exist, treat it as DELETED
-                            let (topic, final_path_str) = event_to_topic_and_path(&event.kind, path);
+                            let (topic, final_path_str) = event_to_topic_and_path(event.kind, path);
 
                             // Convert to FileEvent - use final_path_str and topic to determine type
                             let file_event = match topic {
@@ -281,13 +307,19 @@ where
     Ok(FileWatcherHandle { tx })
 }
 
-/// Start watching with default config
+/// Start watching with default config.
+///
+/// # Errors
+///
+/// Returns an error if the watcher cannot be created for `path`.
 #[cfg(feature = "notify")]
 pub async fn watch_path<P: AsRef<Path>>(
     path: P,
 ) -> Result<FileWatcherHandle, Box<dyn std::error::Error>> {
-    let mut config = WatcherConfig::default();
-    config.paths = vec![path.as_ref().to_string_lossy().to_string()];
+    let config = WatcherConfig {
+        paths: vec![path.as_ref().to_string_lossy().to_string()],
+        ..WatcherConfig::default()
+    };
     start_file_watcher::<fn(WatcherResult)>(config, None).await
 }
 

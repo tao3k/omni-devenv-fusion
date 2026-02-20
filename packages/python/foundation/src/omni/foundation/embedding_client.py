@@ -71,14 +71,22 @@ class EmbeddingClient:
             logger.error("Embedding health check error", url=self.base_url, error=str(e))
             return {"status": "error", "server_url": self.base_url, "error": str(e)}
 
-    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings for multiple texts via HTTP."""
+    async def embed_batch(
+        self, texts: list[str], timeout_seconds: float | None = None
+    ) -> list[list[float]]:
+        """Generate embeddings for multiple texts via HTTP.
+
+        Args:
+            texts: Texts to embed.
+            timeout_seconds: Request timeout in seconds (default from session; use 5–10 for recall).
+        """
         session = await self._get_session()
+        total = float(timeout_seconds) if timeout_seconds is not None else 60
         try:
             async with session.post(
                 f"{self.base_url}/embed/batch",
                 json={"texts": texts},
-                timeout=aiohttp.ClientTimeout(total=60),
+                timeout=aiohttp.ClientTimeout(total=total),
             ) as response:
                 if response.status != 200:
                     error = await response.text()
@@ -129,15 +137,18 @@ class EmbeddingClient:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
+        # Use shorter timeout when used from recall (avoids thread blocking 60s; recall layer has its own wait_for)
+        _timeout = int(get_setting("knowledge.recall_embed_timeout_seconds", 5)) + 5
+        _timeout = min(max(_timeout, 5), 60)
         try:
-            with urllib.request.urlopen(req, timeout=60) as response:
+            with urllib.request.urlopen(req, timeout=_timeout) as response:
                 raw = response.read().decode("utf-8")
                 return json.loads(raw) if raw else {}
         except urllib.error.URLError as e:
             raise RuntimeError(f"Failed to connect to embedding server: {e}") from e
 
     def sync_embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """Synchronous batch embedding without asyncio bridging."""
+        """Synchronous batch embedding (client-only; used when MCP embedding service is already running)."""
         data = self._sync_request_json("/embed/batch", {"texts": texts})
         return data.get("vectors", [])
 

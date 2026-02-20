@@ -26,7 +26,7 @@ Each routing decision has a confidence score:
 | **0.5 - < 0.75**      | Medium confidence | Proceed with caution  |
 | **< 0.5**             | Low confidence    | Ask for clarification |
 
-Confidence mapping is configurable in `settings.yaml` (resolved from `--conf <dir>`):
+Confidence mapping is configurable in settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml; resolved from `--conf <dir>`):
 
 ```yaml
 router:

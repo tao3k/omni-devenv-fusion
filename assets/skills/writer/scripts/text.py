@@ -2,14 +2,16 @@
 writer/scripts/text.py - Writer Skill Commands
 """
 
+import asyncio
 import json
 import re
 import subprocess
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 import structlog
 
 from omni.foundation.api.decorators import skill_command
+from omni.foundation.api.response_payloads import build_status_message_response
 from omni.foundation.config.skills import SKILLS_DIR
 
 logger = structlog.get_logger(__name__)
@@ -23,7 +25,7 @@ class WritingStyleCache:
     _instance: Optional["WritingStyleCache"] = None
     _loaded: bool = False
     _guidelines: str = ""
-    _guidelines_dict: dict[str, str] = {}
+    _guidelines_dict: ClassVar[dict[str, str]] = {}
 
     def __new__(cls) -> "WritingStyleCache":
         if cls._instance is None:
@@ -390,18 +392,21 @@ async def load_writing_memory() -> str:
 )
 async def run_vale_check(file_path: str) -> str:
     try:
-        subprocess.run(["vale", "--version"], capture_output=True, check=True)
+        await asyncio.to_thread(
+            subprocess.run, ["vale", "--version"], capture_output=True, check=True
+        )
     except (subprocess.CalledProcessError, FileNotFoundError):
         return json.dumps(
-            {
-                "status": "error",
-                "message": "Vale CLI not found. Install with: brew install vale",
-                "violations": [],
-            }
+            build_status_message_response(
+                status="error",
+                message="Vale CLI not found. Install with: brew install vale",
+                extra={"violations": []},
+            )
         )
 
     try:
-        result = subprocess.run(
+        result = await asyncio.to_thread(
+            subprocess.run,
             ["vale", "--output=JSON", file_path],
             capture_output=True,
             text=True,
@@ -434,17 +439,17 @@ async def run_vale_check(file_path: str) -> str:
 
     except json.JSONDecodeError:
         return json.dumps(
-            {
-                "status": "error",
-                "message": "Failed to parse Vale output",
-                "violations": [],
-            }
+            build_status_message_response(
+                status="error",
+                message="Failed to parse Vale output",
+                extra={"violations": []},
+            )
         )
     except Exception as e:
         return json.dumps(
-            {
-                "status": "error",
-                "message": f"Vale error: {e!s}",
-                "violations": [],
-            }
+            build_status_message_response(
+                status="error",
+                message=f"Vale error: {e!s}",
+                extra={"violations": []},
+            )
         )

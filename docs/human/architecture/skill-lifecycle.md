@@ -62,7 +62,7 @@ async def git_status() -> str:
 
 ### 1. Discovery
 
-Skills are discovered from `assets/skills/` directories by the skills-scanner crate.
+Skills are discovered from `assets/skills/` directories by the omni-scanner crate.
 
 ### 2. Loading
 

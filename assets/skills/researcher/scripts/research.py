@@ -280,21 +280,34 @@ def repomix_map(path: str, max_depth: int = 4) -> str:
     return "\n".join(lines)
 
 
+# Subprocess timeout for repomix (avoid hanging on huge shards)
+REPOMIX_SHARD_TIMEOUT_S = 120
+
+# Max characters to keep from repomix output (smaller = faster LLM, fits MCP timeout)
+REPOMIX_SHARD_MAX_CHARS = 32_000
+
+
 def repomix_compress_shard(
     path: str,
     targets: list[str],
     shard_name: str,
+    max_chars: int | None = None,
+    shard_id: int | None = None,
 ) -> dict[str, Any]:
     """
     Compress a specific shard with optimized repomix call.
 
     Uses system binary directly to avoid npx overhead.
+    Truncates output to max_chars to keep downstream LLM analysis fast (MCP-friendly).
+    shard_id ensures unique config/output filenames when parallel shards share similar names.
     """
     repo_path = Path(path)
+    max_chars = max_chars if max_chars is not None else REPOMIX_SHARD_MAX_CHARS
     safe_name = "".join(c for c in shard_name if c.isalnum() or c in "_ -")
     safe_name = safe_name[:30]  # Limit length
-    config_file = repo_path / f"repomix.{safe_name}.json"
-    output_file = repo_path / f"context.{safe_name}.xml"
+    unique_suffix = f"{shard_id}_{safe_name}" if shard_id is not None else safe_name
+    config_file = repo_path / f"repomix.{unique_suffix}.json"
+    output_file = repo_path / f"context.{unique_suffix}.xml"
 
     config = {
         "output": {
@@ -323,19 +336,20 @@ def repomix_compress_shard(
 
     config_file.write_text(json.dumps(config, indent=2))
 
-    # Use system binary (fast) or npx (fallback)
-    repomix_cmd = _find_repomix_cmd()
-    cmd = [repomix_cmd, "--config", str(config_file)]
+    try:
+        # Use system binary (fast) or npx (fallback)
+        repomix_cmd = _find_repomix_cmd()
+        cmd = [repomix_cmd, "--config", str(config_file)]
 
-    result = subprocess.run(
-        cmd,
-        cwd=repo_path,
-        capture_output=True,
-        text=True,
-    )
-
-    # Cleanup config
-    config_file.unlink(missing_ok=True)
+        result = subprocess.run(
+            cmd,
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            timeout=REPOMIX_SHARD_TIMEOUT_S,
+        )
+    finally:
+        config_file.unlink(missing_ok=True)
 
     if result.returncode != 0:
         raise RuntimeError(f"Repomix shard failed: {result.stderr}")
@@ -343,6 +357,8 @@ def repomix_compress_shard(
     if output_file.exists():
         content = output_file.read_text(encoding="utf-8")
         output_file.unlink(missing_ok=True)
+        if len(content) > max_chars:
+            content = content[:max_chars] + "\n\n[...truncated for faster analysis...]"
         return {
             "xml_content": content,
             "token_count": len(content) // 4,

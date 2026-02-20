@@ -28,7 +28,6 @@ from omni.agent.core.context.manager import ContextManager
 from omni.agent.core.context.pruner import ContextPruner, PruningConfig
 from omni.core.context.orchestrator import create_omni_loop_context
 from omni.foundation.config.logging import get_logger
-from omni.foundation.config.settings import get_setting
 from omni.foundation.services.llm import InferenceClient
 
 logger = get_logger("omni.agent.loop")
@@ -135,6 +134,8 @@ class OmniLoop:
         self.session_id = str(uuid.uuid4())[:8]
         self.kernel = kernel
         self.current_step = 0  # Track step for event publishing
+        self.step_count = 0  # Track completed steps
+        self.tool_calls_count = 0  # Track tool invocations
 
         # Epistemic Gating
         self._epistemic_gater = EpistemicGater()
@@ -148,6 +149,7 @@ class OmniLoop:
         self.context = ContextManager(pruner=ContextPruner(config=pruning_config))
 
         self.engine = InferenceClient()
+        # Rust omni-agent owns authoritative system prompt injection.
         self.orchestrator = create_omni_loop_context()
         self.history: List[Dict[str, Any]] = []
         self._initialized = False
@@ -166,6 +168,28 @@ class OmniLoop:
 
             # Cognitive Constraint Injection
             constraint_prompt = (
+                "\n\n[EXPERT IDENTITY]\n"
+                "You are a shell scripting expert. Use standard shell commands (bash-compatible):\n"
+                "- Use `ls -la`, `cat`, `grep`, `find`, `awk`, `sed`\n"
+                "- Use `&&` or `;` for chaining commands\n"
+                "- Use `git`, `cargo`, `npm`, `pytest`, `make`\n"
+                "- Use standard command-line syntax, NOT natural language\n"
+                "\n"
+                "WRONG: `list files`, `find files`, `show content`\n"
+                'RIGHT: `ls -la`, `cat file.txt`, `find . -name "*.py"`\n'
+                "\n\n[TOOL CALLING PROTOCOL]\n"
+                "When you need to run terminal commands, use the <tool_call> format:\n"
+                '<tool_call>{"name": "omniCell.nuShell", "arguments": {"command": "ls -la"}}</tool_call>\n'
+                "\n"
+                "Example: To run cargo test, output:\n"
+                '<tool_call>{"name": "omniCell.nuShell", "arguments": {"command": "cargo test"}}</tool_call>\n'
+                "\n\n[COMPLEX TASKS]\n"
+                "For complex multi-step tasks, break them down and execute step by step:\n"
+                "1. First explore the environment/data\n"
+                "2. Then execute the main task\n"
+                "3. Verify the results\n"
+                "\n\n[DEFAULT TOOLS]\n"
+                "- omniCell.nuShell: Execute shell commands (ls, git, cargo, npm, pytest, etc.)\n"
                 "\n\n[COGNITIVE PROTOCOL]\n"
                 "1. DO NOT act as a text editor. Use High-Level Skills (`researcher`, `code_tools`) first.\n"
                 "2. `skill.discover` is MANDATORY for unknown capabilities.\n"
@@ -309,7 +333,11 @@ class OmniLoop:
         return [name for name in tool_names if name not in TIER_1_ATOMIC]
 
     async def run(self, task: str, max_steps: Optional[int] = None) -> str:
-        """Execute a task through the MatureReAct loop."""
+        import time
+
+        _start = time.time()
+        logger.info(f"[LOOP] Starting run at {_start}")
+
         # Epistemic Gating
         if self._epistemic_gater is not None:
             should_proceed, reason, metadata = self._epistemic_gater.evaluate(task)
@@ -322,10 +350,13 @@ class OmniLoop:
                 )
                 return reason
 
+        logger.info(f"[LOOP] Before _ensure_initialized: {time.time() - _start:.2f}s")
         await self._ensure_initialized()
+        logger.info(f"[LOOP] After _ensure_initialized: {time.time() - _start:.2f}s")
 
         # Memory Recall (Fast Path - Associative)
         await self._inject_memory_context(task)
+        logger.info(f"[LOOP] After memory recall: {time.time() - _start:.2f}s")
 
         # Configure limits
         steps_limit = max_steps if max_steps else self.config.max_tool_calls
@@ -377,43 +408,100 @@ class OmniLoop:
         # Fire-and-forget learning
         asyncio.create_task(self._trigger_harvester())
 
+        # [NEW] Self-Evolving Memory: Store episode and update Q-value
+        asyncio.create_task(self._evolve_memory(task, response, self.step_count > 0))
+
         return response
 
-    async def _inject_memory_context(self, task: str) -> None:
+    async def _evolve_memory(self, task: str, response: str, success: bool) -> None:
         """
-        Associative Recall
+        Self-Evolution: Store episode to persistent LanceDB.
 
-        Before acting, check if we have relevant memories/rules for this task.
-        Fast Path (System 1) - Automatic rule/preference injection.
+        After each execution, store the experience to vector store.
+        This is the core of MemRL's self-evolving capability.
         """
+        logger.info(f"🧬 _evolve_memory called: task={task[:30]}, success={success}")
         try:
-            # Import here to avoid circular dependencies
             from omni.foundation.services.vector import get_vector_store
 
             store = get_vector_store()
 
-            # Search for relevant memories (Top 3, threshold 0.75)
-            memories = await store.search(query=task, n_results=3)
+            # Extract key action from response
+            experience = self._extract_key_experience(response)
+
+            # Determine outcome and Q-value
+            outcome = "success" if success else "failure"
+            q_value = 1.0 if success else 0.0
+
+            # Store to LanceDB (persistent)
+            await store.add(
+                content=experience,
+                metadata={
+                    "intent": task,
+                    "outcome": outcome,
+                    "q_value": q_value,
+                },
+                collection="memory",
+            )
+
+            logger.info(f"🧬 Self-evolution: stored to LanceDB, outcome={outcome}")
+
+        except ImportError as e:
+            logger.warning(f"VectorStore not available: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to evolve memory: {e}")
+
+    def _extract_key_experience(self, response: str) -> str:
+        """Extract key action/experience from LLM response."""
+        # Look for tool execution results
+        lines = response.split("\n")
+        for i, line in enumerate(lines):
+            if "[Tool:" in line or "Result:" in line:
+                # Return the tool result part
+                if i + 1 < len(lines):
+                    return lines[i + 1].strip()[:200]
+        # Fallback: use first 200 chars of response
+        return response[:200]
+
+    async def _inject_memory_context(self, task: str) -> None:
+        """
+        Self-Evolving Memory Recall - uses existing LanceDB vector store.
+
+        Before acting, check if we have relevant experiences in memory.
+        Uses existing persistent vector store (collection="memory").
+        """
+        try:
+            # Use existing LanceDB-backed vector store (persistent)
+            from omni.foundation.services.vector import get_vector_store
+
+            store = get_vector_store()
+
+            # Search memory collection for relevant experiences
+            memories = await store.search(query=task, n_results=3, collection="memory")
 
             if not memories:
+                logger.debug("No memories found, skipping recall")
                 return
 
             # Format memories into context block
-            memory_block = "\n[RECALLED MEMORIES - PREVIOUS LESSONS]\n"
+            memory_block = "\n[RECALLED MEMORIES - PAST EXPERIENCES]\n"
+            memory_block += "(These are past experiences that may help with this task)\n"
             for m in memories:
-                source = m.metadata.get("domain", "User")
-                memory_block += f"- {m.content} (Source: {source})\n"
-            memory_block += "[End of Memories]\n\n"
+                outcome = m.metadata.get("outcome", "unknown")
+                q_value = m.metadata.get("q_value", 0.5)
+                q_indicator = "✅" if q_value > 0.6 else "⚠️" if q_value > 0.4 else "❌"
+                memory_block += f"- {q_indicator} {m.content[:200]}\n"
+                memory_block += f"  (outcome: {outcome}, utility: {q_value:.2f})\n"
+            memory_block += "[End of Recalled Memories]\n\n"
 
             # Inject into System Context
             self.context.add_system_message(memory_block)
-            logger.info(f"🧠 Injected {len(memories)} memories into context")
+            logger.info(f"🧠 Injected {len(memories)} memories from LanceDB")
 
         except ImportError:
-            # VectorStore not available, skip silently
             logger.debug("VectorStore not available, skipping memory recall")
         except Exception as e:
-            logger.warn(f"Memory recall failed: {e}")
+            logger.warning(f"Memory recall failed: {e}")
 
     async def _trigger_harvester(self):
         """
@@ -433,7 +521,7 @@ class OmniLoop:
             from omni.foundation.config.skills import SKILLS_DIR
             from omni.foundation.services.vector import get_vector_store
 
-            harvester = Harvester(self.engine)
+            harvester = Harvester(engine=self.engine)
 
             # Slow Path: Harvest Procedural Skills
             candidate = await harvester.analyze_session(self.history)

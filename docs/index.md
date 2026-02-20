@@ -1,143 +1,145 @@
 # Omni-Dev-Fusion Documentation
 
-> Explore the potential of AI and LLMs in your software development lifecycle.
+> AI and LLMs in your software development lifecycle. One entry point, project-aware skills, semantic routing, MCP-native.
 
-We organized our docs into four categories. Find what you need:
+**Start here:** [Getting Started](./tutorials/getting-started.md) · **Reference index:** [Reference (by domain)](./reference/README.md) · **Progress:** [Backlog](./backlog.md)
 
 ---
 
 ## Tutorials
 
-Learning-oriented. Step-by-step lessons to get you running.
-
-| Document                                          | Description                                           |
-| ------------------------------------------------- | ----------------------------------------------------- |
-| [Getting Started](./tutorials/getting-started.md) | Set up your environment and run your first MCP server |
+| Document                                          | Description                                                                 |
+| ------------------------------------------------- | --------------------------------------------------------------------------- |
+| [Getting Started](./tutorials/getting-started.md) | Set up environment (Nix + direnv, uv), generate skill index, run MCP server |
 
 ---
 
 ## How-to Guides
 
-Problem-oriented. Recipes for solving specific tasks.
-
-| Document                                 | Description                                  |
-| ---------------------------------------- | -------------------------------------------- |
-| [Git Workflow](./how-to/git-workflow.md) | Commit conventions and Agent-Commit Protocol |
+| Document                                                           | Description                                                          |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| [Git Workflow](./reference/odf-ep-protocol.md#git-workflow)        | Commit conventions and Agent-Commit Protocol (ODF-EP § Git Workflow) |
+| [Knowledge MCP query paper](./how-to/knowledge-mcp-query-paper.md) | Query papers via MCP knowledge tools                                 |
+| [Run the Rust agent](./how-to/run-rust-agent.md)                   | Verification checklist: gateway, stdio, repl, MCP, memory            |
 
 ---
 
 ## Reference
 
-Information-oriented. Technical details, API specs, and configuration options.
+Technical specs, contracts, configuration. **Full list by domain:** [reference/README.md](./reference/README.md).
 
-| Document                                                                          | Description                                                                                         |
-| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| [MCP Orchestrator](./reference/mcp-orchestrator.md)                               | Omni MCP tool configuration and usage                                                               |
-| [MCP Best Practices](./reference/mcp-best-practices.md)                           | MCP server design patterns and anti-patterns                                                        |
-| [Documentation Standards](./reference/documentation-standards.md)                 | Doc guidelines for this project                                                                     |
-| [ODF-EP Protocol](./reference/odf-ep-protocol.md)                                 | MANDATORY for LLMs - Engineering Protocol                                                           |
-| [CLI Reference](./reference/cli.md)                                               | Omni run, omni run exec commands                                                                    |
-| [Code Tools Skill](./reference/code-tools.md)                                     | AST-based code navigation and refactoring                                                           |
-| [AST-Based Search](./reference/ast-grep.md)                                       | ast-grep patterns and Cartographer/Hunter                                                           |
-| [Skill Generator](./reference/skill-generator.md)                                 | Hybrid skill generator (Jinja2 + LLM)                                                               |
-| [Execution Tracing](./reference/tracer.md)                                        | UltraRAG-style execution tracing system                                                             |
-| [LangGraph UltraRAG Demo](./reference/langgraph-ultrarag-demo.md)                 | XML contracts, quality gates, and fail-fast                                                         |
-| [Retrieval Namespace](./reference/retrieval-namespace.md)                         | Unified retrieval API, backends, factory, and runtime defaults                                      |
-| [Search Systems](./reference/search-systems.md)                                   | When to use vector vs hybrid vs agentic search; defaults and decision guide                         |
-| [MCP Tool Schema](./reference/mcp-tool-schema.md)                                 | tools/call result contract, `mcp_schema` API, shared schema                                         |
-| [Vector/Router Schema Contract](./reference/vector-router-schema-contract.md)     | Tool search / vector / hybrid field definitions, no legacy `keywords`                               |
-| [Route Test Result Shape](./reference/route-test-result-shape.md)                 | Algorithm contract: Rust → tool_search.v1 → route result; canonical snapshot                        |
-| [Skills and Router Databases](./reference/skills-and-router-databases.md)         | Two DBs: skills = full data; router = scores only, no redundancy                                    |
-| [LanceDB Version and Roadmap](./reference/lancedb-version-and-roadmap.md)         | Rust lance 2.x; Phases 1–5 done (scalar, maintenance, vector index, partitioning, observability)    |
-| [Omni-Vector Status](./reference/omni-vector-status.md)                           | Omni-vector feature matrix, Python API gaps, and next steps (index/partitioning exposure)           |
-| [Omni-Vector Audit & Next Steps](./reference/omni-vector-audit-and-next-steps.md) | Audit of status report, P0–P3 priorities, and LanceDB 2.x–aligned improvements                      |
-| [Vector Store API](./reference/vector-store-api.md)                               | RustVectorStore, payload schemas (VectorPayload, HybridPayload, ToolSearchPayload), Arrow IPC usage |
-| [Router & RAG Arrow Roadmap](./reference/router-rag-arrow-roadmap.md)             | Arrow status for router (hybrid_search, indexer) and RAG (librarian, dual_core); next steps         |
-| [JSON vs Arrow Performance](./reference/json-vs-arrow-performance.md)             | Benchmark vector search JSON path vs Arrow IPC; how to run and interpret results                    |
+### Essential (mandatory for contributors)
+
+| Document                                                                | Description                                                         |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [ODF-EP Protocol](./reference/odf-ep-protocol.md)                       | **MANDATORY for LLMs** — Engineering Protocol (style, testing, git) |
+| [Project Execution Standard](./reference/project-execution-standard.md) | **MANDATORY** — Rust/Python workflow, SSOT paths, build/test        |
+| [ODF-REP Protocol](./reference/odf-rep-protocol.md)                     | RAG, memory, knowledge indexing                                     |
+| [Documentation Standards](./reference/documentation-standards.md)       | Doc guidelines for this project                                     |
+| [CLI Reference](./reference/cli.md)                                     | `omni run`, `omni db`, and main commands                            |
+
+### By topic
+
+- **MCP & Skills:** [MCP Orchestrator](./reference/mcp-orchestrator.md), [MCP Tool Schema](./reference/mcp-tool-schema.md), [Skill Data Hierarchy](./reference/skill-data-hierarchy-and-references.md), [Extension System](./reference/extension-system.md), [Skill Generator](./reference/skill-generator.md), [Code Tools](./reference/code-tools.md), [AST-Based Search](./reference/ast-grep.md)
+- **Channels:** [Telegram Channel](./reference/telegram-channel.md), [Discord Channel](./reference/discord-channel.md) — provider-specific runtime, allowlists, control-command authorization, and ingress contracts
+- **Router & Search:** [Search Systems](./reference/search-systems.md), [Weighted RRF](./reference/weighted-rrf.md), [Vector/Router Schema Contract](./reference/vector-router-schema-contract.md), [Librarian](./reference/librarian.md)
+- **Vector & LanceDB:** [LanceDB Query-Release Lifecycle](./reference/lancedb-query-release-lifecycle.md), [LanceDB Version and Roadmap](./reference/lancedb-version-and-roadmap.md), [Vector Store API](./reference/vector-store-api.md)
+- **Knowledge & Memory:** [Librarian](./reference/librarian.md), [Memory Module](./reference/memory-module.md), [Omni-Agent Memory Self-Evolution and Self-Repair](./reference/omni-agent-memory-self-evolution-self-repair.md), [LinkGraph to IWE Migration Feasibility and Blueprint](./reference/link-graph-to-iwe-migration-feasibility-and-blueprint.md)
+- **Testing & Execution:** [Test Kit](./reference/test-kit.md), [Project Execution Standard](./reference/project-execution-standard.md), [Nickel/Rust Responsibilities](./reference/nickel-rust-responsibilities.md)
 
 ---
 
 ## Developer
 
-Internal documentation for Omni-Dev Fusion developers.
-
-| Document                                                      | Description                                                                   |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [Execution Roadmap](./plan/execution-roadmap.md)              | What to implement next (excluding New Skill tutorial); step-by-step checklist |
-| [Skill Discovery](./developer/discover.md)                    | Skill discovery (MIGRATION GUIDE)                                             |
-| [Testing Guide](./developer/testing.md)                       | Test system architecture and developer guide                                  |
-| [CLI Guide](./developer/cli.md)                               | CLI developer documentation                                                   |
-| [MCP Core Architecture](./developer/mcp-core-architecture.md) | Shared library architecture guide                                             |
-| [Routing Guide](./developer/routing.md)                       | Routing architecture (MIGRATION GUIDE)                                        |
-
----
-
-## Trinity Architecture
-
-Skill-centric agent architecture with hot reload and DynamicGraphBuilder.
-
-| Document                                                           | Description                                           |
-| ------------------------------------------------------------------ | ----------------------------------------------------- |
-| [Trinity Core](./human/architecture/trinity-core.md)               | Core architecture - Orchestrator/Coder/Executor roles |
-| [Skills Architecture](./human/architecture/skills-architecture.md) | Complete skills guide - start here                    |
-| [Skill Standard](./human/architecture/skill-standard.md)           | Living Skill Architecture and standards               |
-| [Skill Lifecycle](./human/architecture/skill-lifecycle.md)         | LangGraph workflow support and patterns               |
-
----
-
-## Cognitive Trinity
-
-Skills, Knowledge, and Memory integration:
-
-| Component     | Capability                     | Document                                                               | Status |
-| ------------- | ------------------------------ | ---------------------------------------------------------------------- | ------ |
-| **Skills**    | Composable capability packages | [Skill Standard](./human/architecture/skill-standard.md)               | Active |
-| **Knowledge** | Unified Knowledge Index        | [Knowledge Matrix](./human/architecture/knowledge-matrix.md)           | Active |
-| **Memory**    | Episodic Memory                | [Memory Mesh](./human/architecture/memory-mesh.md)                     | Active |
-| **Cognition** | CCA Runtime                    | [Cognitive Scaffolding](./human/architecture/cognitive-scaffolding.md) | Active |
-| **Omni Loop** | CCA Runtime                    | [Omni Loop](./human/architecture/omni-loop.md)                         | ACTIVE |
-| **Pipeline**  | System Prompt Assembly         | [Cognitive Pipeline](./explanation/cognitive-pipeline.md)              | NEW    |
-
----
-
-## LLM Guides
-
-Guides specifically for LLMs interacting with the system:
-
-| Document                                  | Description                               |
-| ----------------------------------------- | ----------------------------------------- |
-| [Routing Guide](./llm/routing-guide.md)   | How routing works with confidence scoring |
-| [Memory Context](./llm/memory-context.md) | Memory hierarchy and usage patterns       |
+| Document                                                                      | Description                               |
+| ----------------------------------------------------------------------------- | ----------------------------------------- |
+| [Backlog](./backlog.md)                                                       | Feature status and what to implement next |
+| [Testing Guide](./developer/testing.md)                                       | Test system and developer guide           |
+| [CLI Guide](./developer/cli.md)                                               | CLI developer documentation               |
+| [Skill Discovery](./developer/discover.md)                                    | Skill discovery implementation            |
+| [Routing](./developer/routing.md)                                             | Routing architecture                      |
+| [MCP Core Architecture](./developer/mcp-core-architecture.md)                 | Shared library and MCP core               |
+| [Knowledge Search Improvements](./developer/knowledge-search-improvements.md) | Knowledge search improvements             |
 
 ---
 
 ## Architecture
 
-Detailed codebase structure and architecture documentation.
+### Codebase and systems
 
-| Document                                                        | Description                                        |
-| --------------------------------------------------------------- | -------------------------------------------------- |
-| [Codebase Structure](./architecture/codebase-structure.md)      | Complete directory tree and file descriptions      |
-| [Rust Crates](./architecture/rust-crates.md)                    | Rust crates reference with modules and performance |
-| [Skills System](./architecture/skills.md)                       | Zero-Code skill architecture and development guide |
-| [Kernel Architecture](./architecture/kernel.md)                 | Microkernel engine, lifecycle management           |
-| [Router Architecture](./architecture/router.md)                 | Semantic routing system (OmniRouter, HiveRouter)   |
-| [MCP-Server Architecture](./architecture/mcp-server.md)         | MCP protocol implementation                        |
-| [UltraRAG Gap Analysis](./explanation/ultrarag-gap-analysis.md) | Comparison with UltraRAG implementation            |
+| Document                                                              | Description                                                             |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [Codebase Structure](./architecture/codebase-structure.md)            | Directory tree and file roles                                           |
+| [Architecture by Package Storage](./architecture/packages-storage.md) | `packages/` layout, Python/Rust source paths, dependency flow           |
+| [Rust Crates](./architecture/rust-crates.md)                          | Rust crates reference (omni-vector, omni-tokenizer, omni-scanner, etc.) |
+| [Skills System](./architecture/skills.md)                             | Zero-code skill architecture                                            |
+| [Router Architecture](./architecture/router.md)                       | Semantic routing (OmniRouter, hybrid search)                            |
+| [MCP-Server Architecture](./architecture/mcp-server.md)               | MCP protocol implementation                                             |
+| [Kernel Architecture](./architecture/kernel.md)                       | Microkernel engine and lifecycle                                        |
+
+### Trinity and cognition
+
+Skills, Knowledge, and Memory:
+
+| Component     | Document                                                                                                                                                                                 | Notes                                 |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| **Skills**    | [Skill Standard](./human/architecture/skill-standard.md), [Skills Architecture](./human/architecture/skills-architecture.md), [Skill Lifecycle](./human/architecture/skill-lifecycle.md) | Composable capabilities, hot reload   |
+| **Knowledge** | [Knowledge Matrix](./human/architecture/knowledge-matrix.md)                                                                                                                             | Unified index (LinkGraph + Librarian) |
+| **Memory**    | [Memory Mesh](./human/architecture/memory-mesh.md), [Skill Memory](./human/architecture/skill-memory.md)                                                                                 | Episodic and project memory           |
+| **Runtime**   | [Omni Loop](./human/architecture/omni-loop.md), [Cognitive Scaffolding](./human/architecture/cognitive-scaffolding.md), [Cognitive Pipeline](./explanation/cognitive-pipeline.md)        | CCA runtime, prompt assembly          |
+
+---
+
+## LLM Guides
+
+| Document                                    | Description                              |
+| ------------------------------------------- | ---------------------------------------- |
+| [Routing Guide](./llm/routing-guide.md)     | How routing works and confidence scoring |
+| [Memory Context](./llm/memory-context.md)   | Memory hierarchy and usage               |
+| [Skill Discovery](./llm/skill-discovery.md) | Skill discovery for LLMs                 |
 
 ---
 
 ## Milestones
 
-| Document                                                                                                                | Description                                                                                                   |
-| ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| [Unified Search & Contracts (Feb 2026)](./milestones/2026-02-unified-search-and-contracts.md)                           | Router/retrieval contracts, route explain API, Tantivy vs Lance FTS decision loop — **completed**             |
-| [Omni-Vector Optimization & Arrow-Native (Feb 2026)](./milestones/2026-02-omni-vector-optimization-and-arrow-native.md) | Parallel hybrid_search, fusion optimizations, 10-column Arrow-native schema, no legacy compat — **completed** |
+| Document                                                                                                                | Description                                                                             |
+| ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| [Unified Search & Contracts (Feb 2026)](./milestones/2026-02-unified-search-and-contracts.md)                           | Router/retrieval contracts, route explain API, keyword backend decision — **completed** |
+| [Omni-Vector Optimization & Arrow-Native (Feb 2026)](./milestones/2026-02-omni-vector-optimization-and-arrow-native.md) | Parallel hybrid search, Arrow-native schema — **completed**                             |
+| [UltraRAG-Style Ingest — Completed](./milestones/ultrarag-style-ingest-completed.md)                                    | Idempotent ingest, Rust chunking, full_document recall, optional images — **completed** |
+
+---
+
+## Plans and Backlog
+
+| Document                                                                                                                        | Description                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [Backlog](./backlog.md)                                                                                                         | **Single source** for feature status and priorities                                                                                              |
+| [UltraRAG-Style Ingest — Completed](milestones/ultrarag-style-ingest-completed.md)                                              | Ingest pipeline (Rust chunking, idempotent write, full_document recall); see [Backlog](backlog.md#ultrarag-style-ingest-complete-implementation) |
+| [Omega + Graph + Loop/ReAct Rust Unification](./plans/omega-graph-react-rust-unification.md)                                    | Unified Rust runtime blueprint and migration rules for removing Python runtime loops safely                                                      |
+| [Xiuxian-Qianhuan Injection + Memory Self-Evolution + Reflection](./plans/knowledge-injection-memory-evolution-architecture.md) | Typed injection architecture, policy contracts, and rollout plan for Rust runtime integration                                                    |
+| [Xiuxian-Qianhuan Unified Workflow Audit](./plans/xiuxian-qianhuan-unified-workflow-audit.md)                                   | One-page auditable architecture view across Omega, Graph, ReAct, injection, memory, and knowledge boundaries                                     |
+| [Xiuxian-Qianhuan Paper Optimization Notes (arXiv 2025-2026)](./plans/xiuxian-qianhuan-paper-optimization-notes.md)             | Two-pass paper review (quick read + deep compare) with code-level gap matrix and pre-implementation optimization backlog                         |
+| [Xiuxian-Qianhuan Implementation Rollout Plan](./plans/xiuxian-qianhuan-implementation-rollout.md)                              | A0-A7 execution sequence with data-plane contract, discover confidence contract, and measurable rollout gates                                    |
+
+---
+
+## Testing
+
+| Document                                                                             | Description                                                   |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| [Testing Guide](./developer/testing.md)                                              | Main testing guide                                            |
+| [Test Kit](reference/test-kit.md)                                                    | Fixtures and utilities                                        |
+| [Keyword Backend Decision](testing/keyword-backend-decision.md)                      | Canonical Tantivy vs Lance FTS decision                       |
+| [Omni-Agent Live Multi-Group Runbook](testing/omni-agent-live-multigroup-runbook.md) | Standardized `Test1/Test2/Test3` live black-box evidence flow |
+| [Testing folder](testing/README.md)                                                  | What each testing doc is for; reports vs canonical            |
 
 ---
 
 ## Related
 
-| Document                                       | Description                           |
-| ---------------------------------------------- | ------------------------------------- |
-| [Skills Directory](../assets/skills/README.md) | Skill packages and commands reference |
+| Document                                                  | Description                                                                        |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [Skills Directory](../assets/skills/README.md)            | Skill packages and commands                                                        |
+| [Why Omni-Dev Fusion](explanation/why-omni-dev-fusion.md) | Scenarios and value proposition                                                    |
+| [Why Nix](explanation/why-nix.md)                         | Nix for environment and build; Nickel + Nix for safe, efficient skill environments |

@@ -3,6 +3,9 @@ name = "omni-sandbox"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 # PyO3 for Python bindings
 pyo3 = { workspace = true, features = ["experimental-async"] }

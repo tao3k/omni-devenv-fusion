@@ -98,14 +98,14 @@ The project **upgraded to lance 2.0** before implementing Phase 1 (Scalar Indice
 
 2. **Partitioning write (P1)**
    - Done: `suggest_partition_column()`, `add_documents_partitioned(table_name, partition_by, ids, vectors, contents, metadatas)` in Rust and Python. Rows grouped by partition column value (from metadata JSON); one append per group for fragment alignment. Read path: predicate on partition column (e.g. `skill_name = 'git'`) is already pushed down.
-   - Done: partition strategy config. `vector.default_partition_column` in `settings.yaml` (e.g. `"skill_name"`); `RustVectorStore.add_documents_partitioned(..., partition_by=None)` uses this default when `partition_by` is `None`.
+   - Done: partition strategy config. `vector.default_partition_column` in settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) (e.g. `"skill_name"`); `RustVectorStore.add_documents_partitioned(..., partition_by=None)` uses this default when `partition_by` is `None`.
 
 3. **Observability CLI (P1)**
    - Done: `omni db health`, `omni db compact`, `omni db query-metrics`, `omni db index-stats`.
    - Missing: real-time performance monitoring once Lance tracing is available.
 
 4. **Index cache (P2)**
-   - Done: `omni db index-stats` (read path). VectorStore has `index_cache_size_bytes: Option<usize>`; `open_dataset_at_uri()` uses `DatasetBuilder::from_uri().with_index_cache_size_bytes(n).load().await` when set. Python: `RustVectorStore(..., index_cache_size_bytes=None)` and `create_vector_store(..., index_cache_size_bytes)`. Config: `settings.yaml` → `vector.index_cache_size_bytes` (bytes or null); used when constructing the store if not passed explicitly.
+   - Done: `omni db index-stats` (read path). VectorStore has `index_cache_size_bytes: Option<usize>`; `open_dataset_at_uri()` uses `DatasetBuilder::from_uri().with_index_cache_size_bytes(n).load().await` when set. Python: `RustVectorStore(..., index_cache_size_bytes=None)` and `create_vector_store(..., index_cache_size_bytes)`. Config: settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) → `vector.index_cache_size_bytes` (bytes or null); used when constructing the store if not passed explicitly.
 
 **Effort (indicative)**
 

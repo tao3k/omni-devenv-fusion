@@ -11,9 +11,12 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import signal
 import sys
+import time
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from enum import Enum
 
 # CRITICAL: Python 3.13 compatibility fix - MUST be before ANY other imports
@@ -38,13 +41,14 @@ if sys.version_info >= (3, 13):
 import typer
 from mcp import types
 from rich.panel import Panel
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from omni.agent.mcp_server.startup import (
+    initialize_handler_on_server_loop as _initialize_handler_on_server_loop,
+    wait_for_sse_server_readiness as _wait_for_sse_server_readiness,
+)
 from omni.foundation.config.logging import configure_logging, get_logger
 from omni.foundation.utils.asyncio import run_async_blocking
-
-if TYPE_CHECKING:
-    from omni.agent.server import AgentMCPHandler
 
 # =============================================================================
 # Lightweight HTTP Server for Embedding (STDIO mode only)
@@ -95,19 +99,29 @@ async def _handle_embedding_request(request: _web.Request) -> _web.Response:
             from omni.foundation.services.embedding import get_embedding_service
 
             embed_service = get_embedding_service()
-            vectors = embed_service.embed_batch(texts)
+            start = time.perf_counter()
+            vectors = await asyncio.to_thread(embed_service.embed_batch, texts)
+            duration_ms = (time.perf_counter() - start) * 1000.0
             result = {
                 "success": True,
                 "count": len(vectors),
                 "vectors": vectors,
                 "preview": [v[:10] for v in vectors] if vectors else [],
             }
+            logger.debug(
+                "embedding_http_embed_texts_done count=%s duration_ms=%.2f",
+                len(vectors),
+                duration_ms,
+            )
 
             return _web.json_response(
                 {
                     "jsonrpc": "2.0",
                     "id": req_id,
-                    "result": {"content": [{"type": "text", "text": _json.dumps(result)}]},
+                    "result": {
+                        "content": [{"type": "text", "text": _json.dumps(result)}],
+                        "isError": False,
+                    },
                 }
             )
 
@@ -125,14 +139,21 @@ async def _handle_embedding_request(request: _web.Request) -> _web.Response:
             from omni.foundation.services.embedding import get_embedding_service
 
             embed_service = get_embedding_service()
-            vector = embed_service.embed(text)[0]
+            start = time.perf_counter()
+            vectors = await asyncio.to_thread(embed_service.embed, text)
+            vector = vectors[0] if vectors else []
+            duration_ms = (time.perf_counter() - start) * 1000.0
             result = {"success": True, "vector": vector, "preview": vector[:10] if vector else []}
+            logger.debug("embedding_http_embed_single_done duration_ms=%.2f", duration_ms)
 
             return _web.json_response(
                 {
                     "jsonrpc": "2.0",
                     "id": req_id,
-                    "result": {"content": [{"type": "text", "text": _json.dumps(result)}]},
+                    "result": {
+                        "content": [{"type": "text", "text": _json.dumps(result)}],
+                        "isError": False,
+                    },
                 }
             )
 
@@ -159,6 +180,92 @@ async def _handle_embedding_request(request: _web.Request) -> _web.Response:
 async def _handle_embedding_health(_request: _web.Request) -> _web.Response:
     """Health endpoint for embedding HTTP service."""
     return _web.json_response({"status": "ok"})
+
+
+def _is_transient_embedding_warm_error(error: Exception) -> bool:
+    message = str(error).lower()
+    transient_markers = (
+        "apiconnectionerror",
+        "server disconnected without sending a response",
+        "connection refused",
+        "failed to connect",
+        "remoteprotocolerror",
+        "temporarily unavailable",
+        "read timeout",
+        "connect timeout",
+    )
+    return any(marker in message for marker in transient_markers)
+
+
+async def _warm_embedding_after_startup(
+    timeout_seconds: float = 8.0,
+    *,
+    max_attempts: int = 8,
+    retry_delay_seconds: float = 0.3,
+) -> None:
+    """Warm embedding backend with bounded timeout and transient-connection retries."""
+    logger = get_logger("omni.mcp.embedding")
+    try:
+        from omni.foundation.services.embedding import get_embedding_service
+
+        embed_svc = get_embedding_service()
+        if embed_svc.backend == "unavailable":
+            return
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + max(timeout_seconds, 0.1)
+        attempts = 0
+        last_error: Exception | None = None
+
+        while attempts < max(1, max_attempts):
+            attempts += 1
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                break
+            try:
+                await asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: embed_svc.embed("_warm_")),
+                    timeout=remaining,
+                )
+                logger.info(
+                    "Embedding model warmed (Ollama model loaded for fast first request) "
+                    "attempt=%s/%s",
+                    attempts,
+                    max(1, max_attempts),
+                )
+                return
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Embedding warm timed out after %.1fs; continue startup", timeout_seconds
+                )
+                return
+            except Exception as error:
+                last_error = error
+                if not _is_transient_embedding_warm_error(error):
+                    logger.warning("Embedding warm skipped: %s", error)
+                    return
+                if attempts >= max(1, max_attempts):
+                    break
+                logger.info(
+                    "Embedding warm transient failure; retrying (attempt=%s/%s): %s",
+                    attempts,
+                    max(1, max_attempts),
+                    error,
+                )
+                sleep_seconds = min(max(retry_delay_seconds, 0.0), max(0.0, deadline - loop.time()))
+                if sleep_seconds > 0:
+                    await asyncio.sleep(sleep_seconds)
+
+        if last_error is not None:
+            logger.warning(
+                "Embedding warm skipped after %s attempts: %s",
+                attempts,
+                last_error,
+            )
+    except asyncio.TimeoutError:
+        logger.warning("Embedding warm timed out after %.1fs; continue startup", timeout_seconds)
+    except Exception as e:
+        logger.warning("Embedding warm skipped: %s", e)
 
 
 async def _check_embedding_service(host: str = "127.0.0.1", port: int = 3001) -> bool:
@@ -296,6 +403,7 @@ _shutdown_requested = False
 _shutdown_count = 0  # For SSE mode signal handling
 _handler_ref = None
 _transport_ref = None  # For stdio transport stop
+_server_loop_ref: asyncio.AbstractEventLoop | None = None
 
 
 # =============================================================================
@@ -353,10 +461,7 @@ def _setup_signal_handler(handler_ref=None, transport_ref=None, stdio_mode=False
 
         # SSE mode: stop the transport first (breaks the run_loop)
         if transport_ref is not None:
-            try:
-                run_async_blocking(transport_ref.stop())
-            except Exception:
-                pass
+            _stop_transport_for_shutdown(transport_ref)
 
         _sync_graceful_shutdown()
 
@@ -381,18 +486,66 @@ async def _graceful_shutdown(handler) -> None:
         logger.error(f"Error during shutdown: {e}")
 
 
+def _run_coroutine_for_shutdown(
+    coro: Any,
+    *,
+    timeout_seconds: float,
+    action: str,
+) -> None:
+    """Run shutdown coroutine on the SSE server loop when available."""
+    loop = _server_loop_ref
+    if loop is not None and loop.is_running() and not loop.is_closed():
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        try:
+            future.result(timeout=timeout_seconds)
+            return
+        except FutureTimeoutError as e:
+            future.cancel()
+            raise TimeoutError(f"{action} timed out after {timeout_seconds}s") from e
+    run_async_blocking(coro)
+
+
+def _stop_transport_for_shutdown(transport_ref, *, timeout_seconds: float = 10.0) -> None:
+    """Stop transport during shutdown without crossing event loops."""
+    logger = get_logger("omni.mcp.shutdown")
+    try:
+        _run_coroutine_for_shutdown(
+            transport_ref.stop(),
+            timeout_seconds=timeout_seconds,
+            action="transport stop",
+        )
+    except Exception as e:
+        logger.warning("Transport stop failed during shutdown: %s", e)
+
+
+def _stop_ollama_if_started() -> None:
+    """Stop the Ollama subprocess if we started it (MCP exit)."""
+    from omni.agent.ollama_lifecycle import _stop_managed_ollama
+
+    _stop_managed_ollama()
+
+
 def _sync_graceful_shutdown() -> None:
     """Sync wrapper for graceful shutdown (for signal handler)."""
     global _handler_ref
+    logger = get_logger("omni.mcp.shutdown")
+    _stop_ollama_if_started()
     if _handler_ref is not None:
         try:
-            run_async_blocking(_graceful_shutdown(_handler_ref))
-        except Exception:
-            pass
+            _run_coroutine_for_shutdown(
+                _graceful_shutdown(_handler_ref),
+                timeout_seconds=30.0,
+                action="graceful shutdown",
+            )
+        except Exception as e:
+            logger.error("Graceful shutdown failed: %s", e)
 
 
 def register_mcp_command(app_instance: typer.Typer) -> None:
     """Register mcp command directly with the main app."""
+    from omni.agent.cli.load_requirements import register_requirements
+
+    register_requirements("mcp", ollama=True, embedding_index=True)
 
     @app_instance.command("mcp", help="Start Omni MCP Server (Level 2 Transport)")
     def run_mcp(
@@ -420,43 +573,70 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
             "-v",
             help="Enable verbose mode (hot reload, debug logging)",
         ),
+        no_embedding: bool = typer.Option(
+            False,
+            "--no-embedding",
+            help="Skip embedding service (lightweight mode; knowledge.recall will fail)",
+        ),
     ):
         """
         Start Omni MCP Server with high-performance omni.mcp transport layer.
 
         Uses Rust-powered orjson for 10-50x faster JSON serialization.
         """
-        global _handler_ref, _transport_ref
+        global _handler_ref, _transport_ref, _server_loop_ref
 
         try:
             if transport == TransportMode.stdio:
                 # Configure logging (stdout is used by MCP, so log to stderr)
                 log_level = "DEBUG" if verbose else "INFO"
                 configure_logging(level=log_level)
+                if not verbose:
+                    logging.getLogger("litellm").setLevel(logging.WARNING)
+                    logging.getLogger("LiteLLM").setLevel(logging.WARNING)
                 logger = get_logger("omni.mcp.stdio")
 
                 async def run_stdio():
                     """Run stdio mode with embedding HTTP server."""
                     logger.info("📡 Starting Omni MCP Server (STDIO mode)")
 
-                    # Initialize embedding service FIRST (auto-detects, starts HTTP server on 18501)
-                    from omni.foundation.services.embedding import get_embedding_service
+                    if not no_embedding:
+                        # If embedding.provider is ollama, ensure Ollama is running (may already be from entry_point).
+                        from omni.agent.ollama_lifecycle import ensure_ollama_for_embedding
 
-                    embed_svc = get_embedding_service()
-                    embed_svc.initialize()  # This triggers auto-detection and HTTP server startup
-                    logger.info("✅ Embedding service initialized")
+                        ensure_ollama_for_embedding()
+                        # MCP must not load the embedding model in-process (keeps memory low).
+                        # Use client-only: connect to an existing embedding service; never start local server.
+                        os.environ["OMNI_EMBEDDING_CLIENT_ONLY"] = "1"
+                        from omni.foundation.services.embedding import get_embedding_service
+
+                        embed_svc = get_embedding_service()
+                        embed_svc.initialize()
+                        if embed_svc.backend == "http":
+                            logger.info("✅ Embedding: client mode (using existing service)")
+                        elif embed_svc.backend == "litellm":
+                            logger.info("✅ Embedding: LiteLLM backend (Ollama/Xinference) ready")
+                        elif embed_svc.backend == "unavailable":
+                            logger.warning(
+                                "Embedding service unreachable; cortex indexing will be skipped. "
+                                "Start Ollama (or set embedding.provider=ollama and run omni mcp) or an embedding HTTP service (e.g. port 18501)."
+                            )
+                        else:
+                            logger.info("✅ Embedding: %s mode", embed_svc.backend)
+                        if embed_svc.backend != "unavailable":
+                            await _warm_embedding_after_startup()
+                    else:
+                        logger.info("⏭️ Embedding service skipped (--no-embedding)")
 
                     # Run stdio server (it handles its own server/handler creation)
                     from omni.agent.mcp_server.stdio import run_stdio as old_run_stdio
 
-                    # Start model loading AFTER stdio server starts (non-blocking)
-                    embed_svc.start_model_loading()
-                    logger.info("🔄 Embedding model loading in background...")
-
                     await old_run_stdio(verbose=verbose)
 
-                    # Stop embedding HTTP server
-                    await _stop_embedding_http_server()
+                    # Stop embedding HTTP server (only if we started it)
+                    if not no_embedding:
+                        await _stop_embedding_http_server()
+                    _stop_ollama_if_started()
 
                 run_async_blocking(run_stdio())
 
@@ -464,6 +644,9 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                 # Configure logging
                 log_level = "DEBUG" if verbose else "INFO"
                 configure_logging(level=log_level)
+                if not verbose:
+                    logging.getLogger("litellm").setLevel(logging.WARNING)
+                    logging.getLogger("LiteLLM").setLevel(logging.WARNING)
                 logger = get_logger("omni.mcp.sse")
 
                 err_console.print(
@@ -478,6 +661,7 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                 from omni.agent.server import create_agent_handler
 
                 handler = create_agent_handler()
+                handler.set_verbose(verbose)
                 _handler_ref = handler
 
                 # Import SSE server
@@ -487,67 +671,91 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                 # Use threading to run server in background while we initialize services
                 import threading
 
-                server_ready = threading.Event()
+                server_loop_ready = threading.Event()
+                server_loop_holder: dict[str, asyncio.AbstractEventLoop] = {}
                 server_error = [None]
 
                 def run_server():
+                    global _server_loop_ref
+                    loop = asyncio.new_event_loop()
                     try:
-                        asyncio.run(run_sse(handler, host, port))
+                        asyncio.set_event_loop(loop)
+                        _server_loop_ref = loop
+                        server_loop_holder["loop"] = loop
+                        server_loop_ready.set()
+                        loop.run_until_complete(run_sse(handler, host, port))
                     except Exception as e:
                         server_error[0] = e
+                    finally:
+                        if _server_loop_ref is loop:
+                            _server_loop_ref = None
+                        server_loop_ready.set()
+                        if not loop.is_closed():
+                            loop.close()
 
                 server_thread = threading.Thread(target=run_server, daemon=True)
                 server_thread.start()
+                server_loop_ready.wait(timeout=2.0)
 
-                # Wait for server to be ready
-                import time
-
-                for _ in range(50):  # 5 seconds max wait
-                    time.sleep(0.1)
-                    try:
-                        import httpx
-
-                        resp = httpx.get(f"http://{host}:{port}/health", timeout=0.5)
-                        if resp.status_code == 200:
-                            break
-                    except Exception:
-                        pass
-                else:
-                    logger.warning("Server health check timed out, continuing...")
+                # Wait for server readiness and fail fast if startup failed.
+                _wait_for_sse_server_readiness(host, port, server_thread, server_error)
 
                 logger.info(f"✅ SSE server started on http://{host}:{port}")
 
-                # Now initialize services in background
-                # Initialize embedding service
-                from omni.foundation.services.embedding import get_embedding_service
+                # Initialize handler first so MCP initialize/tool discovery can respond quickly.
+                server_loop = server_loop_holder.get("loop")
+                init_started = time.perf_counter()
+                if server_loop is not None and server_loop.is_running():
+                    _initialize_handler_on_server_loop(handler, server_loop, timeout_seconds=90.0)
+                else:
+                    logger.warning(
+                        "SSE server loop unavailable for handler init; falling back to temporary loop"
+                    )
+                    run_async_blocking(handler.initialize())
+                logger.info(
+                    "✅ MCP handler initialized (init_ms=%.1f)",
+                    (time.perf_counter() - init_started) * 1000.0,
+                )
 
-                embed_svc = get_embedding_service()
-                embed_svc.initialize()
-                logger.info("✅ Embedding service initialized")
+                # Initialize embedding services after MCP handler is ready.
+                if not no_embedding:
+                    # If embedding.provider is ollama, ensure Ollama is running (may already be from entry_point).
+                    from omni.agent.ollama_lifecycle import ensure_ollama_for_embedding
 
-                # Initialize handler
-                run_async_blocking(handler.initialize())
-                logger.info("✅ MCP handler initialized")
+                    ensure_ollama_for_embedding()
+                    # MCP must not load the embedding model in-process (keeps memory low).
+                    os.environ["OMNI_EMBEDDING_CLIENT_ONLY"] = "1"
+                    from omni.foundation.services.embedding import get_embedding_service
 
-                # Start model loading in background
-                embed_svc.start_model_loading()
-                logger.info("🔄 Embedding model loading in background...")
+                    embed_svc = get_embedding_service()
+                    embed_svc.initialize()
+                    if embed_svc.backend == "http":
+                        logger.info("✅ Embedding: client mode (using existing service)")
+                    elif embed_svc.backend == "litellm":
+                        logger.info("✅ Embedding: LiteLLM backend (Ollama/Xinference) ready")
+                    elif embed_svc.backend == "unavailable":
+                        logger.warning(
+                            "Embedding service unreachable; cortex indexing will be skipped. "
+                            "Start Ollama (or set embedding.provider=ollama and run omni mcp) or an embedding HTTP service (e.g. port 18501)."
+                        )
+                    else:
+                        logger.info("✅ Embedding: %s mode", embed_svc.backend)
+                    if embed_svc.backend != "unavailable":
+                        run_async_blocking(_warm_embedding_after_startup())
+                else:
+                    logger.info("⏭️ Embedding service skipped (--no-embedding)")
 
-                # Keep main thread alive
+                # Keep main thread alive until server thread exits (e.g. Ctrl+C)
                 try:
                     server_thread.join()
                 except KeyboardInterrupt:
                     logger.info("Server stopped")
 
-                def shutdown_handler(signum, frame):
-                    logger.info("Shutdown signal received")
-                    raise KeyboardInterrupt()
-
-                signal.signal(signal.SIGINT, shutdown_handler)
-                signal.signal(signal.SIGTERM, shutdown_handler)
-
-                # Run SSE server
-                asyncio.run(run_sse(handler, host, port))
+                # Server thread exited; run graceful shutdown and exit (do not start server again)
+                shutdown_logger = get_logger("omni.mcp.shutdown")
+                shutdown_logger.info("👋 Shutting down...")
+                _sync_graceful_shutdown()
+                sys.exit(0)
 
         except KeyboardInterrupt:
             shutdown_logger = get_logger("omni.mcp.shutdown")
@@ -556,7 +764,18 @@ def register_mcp_command(app_instance: typer.Typer) -> None:
                 _sync_graceful_shutdown()
             sys.exit(0)
         except Exception as e:
-            err_console.print(Panel(f"[bold red]Server Error:[/bold red] {e}", style="red"))
+            from omni.foundation.services.embedding import EmbeddingPortInUseError
+
+            if isinstance(e, EmbeddingPortInUseError):
+                err_console.print(
+                    Panel(
+                        f"[bold red]Embedding port conflict:[/bold red]\n\n{e}\n\n"
+                        "Edit packages/conf/settings.yaml and set embedding.http_port to a free port.",
+                        style="red",
+                    )
+                )
+            else:
+                err_console.print(Panel(f"[bold red]Server Error:[/bold red] {e}", style="red"))
             if _handler_ref is not None:
                 _sync_graceful_shutdown()
             sys.exit(1)

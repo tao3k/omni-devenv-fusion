@@ -12,6 +12,7 @@ Python 3.12+ Features:
 from __future__ import annotations
 
 import asyncio
+import atexit
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -32,12 +33,24 @@ except ImportError:
 
 from omni.foundation.bridge import RustVectorStore, SearchResult
 from omni.foundation.config.logging import get_logger
+from omni.foundation.services.embedding import EmbeddingUnavailableError
 from omni.foundation.services.vector_schema import parse_tool_search_payload
 
 logger = get_logger("omni.core.router.indexer")
 
 # Thread pool for blocking embedding operations (prevents event loop blocking)
 _EMBEDDING_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="embedding")
+
+
+def _shutdown_embedding_executor() -> None:
+    """Shutdown executor on process exit. Do not set daemon on active threads (Python 3.13+ raises)."""
+    try:
+        _EMBEDDING_EXECUTOR.shutdown(wait=False)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+atexit.register(_shutdown_embedding_executor)
 
 
 @dataclass
@@ -125,7 +138,7 @@ class SkillIndexer:
 
         Args:
             storage_path: Path to vector store (None = use unified path, ":memory:" for in-memory)
-            dimension: Embedding dimension (default: from settings.yaml embedding.dimension)
+            dimension: Embedding dimension (default: from settings embedding.dimension)
         """
         from omni.foundation.config.settings import get_setting
 
@@ -135,7 +148,7 @@ class SkillIndexer:
 
             storage_path = str(get_vector_db_path())
 
-        # Use dimension from settings.yaml (default to 1024 for LLM provider)
+        # Use dimension from settings (default to 1024 for LLM provider)
         if dimension is None:
             dimension = int(get_setting("embedding.dimension"))
 
@@ -398,6 +411,12 @@ class SkillIndexer:
                 except Exception as e:
                     logger.warning(f"Failed to save index metadata: {e}")
 
+        except EmbeddingUnavailableError as e:
+            logger.warning(
+                "Cortex indexing skipped: embedding unavailable (client-only mode). %s",
+                e,
+            )
+            self._indexed_count = 0
         except Exception as e:
             logger.error(f"Failed to batch index Cortex: {e}")
             self._indexed_count = 0

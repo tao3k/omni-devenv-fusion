@@ -52,7 +52,7 @@ Alternative: Zettelkasten methodology using mcp-obsidian + Rucola + LanceDB.
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                     DIMENSION 2: Rust (Performance)                 │    │
 │  │                                                                     │    │
-│  │   omni-knowledge provides:                                          │    │
+│  │   xiuxian-wendao provides:                                          │    │
 │  │   • comrak 0.50 AST parsing (Rucola-style architecture)             │    │
 │  │   • Arena allocation (zero-copy)                                    │    │
 │  │   • Single-pass traversal (extract all in one pass)                 │    │
@@ -161,7 +161,7 @@ let extraction = zk::extract(content, true, true);
 │  │                              │                                        │  │
 │  │                              ▼                                        │  │
 │  │  ┌─────────────────────────────────────────────────────────────────┐│  │
-│  │  │  Rust Core (omni-knowledge)                                     ││  │
+│  │  │  Rust Core (xiuxian-wendao)                                     ││  │
 │  │  │  • comrak 0.50 AST parsing (Arena allocation)                   ││  │
 │  │  │  • zk::extract() → ZkExtraction (tags + entities + wikilinks)   ││  │
 │  │  │  • Zero-copy, single-pass, Unicode-normalized                   ││  │
@@ -198,7 +198,7 @@ let extraction = zk::extract(content, true, true);
 
 ## Rust Implementation: comrak 0.50 AST Parsing
 
-The `omni-knowledge` crate implements high-performance markdown parsing using [comrak 0.50](https://github.com/kivikakk/comrak.rs), following Rucola's architecture pattern:
+The `xiuxian-wendao` crate implements high-performance markdown parsing using [comrak 0.50](https://github.com/kivikakk/comrak.rs), following Rucola's architecture pattern:
 
 ### Core Module: `zk.rs`
 
@@ -271,7 +271,7 @@ pub struct ZkExtraction {
 ### Modular Structure
 
 ```
-packages/rust/crates/omni-knowledge/src/
+packages/rust/crates/xiuxian-wendao/src/
 ├── lib.rs              # Main module, registers PyO3 bindings
 ├── zk.rs               # Core extraction logic (pure Rust)
 ├── zk_py.rs           # PyO3 bindings (Python integration)
@@ -307,7 +307,7 @@ pub fn register_zk_module(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
 ### Python API
 
 ```python
-from omni_knowledge import zk_extract, zk_extract_tags, zk_extract_entities
+from xiuxian_wendao import zk_extract, zk_extract_tags, zk_extract_entities
 
 # Extract all from markdown
 result = zk_extract(content, extract_tags=True, extract_wikilinks=True)
@@ -335,10 +335,10 @@ pub fn parse_wikilink(url: &str) -> (String, Option<String>) {
 
 ### Tests
 
-Located at `packages/rust/crates/omni-knowledge/tests/test_zk.rs`:
+Located at `packages/rust/crates/xiuxian-wendao/tests/test_zk.rs`:
 
 ```bash
-cargo test -p omni-knowledge --test test_zk
+cargo test -p xiuxian-wendao --test test_zk
 # → 21 passed, 0 failed
 ```
 

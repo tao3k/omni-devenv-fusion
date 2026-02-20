@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
@@ -24,6 +25,24 @@ from typing import Any
 import structlog
 
 logger = structlog.get_logger("llm.provider")
+
+
+def _minimax_model_casing(model: str) -> str:
+    """Normalise MiniMax model name to dashboard-style casing before passing to LiteLLM.
+
+    MiniMax platform docs use "MiniMax-M2.1-highspeed"; LiteLLM and the v1 API support
+    the fast variant as "MiniMax-M2.1-lightning". We map highspeed -> lightning so
+    config can use either name and the API accepts it (avoids 2013 unknown model).
+    """
+    if not model or not model.lower().startswith("minimax-"):
+        return model
+    suffix = model[len("minimax-") :]
+    if suffix.lower().startswith("m2"):
+        suffix = "M2" + suffix[2:]
+    # v1 API / LiteLLM use "lightning" for the fast variant; platform docs say "highspeed"
+    if "-highspeed" in suffix.lower():
+        suffix = suffix.replace("-highspeed", "-lightning").replace("-Highspeed", "-lightning")
+    return "MiniMax-" + suffix
 
 
 @dataclass
@@ -173,21 +192,29 @@ class LiteLLMProvider(LLMProvider):
             actual_max_tokens = max_tokens or self.config.max_tokens
             actual_timeout = int(kwargs.get("timeout", self.config.timeout))
 
-            # Prepare model string for litellm
-            # MiniMax uses 'minimax/MiniMax-M2.1' format
+            # Prepare model string for litellm.
+            # For MiniMax: pass model=actual_model and custom_llm_provider="minimax" so the
+            # request body keeps exact dashboard casing (e.g. MiniMax-M2.1-highspeed). Using
+            # "minimax/ActualModel" can lead LiteLLM/API to normalize to "minimax-actualmodel" (2013).
+            api_key = self._get_api_key()
             if self.config.provider == "minimax":
-                litellm_model = f"minimax/{actual_model}"
+                actual_model = _minimax_model_casing(actual_model)
+                litellm_model = actual_model
+                litellm_kwargs = {
+                    "model": litellm_model,
+                    "custom_llm_provider": "minimax",
+                    "max_tokens": actual_max_tokens,
+                    "api_key": api_key,
+                    "timeout": actual_timeout,
+                }
             else:
                 litellm_model = f"{self.config.provider}/{actual_model}"
-
-            # Prepare kwargs for litellm
-            api_key = self._get_api_key()
-            litellm_kwargs = {
-                "model": litellm_model,
-                "max_tokens": actual_max_tokens,
-                "api_key": api_key,
-                "timeout": actual_timeout,
-            }
+                litellm_kwargs = {
+                    "model": litellm_model,
+                    "max_tokens": actual_max_tokens,
+                    "api_key": api_key,
+                    "timeout": actual_timeout,
+                }
             tools = kwargs.get("tools")
             tool_choice = kwargs.get("tool_choice")
             response_format = kwargs.get("response_format")
@@ -199,15 +226,24 @@ class LiteLLMProvider(LLMProvider):
             # Add base_url for MiniMax (required for LiteLLM)
             if self.config.provider == "minimax":
                 litellm_kwargs["api_base"] = "https://api.minimax.io/v1"
-                # MiniMax requires Authorization header explicitly
                 litellm_kwargs["headers"] = {"Authorization": f"Bearer {api_key}"}
+                # Ensure request body uses exact model name (dashboard casing e.g. MiniMax-M2.1-highspeed);
+                # LiteLLM may lowercase the model elsewhere, causing 2013 unknown model.
+                base_extra = litellm_kwargs.get("extra_body") or kwargs.get("extra_body") or {}
+                litellm_kwargs["extra_body"] = {**base_extra, "model": actual_model}
+                # Optional: disable long reasoning for faster response (inference.minimax_disable_reasoning: true)
+                try:
+                    from omni.foundation.config.settings import get_setting
+
+                    if bool(get_setting("inference.minimax_disable_reasoning", False)):
+                        litellm_kwargs["extra_body"]["reasoning"] = False
+                except Exception:
+                    pass
             elif self.config.base_url:
                 litellm_kwargs["api_base"] = self.config.base_url
 
-            # Add system prompt (LiteLLM handles this for all providers)
-            if system_prompt:
-                litellm_kwargs["system_prompt"] = system_prompt
-
+            # System prompt: only add to kwargs when using caller-provided messages
+            # (when we build messages below we include system in the list)
             if tools:
                 litellm_kwargs["tools"] = tools
             if tool_choice is not None:
@@ -221,21 +257,40 @@ class LiteLLMProvider(LLMProvider):
             if stop is not None:
                 litellm_kwargs["stop"] = stop
 
-            # Make the call
+            # Build messages: explicit system + user for compatibility (e.g. MiniMax)
             if messages:
+                # Caller-provided messages; optional system_prompt for LiteLLM
+                if system_prompt:
+                    litellm_kwargs["system_prompt"] = system_prompt
+            elif user_query:
+                if system_prompt:
+                    messages = [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_query},
+                    ]
+                else:
+                    messages = [{"role": "user", "content": user_query}]
+            else:
+                # Single full prompt as user content; add minimal system for APIs that expect it
+                messages = [
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant. Return only the requested format (e.g. JSON).",
+                    },
+                    {"role": "user", "content": system_prompt},
+                ]
+
+            if messages:
+                start = time.perf_counter()
                 response = await self._litellm.acompletion(
                     **litellm_kwargs,
                     messages=messages,
                 )
-            elif user_query:
-                response = await self._litellm.acompletion(
-                    **litellm_kwargs,
-                    messages=[{"role": "user", "content": user_query}],
-                )
-            else:
-                response = await self._litellm.acompletion(
-                    **litellm_kwargs,
-                    messages=[{"role": "user", "content": system_prompt}],
+                duration_sec = round(time.perf_counter() - start, 2)
+                logger.debug(
+                    "LLM request completed",
+                    duration_sec=duration_sec,
+                    model=actual_model,
                 )
 
             # Extract content - MiniMax via LiteLLM returns content in reasoning_content

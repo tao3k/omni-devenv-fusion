@@ -61,7 +61,7 @@ pub enum Lang {
 impl Lang {
     /// Get the ast-grep language string
     #[must_use]
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Python => "python",
             Self::Rust => "rust",
@@ -129,7 +129,7 @@ impl Lang {
 
     /// Get file extensions for this language
     #[must_use]
-    pub fn extensions(&self) -> Vec<&'static str> {
+    pub fn extensions(self) -> Vec<&'static str> {
         match self {
             Self::Python => vec!["py"],
             Self::Rust => vec!["rs"],
@@ -186,7 +186,7 @@ impl TryFrom<&str> for Lang {
             "html" | "htm" => Ok(Self::Html),
             "css" => Ok(Self::Css),
             "sql" => Ok(Self::Sql),
-            _ => bail!("Unsupported language: {}", s),
+            _ => bail!("Unsupported language: {s}"),
         }
     }
 }

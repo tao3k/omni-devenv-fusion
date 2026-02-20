@@ -80,6 +80,7 @@ pub(crate) fn list_all_tools_async(
     index_cache_size_bytes: Option<usize>,
     max_cached_tables: Option<usize>,
     table_name: &str,
+    source_filter: Option<&str>,
 ) -> PyResult<String> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -97,7 +98,7 @@ pub(crate) fn list_all_tools_async(
         .await
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         store
-            .list_all_tools(table_name)
+            .list_all_tools(table_name, source_filter)
             .await
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     })

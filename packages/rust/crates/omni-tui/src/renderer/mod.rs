@@ -67,13 +67,13 @@ impl TuiRenderer {
         }
 
         // Restore terminal
-        self.restore_terminal()?;
+        Self::restore_terminal()?;
 
         Ok(())
     }
 
     /// Restore terminal to normal mode
-    pub fn restore_terminal(&mut self) -> Result<(), anyhow::Error> {
+    pub fn restore_terminal() -> Result<(), anyhow::Error> {
         disable_raw_mode()?;
         execute!(stdout(), Clear(ClearType::All))?;
         Ok(())
@@ -112,7 +112,7 @@ impl TuiRenderer {
         if let Some(app) = state.app() {
             match app.layout() {
                 crate::components::AppLayout::VerticalStack => {
-                    Self::render_panels(f, content_area, app)
+                    Self::render_panels(f, content_area, app);
                 }
                 crate::components::AppLayout::SplitView => app.render_split_view(f, content_area),
             }
@@ -128,7 +128,7 @@ impl TuiRenderer {
 
         let status_text = state
             .status_message()
-            .unwrap_or_else(|| "[Ctrl-o: Toggle] [Tab: Next] [Ctrl-c: Quit]");
+            .unwrap_or("[Ctrl-o: Toggle] [Tab: Next] [Ctrl-c: Quit]");
 
         let status = ratatui::widgets::Paragraph::new(status_text)
             .style(ratatui::style::Style::default().fg(ratatui::style::Color::DarkGray));
@@ -153,7 +153,9 @@ impl TuiRenderer {
             .map(|p| {
                 ratatui::layout::Constraint::Length(match *p.state() {
                     PanelState::Folded => 3,
-                    PanelState::Expanded => (p.line_count().min(20) as u16).saturating_add(2),
+                    PanelState::Expanded => u16::try_from(p.line_count().min(20))
+                        .unwrap_or(20)
+                        .saturating_add(2),
                 })
             })
             .collect();
@@ -197,17 +199,17 @@ impl TuiRenderer {
                 }
             }
             crate::TuiEvent::ScrollDown => {
-                if let Some(app) = state.app_mut() {
-                    if let Some(panel) = app.panels_mut().focused_panel_mut() {
-                        panel.scroll_down();
-                    }
+                if let Some(app) = state.app_mut()
+                    && let Some(panel) = app.panels_mut().focused_panel_mut()
+                {
+                    panel.scroll_down();
                 }
             }
             crate::TuiEvent::ScrollUp => {
-                if let Some(app) = state.app_mut() {
-                    if let Some(panel) = app.panels_mut().focused_panel_mut() {
-                        panel.scroll_up();
-                    }
+                if let Some(app) = state.app_mut()
+                    && let Some(panel) = app.panels_mut().focused_panel_mut()
+                {
+                    panel.scroll_up();
                 }
             }
             crate::TuiEvent::Char(c) => {

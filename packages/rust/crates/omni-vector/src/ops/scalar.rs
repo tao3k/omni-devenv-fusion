@@ -1,7 +1,7 @@
-//! Scalar index operations: BTree, Bitmap, and optimal type selection.
+//! Scalar index operations: `BTree`, `Bitmap`, and optimal type selection.
 //!
-//! Provides structured APIs and statistics for LanceDB 2.0 scalar indices
-//! used to accelerate exact match and low-cardinality filters (e.g. skill_name, category).
+//! Provides structured APIs and statistics for `LanceDB` 2.0 scalar indices
+//! used to accelerate exact match and low-cardinality filters (e.g. `skill_name`, `category`).
 
 use std::collections::HashSet;
 use std::time::Instant;
@@ -18,11 +18,12 @@ use super::types::{IndexBuildProgress, IndexStats};
 
 /// Cardinality threshold below which Bitmap index is preferred (low-cardinality columns).
 const BITMAP_CARDINALITY_THRESHOLD: usize = 100;
-/// Cardinality above which we still use BTree but log that partitioning may help.
+/// Cardinality above which we still use `BTree` but log that partitioning may help.
 const HIGH_CARDINALITY_THRESHOLD: usize = 10_000;
 /// Sample size for cardinality estimation (distinct count over first N rows).
 const CARDINALITY_SAMPLE_LIMIT: i64 = 2000;
 
+#[allow(clippy::missing_errors_doc, clippy::doc_markdown)]
 impl VectorStore {
     /// Create a BTree index on a column for exact match and range queries.
     ///
@@ -41,7 +42,7 @@ impl VectorStore {
             .open_dataset_at_uri(table_path.to_string_lossy().as_ref())
             .await?;
         let params = ScalarIndexParams::for_builtin(BuiltinIndexType::BTree);
-        let index_name = format!("scalar_{}_btree", column);
+        let index_name = format!("scalar_{column}_btree");
 
         if let Some(ref cb) = self.index_progress_callback {
             cb(IndexBuildProgress::Started {
@@ -56,7 +57,7 @@ impl VectorStore {
             .await
             .map_err(VectorStoreError::LanceDB)?;
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
         if let Some(ref cb) = self.index_progress_callback {
             cb(IndexBuildProgress::Done { duration_ms });
         }
@@ -85,7 +86,7 @@ impl VectorStore {
             .open_dataset_at_uri(table_path.to_string_lossy().as_ref())
             .await?;
         let params = ScalarIndexParams::for_builtin(BuiltinIndexType::Bitmap);
-        let index_name = format!("scalar_{}_bitmap", column);
+        let index_name = format!("scalar_{column}_bitmap");
 
         if let Some(ref cb) = self.index_progress_callback {
             cb(IndexBuildProgress::Started {
@@ -106,7 +107,7 @@ impl VectorStore {
             .await
             .map_err(VectorStoreError::LanceDB)?;
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
         if let Some(ref cb) = self.index_progress_callback {
             cb(IndexBuildProgress::Done { duration_ms });
         }
@@ -141,9 +142,9 @@ impl VectorStore {
 
         let mut distinct = HashSet::new();
         while let Some(batch) = stream.try_next().await? {
-            let col = batch.column_by_name(column).ok_or_else(|| {
-                VectorStoreError::General(format!("Column '{}' not found", column))
-            })?;
+            let col = batch
+                .column_by_name(column)
+                .ok_or_else(|| VectorStoreError::General(format!("Column '{column}' not found")))?;
             let n = col.len();
             for i in 0..n {
                 let s = crate::ops::get_utf8_at(col.as_ref(), i);
@@ -171,9 +172,7 @@ impl VectorStore {
         } else {
             if cardinality >= HIGH_CARDINALITY_THRESHOLD {
                 log::warn!(
-                    "High cardinality column '{}' (est. {}) may benefit from partitioning",
-                    column,
-                    cardinality
+                    "High cardinality column '{column}' (est. {cardinality}) may benefit from partitioning"
                 );
             }
             self.create_btree_index(table_name, column).await?

@@ -139,19 +139,26 @@ impl EventHandler {
                 let timeout = tick_rate.saturating_sub(last_tick.elapsed());
 
                 // Poll for events with timeout
-                if event::poll(timeout).expect("Failed to poll events") {
-                    if let Ok(CrosstermEvent::Key(key)) = event::read() {
-                        // Handle Ctrl-c specially to exit
-                        if key.modifiers.contains(KeyModifiers::CONTROL)
-                            && key.code == event::KeyCode::Char('c')
-                        {
-                            let _ = sender.send(Event::Input(TuiEvent::Quit));
-                            break;
-                        }
+                match event::poll(timeout) {
+                    Ok(true) => {
+                        if let Ok(CrosstermEvent::Key(key)) = event::read() {
+                            // Handle Ctrl-c specially to exit
+                            if key.modifiers.contains(KeyModifiers::CONTROL)
+                                && key.code == event::KeyCode::Char('c')
+                            {
+                                let _ = sender.send(Event::Input(TuiEvent::Quit));
+                                break;
+                            }
 
-                        if let Some(tui_event) = map_crossterm_event(CrosstermEvent::Key(key)) {
-                            let _ = sender.send(Event::Input(tui_event));
+                            if let Some(tui_event) = map_crossterm_event(CrosstermEvent::Key(key)) {
+                                let _ = sender.send(Event::Input(tui_event));
+                            }
                         }
+                    }
+                    Ok(false) => {}
+                    Err(err) => {
+                        let _ = sender.send(Event::Error(format!("Failed to poll events: {err}")));
+                        break;
                     }
                 }
 

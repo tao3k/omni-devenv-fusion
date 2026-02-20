@@ -3,13 +3,16 @@
 These tests verify:
 1. Rust bindings import correctly from `omni_core_rs`
 2. Checkpoint store creation and operations work
-3. Fallback to SQLite when Rust bindings unavailable
 """
 
 from __future__ import annotations
 
-import pytest
+import json
+import sys
+import types
 from pathlib import Path
+
+import pytest
 
 
 @pytest.fixture(autouse=True)
@@ -47,8 +50,8 @@ class TestRustBindingsImport:
         from omni.foundation.checkpoint import (
             _get_store,
             get_checkpointer,
-            save_workflow_state,
             load_workflow_state,
+            save_workflow_state,
         )
 
         # All functions should be callable
@@ -61,12 +64,11 @@ class TestRustBindingsImport:
 class TestCheckpointStoreCreation:
     """Tests for checkpoint store creation and initialization."""
 
-    def test_get_store_returns_store_or_none(self):
-        """Verify _get_store returns a store or None."""
+    def test_get_store_returns_store(self):
+        """Verify _get_store always returns a Rust-backed store."""
         from omni.foundation.checkpoint import _get_store
 
         store = _get_store()
-        # Store should be either a PyCheckpointStore or None (if bindings unavailable)
         assert store is not None
 
     def test_store_has_required_methods(self):
@@ -74,11 +76,20 @@ class TestCheckpointStoreCreation:
         from omni.foundation.checkpoint import _get_store
 
         store = _get_store()
-        if store is not None:
-            assert hasattr(store, "save_checkpoint")
-            assert hasattr(store, "get_latest")
-            assert hasattr(store, "get_history")
-            assert hasattr(store, "delete_thread")
+        assert hasattr(store, "save_checkpoint")
+        assert hasattr(store, "get_latest")
+        assert hasattr(store, "get_history")
+        assert hasattr(store, "delete_thread")
+
+    def test_get_store_fails_fast_when_rust_bindings_missing(self, monkeypatch) -> None:
+        """Rust-only contract: missing omni_core_rs must raise RuntimeError."""
+        import omni.foundation.checkpoint as checkpoint_module
+
+        checkpoint_module._checkpoint_store_cache.clear()
+        monkeypatch.setitem(sys.modules, "omni_core_rs", types.ModuleType("omni_core_rs"))
+
+        with pytest.raises(RuntimeError, match="omni_core_rs"):
+            checkpoint_module._get_store()
 
 
 class TestWorkflowStateOperations:
@@ -87,9 +98,9 @@ class TestWorkflowStateOperations:
     def test_save_and_load_workflow_state(self):
         """Verify save and load workflow state work correctly."""
         from omni.foundation.checkpoint import (
-            save_workflow_state,
-            load_workflow_state,
             delete_workflow_state,
+            load_workflow_state,
+            save_workflow_state,
         )
 
         workflow_type = "test_workflow"
@@ -120,10 +131,9 @@ class TestWorkflowStateOperations:
     def test_save_with_metadata(self):
         """Verify save with metadata works correctly."""
         from omni.foundation.checkpoint import (
-            save_workflow_state,
-            load_workflow_state,
             delete_workflow_state,
             get_workflow_history,
+            save_workflow_state,
         )
 
         workflow_type = "metadata_test"
@@ -145,9 +155,9 @@ class TestWorkflowStateOperations:
     def test_delete_workflow_state(self):
         """Verify delete removes all checkpoints for a workflow."""
         from omni.foundation.checkpoint import (
-            save_workflow_state,
             delete_workflow_state,
             load_workflow_state,
+            save_workflow_state,
         )
 
         workflow_type = "delete_test"
@@ -167,20 +177,96 @@ class TestWorkflowStateOperations:
         # Verify states are gone
         assert load_workflow_state(workflow_type, workflow_id) is None
 
+    def test_load_workflow_state_auto_repair_retries_once(self, monkeypatch: pytest.MonkeyPatch):
+        """On load failure, auto-repair should run and retry once."""
+        import omni.foundation.checkpoint as checkpoint_module
+
+        class _FakeStore:
+            def __init__(self):
+                self.calls = 0
+                self.cleaned = 0
+
+            def get_latest(self, _table_name: str, _thread_id: str):
+                self.calls += 1
+                if self.calls == 1:
+                    raise RuntimeError("broken checkpoint chain")
+                return json.dumps({"status": "recovered"})
+
+            def cleanup_orphan_checkpoints(self, _table_name: str, _dry_run: bool):
+                self.cleaned += 1
+                return 3
+
+        fake = _FakeStore()
+        monkeypatch.setattr(checkpoint_module, "_get_store", lambda: fake)
+        monkeypatch.setattr(checkpoint_module, "get_setting", lambda _k, default=None: default)
+
+        out = checkpoint_module.load_workflow_state("repair_test", "wf-1")
+        assert out is not None
+        assert out["status"] == "recovered"
+        assert fake.calls == 2
+        assert fake.cleaned == 1
+
+    def test_get_checkpoint_schema_id_prefers_store_method(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import omni.foundation.checkpoint as checkpoint_module
+
+        class _FakeStore:
+            @staticmethod
+            def checkpoint_schema_id() -> str:
+                return "https://schemas.omni.dev/omni.checkpoint.record.v1.schema.json"
+
+        monkeypatch.setattr(checkpoint_module, "_get_store", lambda: _FakeStore())
+        out = checkpoint_module.get_checkpoint_schema_id()
+        assert out.endswith("/omni.checkpoint.record.v1.schema.json")
+
+    def test_repair_workflow_state_runs_cleanup_and_force(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import omni.foundation.checkpoint as checkpoint_module
+
+        class _FakeStore:
+            def __init__(self) -> None:
+                self.force_calls = 0
+
+            @staticmethod
+            def checkpoint_schema_id() -> str:
+                return "https://schemas.omni.dev/omni.checkpoint.record.v1.schema.json"
+
+            @staticmethod
+            def cleanup_orphan_checkpoints(_table_name: str, _dry_run: bool) -> int:
+                return 5
+
+            def force_recover_table(self, _table_name: str) -> None:
+                self.force_calls += 1
+
+        fake = _FakeStore()
+        monkeypatch.setattr(checkpoint_module, "_get_store", lambda: fake)
+
+        result = checkpoint_module.repair_workflow_state(
+            "repair_workflow",
+            dry_run=False,
+            force_recover=True,
+        )
+
+        assert result["status"] == "success"
+        assert result["removed_orphans"] == 5
+        assert str(result["schema_id"]).endswith("/omni.checkpoint.record.v1.schema.json")
+        assert fake.force_calls == 1
+
 
 class TestGetCheckpointer:
     """Tests for get_checkpointer function."""
 
     def test_get_checkpointer_returns_store(self):
         """Verify get_checkpointer returns the checkpoint store."""
-        from omni.foundation.checkpoint import get_checkpointer, _get_store
+        from omni.foundation.checkpoint import _get_store, get_checkpointer
 
         checkpointer = get_checkpointer("test")
         store = _get_store()
 
         # Should return the same store
-        if store is not None:
-            assert checkpointer is not None
+        assert checkpointer is store
 
 
 class TestImportPathValidation:
@@ -212,17 +298,13 @@ class TestImportPathValidation:
         This is a validation test - if someone accidentally uses the wrong import,
         this test helps catch it during development.
         """
-        import sys
-
-        # Simulate the incorrect import
-        incorrect_module = "bindings.python.checkpoint"
 
         # Check if this module path exists in any source files
         # We do this by checking if omni_core_rs is properly imported in checkpoint.py
-        import omni.foundation.checkpoint as checkpoint_module
-
         # Read the source to verify correct import
         import inspect
+
+        import omni.foundation.checkpoint as checkpoint_module
 
         source = inspect.getsource(checkpoint_module)
 
@@ -239,10 +321,10 @@ class TestImportPathValidation:
     def test_foundation_checkpoint_integration(self):
         """Integration test: verify checkpoint module integrates with foundation."""
         from omni.foundation.checkpoint import (
-            save_workflow_state,
-            load_workflow_state,
             delete_workflow_state,
             get_checkpointer,
+            load_workflow_state,
+            save_workflow_state,
         )
 
         workflow_type = "integration_test"

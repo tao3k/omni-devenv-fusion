@@ -115,21 +115,23 @@ def get_vector_store_dimension(table_name: str = "skills") -> int | None:
     """Get actual dimension from vector store.
 
     Queries the vector store to find the actual dimension used.
+    Uses get_vector_store() so the same cached instance is reused by router/HybridSearch
+    (avoids duplicate RustVectorStore init and second "Initialized RustVectorStore" log).
     Returns None if store doesn't exist or can't be queried.
     """
     try:
-        from omni.foundation.bridge.rust_vector import RustVectorStore
+        from omni.foundation.bridge.rust_vector import get_vector_store
 
-        store = RustVectorStore()
+        store = get_vector_store()
         return store._dimension
     except Exception:
         pass
 
     # Fallback: try to get from table schema
     try:
-        from omni.foundation.bridge.rust_vector import RustVectorStore
+        from omni.foundation.bridge.rust_vector import get_vector_store
 
-        store = RustVectorStore()
+        store = get_vector_store()
         info = store.get_table_info(table_name)
         if info and "schema" in info:
             # Check for vector column dimension

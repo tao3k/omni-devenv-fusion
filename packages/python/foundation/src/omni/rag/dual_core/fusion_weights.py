@@ -1,11 +1,7 @@
 """Dynamic fusion weight selection based on Rust-native query intent.
 
-Determines how much emphasis to place on ZK (graph/proximity) vs LanceDB
-(vector/keyword) signals depending on query characteristics:
-
-- Knowledge/docs-oriented queries → boost ZK proximity & graph rerank
-- Code/tool-oriented queries → boost LanceDB vector precision
-- Generic queries → balanced defaults
+Determines how much emphasis to place on LinkGraph (graph/proximity) vs
+LanceDB (vector/keyword) signals depending on query characteristics.
 """
 
 from __future__ import annotations
@@ -18,11 +14,11 @@ logger = logging.getLogger("omni.rag.dual_core.fusion")
 
 @dataclass(frozen=True)
 class FusionWeights:
-    """Per-query weights controlling ZK vs LanceDB emphasis.
+    """Per-query weights controlling LinkGraph vs LanceDB emphasis.
 
     Attributes:
-        zk_proximity_scale: Multiplier for ZK link proximity boost (Bridge 1).
-        zk_entity_scale: Multiplier for ZK entity graph enrichment (Bridge 3).
+        link_graph_proximity_scale: Multiplier for LinkGraph proximity boost (Bridge 1).
+        link_graph_entity_scale: Multiplier for graph entity enrichment (Bridge 3).
         kg_rerank_scale: Multiplier for KG query-time rerank (Bridge 5).
         vector_weight: Emphasis on LanceDB vector similarity.
         keyword_weight: Emphasis on LanceDB BM25 keyword match.
@@ -30,8 +26,8 @@ class FusionWeights:
         intent_target: Canonical target from intent extractor (informational).
     """
 
-    zk_proximity_scale: float = 1.0
-    zk_entity_scale: float = 1.0
+    link_graph_proximity_scale: float = 1.0
+    link_graph_entity_scale: float = 1.0
     kg_rerank_scale: float = 1.0
     vector_weight: float = 1.0
     keyword_weight: float = 1.0
@@ -43,12 +39,12 @@ class FusionWeights:
 # Default balanced weights
 _BALANCED = FusionWeights()
 
-# Target → ZK emphasis profile
-_ZK_HEAVY_TARGETS = {"knowledge", "docs"}
+# Target → LinkGraph emphasis profile
+_GRAPH_HEAVY_TARGETS = {"knowledge", "docs"}
 # Target → LanceDB emphasis profile
 _VECTOR_HEAVY_TARGETS = {"code", "database", "skill", "test"}
-# Actions that benefit from ZK graph context
-_ZK_ACTIONS = {"search", "research"}
+# Actions that benefit from graph context
+_GRAPH_ACTIONS = {"search", "research"}
 # Actions that need precise tool routing (LanceDB)
 _TOOL_ACTIONS = {"commit", "push", "pull", "merge", "rebase", "run", "test", "lint", "format"}
 
@@ -85,23 +81,23 @@ def compute_fusion_weights(query: str) -> FusionWeights:
     keywords = intent.keywords
 
     # Start from balanced
-    zk_prox = 1.0
-    zk_ent = 1.0
+    graph_prox = 1.0
+    graph_ent = 1.0
     kg_rerank = 1.0
     vec_w = 1.0
     kw_w = 1.0
 
     # --- Target-based adjustments ---
-    if target in _ZK_HEAVY_TARGETS:
-        # Knowledge / docs queries: ZK graph context is more valuable
-        zk_prox = 1.5
-        zk_ent = 1.4
+    if target in _GRAPH_HEAVY_TARGETS:
+        # Knowledge / docs queries: graph context is more valuable.
+        graph_prox = 1.5
+        graph_ent = 1.4
         kg_rerank = 1.3
         vec_w = 0.9
     elif target in _VECTOR_HEAVY_TARGETS:
         # Code / tool queries: LanceDB precision matters more
-        zk_prox = 0.7
-        zk_ent = 0.8
+        graph_prox = 0.7
+        graph_ent = 0.8
         kg_rerank = 0.9
         vec_w = 1.2
         kw_w = 1.3
@@ -111,26 +107,26 @@ def compute_fusion_weights(query: str) -> FusionWeights:
     # or if the target is in a compatible group. Target provides stronger
     # domain signal than action alone.
     has_specific_target = target is not None
-    if action in _ZK_ACTIONS and target not in _VECTOR_HEAVY_TARGETS:
+    if action in _GRAPH_ACTIONS and target not in _VECTOR_HEAVY_TARGETS:
         # Search / research benefits from broader graph context
-        zk_prox = max(zk_prox, 1.3)
+        graph_prox = max(graph_prox, 1.3)
         kg_rerank = max(kg_rerank, 1.2)
     elif action in _TOOL_ACTIONS:
         # Precise tool routing — favor LanceDB exact match
         vec_w = max(vec_w, 1.1)
         kw_w = max(kw_w, 1.4)
-        if not has_specific_target or target not in _ZK_HEAVY_TARGETS:
-            zk_prox = min(zk_prox, 0.8)
+        if not has_specific_target or target not in _GRAPH_HEAVY_TARGETS:
+            graph_prox = min(graph_prox, 0.8)
 
     # --- Keyword density heuristic ---
-    # Many keywords → broader query → ZK graph helps disambiguate
+    # Many keywords → broader query → graph context helps disambiguate.
     if len(keywords) >= 4:
         kg_rerank *= 1.1
-        zk_ent *= 1.1
+        graph_ent *= 1.1
 
     weights = FusionWeights(
-        zk_proximity_scale=round(zk_prox, 2),
-        zk_entity_scale=round(zk_ent, 2),
+        link_graph_proximity_scale=round(graph_prox, 2),
+        link_graph_entity_scale=round(graph_ent, 2),
         kg_rerank_scale=round(kg_rerank, 2),
         vector_weight=round(vec_w, 2),
         keyword_weight=round(kw_w, 2),
@@ -140,10 +136,10 @@ def compute_fusion_weights(query: str) -> FusionWeights:
     )
 
     logger.debug(
-        "Fusion weights computed: action=%s target=%s → zk_prox=%.2f kg_rerank=%.2f vec=%.2f kw=%.2f",
+        "Fusion weights computed: action=%s target=%s → graph_prox=%.2f kg_rerank=%.2f vec=%.2f kw=%.2f",
         action,
         target,
-        weights.zk_proximity_scale,
+        weights.link_graph_proximity_scale,
         weights.kg_rerank_scale,
         weights.vector_weight,
         weights.keyword_weight,

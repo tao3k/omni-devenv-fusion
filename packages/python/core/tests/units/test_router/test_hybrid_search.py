@@ -267,7 +267,50 @@ class TestHybridSearchWithMockedStore:
         mock_store.agentic_search.assert_called_once()
         call_kwargs = mock_store.agentic_search.call_args.kwargs
         assert call_kwargs.get("intent") == "semantic"
+        # No concrete URL → rust_limit = limit (no expansion)
         assert call_kwargs.get("limit") == 3
+
+    @pytest.mark.asyncio
+    async def test_rust_limit_expanded_when_query_has_concrete_url(self):
+        """When query contains concrete URL (https://...), agentic_search receives expanded limit so URL tools (crawl4ai) can enter top-N."""
+        from omni.core.router.hybrid_search import HybridSearch
+
+        mock_results = [
+            make_tool_search_payload(
+                score=0.9,
+                tool_name="crawl_url",
+                skill_name="crawl4ai",
+                file_path="crawl4ai/scripts/crawl.py",
+                routing_keywords=["crawl", "url"],
+                input_schema='{"properties":{"url":{"type":"string"}}}',
+            ),
+            make_tool_search_payload(
+                score=0.85,
+                tool_name="git_repo_analyer",
+                skill_name="researcher",
+                file_path="researcher/scripts/analyze.py",
+                routing_keywords=["research", "analyze"],
+                input_schema="{}",
+            ),
+        ]
+        search = HybridSearch()
+        _stub_embed(search)
+        mock_store = MagicMock(spec=["agentic_search", "get_search_profile"])
+        mock_store.agentic_search = AsyncMock(return_value=mock_results)
+        mock_store.get_search_profile = MagicMock(
+            return_value={"semantic_weight": 1.0, "keyword_weight": 1.5, "rrf_k": 10}
+        )
+        search._store = mock_store
+
+        await search.search(
+            "help me research https://github.com/nickel-lang/tf-ncl/blob/main/examples/aws/modules/aws-simple-ec2.ncl",
+            limit=10,
+            skip_translation=True,
+        )
+
+        call_kwargs = mock_store.agentic_search.call_args.kwargs
+        # Concrete URL → rust_limit = min(10*20, 200) = 200
+        assert call_kwargs.get("limit") == 200
 
 
 class TestHybridSearchIntegration:
@@ -471,6 +514,14 @@ class TestQueryDecomposition:
 
         assert "path" in _detect_param_types("find files in /src/main")
 
+    def test_query_has_concrete_url_uses_original_query(self):
+        """_query_has_concrete_url must use original query; normalized query replaces URL with 'github url'."""
+        from omni.core.router.hybrid_search import _query_has_concrete_url
+
+        assert _query_has_concrete_url("help me research https://github.com/foo/bar") is True
+        assert _query_has_concrete_url("help me research github url") is False
+        assert _query_has_concrete_url("") is False
+
     def test_match_param_type_url_in_schema(self):
         """Schema with 'url' or 'repo_url' param matches URL type."""
         from omni.core.router.hybrid_search import _match_param_type_to_schema
@@ -507,6 +558,41 @@ class TestQueryDecomposition:
         assert score_a > 1.0  # boosted
         assert score_b == 0.9  # not boosted
 
+    def test_is_researcher_like_tool(self):
+        """Researcher-like tools have research/analyze AND repo/repository in routing_keywords."""
+        from omni.core.router.hybrid_search import _is_researcher_like_tool
+
+        assert (
+            _is_researcher_like_tool({"routing_keywords": ["research", "analyze", "repo"]}) is True
+        )
+        assert _is_researcher_like_tool({"routing_keywords": ["research", "repository"]}) is True
+        assert _is_researcher_like_tool({"routing_keywords": ["analyze_repo", "git"]}) is True
+        assert _is_researcher_like_tool({"routing_keywords": ["research", "url"]}) is False
+        assert _is_researcher_like_tool({"routing_keywords": ["crawl", "url"]}) is False
+
+    def test_apply_research_url_boost_ranks_researcher_first(self):
+        """Research+URL boost puts researcher-like tools above crawl-like when both have similar base scores."""
+        from omni.core.router.hybrid_search import _apply_research_url_boost
+
+        results = [
+            {
+                "id": "crawl4ai.crawl_url",
+                "score": 1.0,
+                "final_score": 1.0,
+                "routing_keywords": ["crawl", "url", "fetch"],
+            },
+            {
+                "id": "researcher.git_repo_analyer",
+                "score": 0.95,
+                "final_score": 0.95,
+                "routing_keywords": ["research", "analyze", "repo", "repository"],
+            },
+        ]
+        boosted = _apply_research_url_boost(results, "help me research github url", ["url"])
+        top = boosted[0]
+        assert "researcher" in top["id"]
+        assert top["score"] > 1.0
+
 
 class TestDualSignalSearchIntegration:
     """Test that search() passes intent-focused text to keyword engine."""
@@ -536,6 +622,34 @@ class TestDualSignalSearchIntegration:
         query_text_sent = call_kwargs.kwargs.get("query_text") or call_kwargs[1].get("query_text")
         assert "url" not in query_text_sent.lower()
         assert "research" in query_text_sent.lower()
+
+    @pytest.mark.asyncio
+    async def test_research_url_keyword_includes_analyze_repo(self):
+        """Regression: research+concrete URL must expand keyword with 'analyze repo' to favor researcher."""
+        from omni.core.router.hybrid_search import HybridSearch
+
+        search = HybridSearch()
+        _stub_embed(search)
+        mock_store = MagicMock(spec=["agentic_search", "get_search_profile"])
+        mock_store.agentic_search = AsyncMock(return_value=[])
+        mock_store.get_search_profile = MagicMock(
+            return_value={
+                "semantic_weight": 1.0,
+                "keyword_weight": 1.5,
+                "rrf_k": 10,
+            }
+        )
+        search._store = mock_store
+
+        await search.search(
+            "help me to research https://github.com/nickel-lang/tf-ncl/blob/main/examples/aws/modules/aws-simple-ec2.ncl",
+            skip_translation=True,
+        )
+
+        call_kwargs = mock_store.agentic_search.call_args
+        query_text_sent = call_kwargs.kwargs.get("query_text") or call_kwargs[1].get("query_text")
+        assert "analyze" in query_text_sent.lower()
+        assert "repo" in query_text_sent.lower()
 
     @pytest.mark.asyncio
     async def test_search_passes_full_query_for_non_url(self):

@@ -22,7 +22,7 @@ async fn open_uri_for_background(
 }
 
 /// True if the error indicates the dataset path exists but is not a valid Lance dataset
-/// (e.g. after drop_table removed _versions/data).
+/// (e.g. after `drop_table` removed `_versions` / `data`).
 fn is_dataset_not_found_or_invalid(e: &crate::error::VectorStoreError) -> bool {
     match e {
         crate::error::VectorStoreError::LanceDB(inner) => {
@@ -36,9 +36,9 @@ fn is_dataset_not_found_or_invalid(e: &crate::error::VectorStoreError) -> bool {
 /// Scalar index type for exact / categorical / full-text filtering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScalarIndexType {
-    /// BTree: exact match, range queries (e.g. skill_name = 'git').
+    /// `BTree`: exact match, range queries (e.g. `skill_name = 'git'`).
     BTree,
-    /// Bitmap: low-cardinality enums (e.g. category = 'git').
+    /// `Bitmap`: low-cardinality enums (e.g. `category = 'git'`).
     Bitmap,
     /// Inverted: FTS / array contains (e.g. tags, content).
     Inverted,
@@ -52,6 +52,7 @@ fn index_type_name(t: ScalarIndexType) -> &'static str {
     }
 }
 
+#[allow(clippy::missing_errors_doc, clippy::doc_markdown)]
 impl VectorStore {
     /// Delete records by IDs.
     pub async fn delete(&self, table_name: &str, ids: Vec<String>) -> Result<(), VectorStoreError> {
@@ -70,6 +71,7 @@ impl VectorStore {
     }
 
     /// Delete records associated with specific file paths.
+    #[allow(clippy::collapsible_if)]
     pub async fn delete_by_file_path(
         &self,
         table_name: &str,
@@ -139,11 +141,83 @@ impl VectorStore {
             }
         }
         if !ids_to_delete.is_empty() {
+            let escaped: Vec<String> = ids_to_delete
+                .iter()
+                .map(|id| id.replace('\'', "''"))
+                .collect();
             dataset
-                .delete(&format!("{ID_COLUMN} IN ('{}')", ids_to_delete.join("','")))
+                .delete(&format!("{ID_COLUMN} IN ('{}')", escaped.join("','")))
                 .await?;
         }
         Ok(())
+    }
+
+    /// Delete records whose metadata.source equals or ends with the given source (e.g. document path).
+    /// Used for idempotent ingest: delete existing chunks for a document before re-ingesting.
+    pub async fn delete_by_metadata_source(
+        &self,
+        table_name: &str,
+        source: &str,
+    ) -> Result<u32, VectorStoreError> {
+        let table_path = self.table_path(table_name);
+        if !table_path.exists() {
+            return Ok(0);
+        }
+        if source.is_empty() {
+            return Ok(0);
+        }
+        let mut dataset = self
+            .open_dataset_at_uri(table_path.to_string_lossy().as_ref())
+            .await?;
+        let schema = dataset.schema();
+        if schema.field(METADATA_COLUMN).is_none() {
+            return Ok(0);
+        }
+        let mut scanner = dataset.scan();
+        scanner.project(&[ID_COLUMN, METADATA_COLUMN])?;
+        let mut stream = scanner.try_into_stream().await?;
+        let mut ids_to_delete = Vec::new();
+        while let Some(batch) = stream.try_next().await? {
+            use crate::ops::column_read::get_utf8_at;
+            use lance::deps::arrow_array::Array;
+            let id_col = batch.column_by_name(ID_COLUMN);
+            let metadata_col = batch.column_by_name(METADATA_COLUMN);
+            let id_arr = id_col.and_then(|c| {
+                c.as_any()
+                    .downcast_ref::<lance::deps::arrow_array::StringArray>()
+            });
+            if let Some(ids) = id_arr {
+                for i in 0..batch.num_rows() {
+                    let id = ids.value(i).to_string();
+                    let meta_raw = metadata_col
+                        .as_ref()
+                        .map(|c| get_utf8_at(c.as_ref(), i))
+                        .unwrap_or_default();
+                    if meta_raw.is_empty() {
+                        continue;
+                    }
+                    let Ok(meta) = serde_json::from_str::<serde_json::Value>(&meta_raw) else {
+                        continue;
+                    };
+                    let row_source = meta.get("source").and_then(|v| v.as_str()).unwrap_or("");
+                    let matches = row_source == source || row_source.ends_with(source);
+                    if matches {
+                        ids_to_delete.push(id);
+                    }
+                }
+            }
+        }
+        let count = u32::try_from(ids_to_delete.len()).unwrap_or(u32::MAX);
+        if !ids_to_delete.is_empty() {
+            let escaped: Vec<String> = ids_to_delete
+                .iter()
+                .map(|id| id.replace('\'', "''"))
+                .collect();
+            dataset
+                .delete(&format!("{ID_COLUMN} IN ('{}')", escaped.join("','")))
+                .await?;
+        }
+        Ok(count)
     }
 
     /// Clear the keyword index (useful when re-indexing tools).
@@ -153,7 +227,7 @@ impl VectorStore {
         let keyword_path = self.base_path.join("keyword_index");
         if keyword_path.exists() {
             std::fs::remove_dir_all(&keyword_path).map_err(|e| {
-                VectorStoreError::General(format!("Failed to clear keyword index: {}", e))
+                VectorStoreError::General(format!("Failed to clear keyword index: {e}"))
             })?;
         }
         // Clear our reference so enable_keyword_index will recreate
@@ -165,6 +239,7 @@ impl VectorStore {
 
     /// Check if keyword index contains a given tool name (for testing).
     /// Returns true if the tool exists in the keyword index.
+    #[must_use]
     pub fn keyword_index_contains(&self, tool_name: &str) -> bool {
         if self.keyword_backend != KeywordSearchBackend::Tantivy {
             return false;
@@ -180,6 +255,7 @@ impl VectorStore {
 
     /// Check if keyword index is empty (for testing).
     /// Returns true if keyword index is empty or not available.
+    #[must_use]
     pub fn keyword_index_is_empty(&self) -> bool {
         if self.keyword_backend != KeywordSearchBackend::Tantivy {
             return true;
@@ -206,12 +282,14 @@ impl VectorStore {
         let table_path = self.table_path(table_name);
         let is_memory_mode = self.base_path.as_os_str() == ":memory:";
         let drop_path = if is_memory_mode {
-            let id = self
-                .memory_mode_id
-                .expect("memory_mode_id set when base_path is :memory:");
+            let Some(id) = self.memory_mode_id else {
+                return Err(VectorStoreError::General(
+                    "memory_mode_id missing while in :memory: mode".to_string(),
+                ));
+            };
             std::env::temp_dir()
                 .join("omni_lance")
-                .join(format!("{:016x}", id))
+                .join(format!("{id:016x}"))
                 .join(table_name)
         } else {
             table_path.clone()
@@ -257,12 +335,8 @@ impl VectorStore {
             let entry = entry?;
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
-            // Remove known LanceDB directories
-            if LANCE_DIRS.contains(&name_str.as_ref()) {
-                std::fs::remove_dir_all(entry.path())?;
-            }
-            // Remove .lance subdirectories (nested table dirs)
-            else if name_str.ends_with(".lance") {
+            // Remove known LanceDB directories and nested table dirs.
+            if LANCE_DIRS.contains(&name_str.as_ref()) || name_str.ends_with(".lance") {
                 std::fs::remove_dir_all(entry.path())?;
             }
             // Remove loose files (e.g. *.manifest)
@@ -527,7 +601,7 @@ impl VectorStore {
                 }
             }
         }
-        serde_json::to_string(&hash_map).map_err(|e| VectorStoreError::General(format!("{}", e)))
+        serde_json::to_string(&hash_map).map_err(|e| VectorStoreError::General(e.to_string()))
     }
 
     /// Create a vector index for a table to optimize search performance.
@@ -544,7 +618,7 @@ impl VectorStore {
         let num_rows = dataset
             .count_rows(None)
             .await
-            .map_err(VectorStoreError::LanceDB)? as usize;
+            .map_err(VectorStoreError::LanceDB)?;
 
         // Skip indexing for very small datasets
         if num_rows < 100 {
@@ -575,14 +649,14 @@ impl VectorStore {
             let mut dataset = match open_uri_for_background(&uri, index_cache_size_bytes).await {
                 Ok(ds) => ds,
                 Err(e) => {
-                    log::warn!("create_index_background: open dataset failed: {}", e);
+                    log::warn!("create_index_background: open dataset failed: {e}");
                     return;
                 }
             };
             let num_rows = match dataset.count_rows(None).await {
-                Ok(n) => n as usize,
+                Ok(n) => n,
                 Err(e) => {
-                    log::warn!("create_index_background: count_rows failed: {}", e);
+                    log::warn!("create_index_background: count_rows failed: {e}");
                     return;
                 }
             };
@@ -601,7 +675,7 @@ impl VectorStore {
                 )
                 .await
             {
-                log::warn!("create_index_background failed: {}", e);
+                log::warn!("create_index_background failed: {e}");
             }
         });
     }
@@ -692,11 +766,11 @@ impl VectorStore {
         self.open_dataset_at_uri(uri.as_ref()).await
     }
 
+    #[allow(clippy::unused_self)]
     fn ensure_non_reserved_column(&self, column: &str) -> Result<(), VectorStoreError> {
         if Self::is_reserved_column(column) {
             return Err(VectorStoreError::General(format!(
-                "Column '{}' is reserved and cannot be altered or dropped",
-                column
+                "Column '{column}' is reserved and cannot be altered or dropped"
             )));
         }
         Ok(())

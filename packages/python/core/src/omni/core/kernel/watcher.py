@@ -1,15 +1,16 @@
 """
 omni.core.kernel.watcher - Reactive Skill Watcher (Live-Wire)
 
-Monitors the skills directory (via SKILLS_DIR()) and triggers incremental
-indexing upon changes. Uses Rust omni-io notify bindings for high-performance
-file watching with EventBus integration.
+Monitors skill scripts (via SKILLS_DIR()) and LinkGraph markdown roots, then
+triggers incremental index updates on changes. Uses Rust omni-io notify
+bindings for high-performance file watching with EventBus integration.
 
 Features:
 - Debouncing: Avoids duplicate events for the same file
 - Pattern filtering: Only processes relevant file types
 - Callback support: Fires callbacks when skills change (for MCP notifications)
 - Kernel integration: Automatically reloads skills when scripts change
+- LinkGraph refresh: Triggers common backend delta refresh for markdown changes
 
 This is the "Live-Wire" that connects Rust Sniffer to Python Indexer,
 enabling hot-reload of tools without restarting the Agent.
@@ -19,20 +20,29 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import omni_core_rs as rs
 
 from omni.foundation.config.logging import get_logger
+from omni.foundation.config.settings import get_setting
 
 logger = get_logger("omni.core.watcher")
 
 # Skip these file patterns (mirrors Rust exclude patterns)
 SKIP_PATTERNS = {".pyc", ".pyo", ".pyd", ".swp", ".swo", ".tmp", "__pycache__", ".git"}
+DEFAULT_LINK_GRAPH_PATTERNS = ["**/*.md", "**/*.markdown", "**/*.mdx", "**/SKILL.md"]
+DEFAULT_LINK_GRAPH_WATCH_DIRS = ["assets/knowledge", "docs", ".data/harvested"]
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from omni.core.kernel.engine import Kernel
+    from omni.core.skills.indexer import SkillIndexer
 
 
 class FileChangeType(str, Enum):
@@ -54,7 +64,7 @@ class FileChangeEvent:
     is_directory: bool = False
 
     @classmethod
-    def from_tuple(cls, data: tuple[str, str]) -> "FileChangeEvent":
+    def from_tuple(cls, data: tuple[str, str]) -> FileChangeEvent:
         """Create from (event_type, path) tuple."""
         return cls(
             event_type=FileChangeType(data[0]),
@@ -65,14 +75,9 @@ class FileChangeEvent:
 
 # ============================================================================
 # Reactive Skill Watcher (Live-Wire)
-# ============================================================================
-
-from omni.core.skills.indexer import SkillIndexer
-
-
 class ReactiveSkillWatcher:
     """
-    Monitors the skill directory and triggers incremental indexing upon changes.
+    Monitors skill directories and LinkGraph markdown roots for reactive updates.
 
     Uses Rust-based file watching (omni-io) for high-performance event capture,
     then dispatches to the SkillIndexer for knowledge updates.
@@ -94,7 +99,7 @@ class ReactiveSkillWatcher:
         patterns: list[str] | None = None,
         debounce_seconds: float = 0.5,
         poll_interval: float = 0.5,
-        kernel: "Kernel | None" = None,
+        kernel: Kernel | None = None,
     ):
         """Initialize the reactive skill watcher.
 
@@ -110,7 +115,7 @@ class ReactiveSkillWatcher:
 
         # Use get_project_root() to get project root (reads PRJ_ROOT from direnv via git)
         self.project_root = get_project_root()
-        # skills_dir from config (user-configurable via settings.yaml -> assets.skills_dir)
+        # skills_dir from config (settings: system packages/conf/settings.yaml, user $PRJ_CONFIG_HOME -> assets.skills_dir)
         self.skills_dir = SKILLS_DIR()
         self.indexer = indexer
         self.poll_interval = poll_interval
@@ -129,13 +134,38 @@ class ReactiveSkillWatcher:
 
         # File patterns to include
         self.patterns = patterns or ["**/*.py"]
+        self._link_graph_patterns = self._resolve_link_graph_patterns()
+        self._link_graph_watch_roots = self._resolve_link_graph_watch_roots()
+
+        watch_paths = [self.skills_dir]
+        for root in self._link_graph_watch_roots:
+            if root.exists() and root.is_dir():
+                watch_paths.append(root)
+        dedup_paths: list[str] = []
+        seen_paths: set[str] = set()
+        for entry in watch_paths:
+            text = str(entry)
+            if text in seen_paths:
+                continue
+            seen_paths.add(text)
+            dedup_paths.append(text)
+
+        combined_patterns = [*self.patterns, *self._link_graph_patterns]
+        dedup_patterns: list[str] = []
+        seen_patterns: set[str] = set()
+        for pattern in combined_patterns:
+            token = str(pattern or "").strip()
+            if not token or token in seen_patterns:
+                continue
+            seen_patterns.add(token)
+            dedup_patterns.append(token)
 
         # Rust watcher config - watch skills_dir (user-configurable)
         self.config = rs.PyWatcherConfig()
-        self.config.paths = [str(self.skills_dir)]
+        self.config.paths = dedup_paths
         self.config.recursive = True
         self.config.debounce_ms = int(debounce_seconds * 1000)
-        self.config.patterns = self.patterns
+        self.config.patterns = dedup_patterns
         self.config.exclude = exclude_patterns
 
         # Event receiver (uses EventBus subscription)
@@ -164,6 +194,97 @@ class ReactiveSkillWatcher:
         """
         self._on_change_callback = callback
         logger.debug("Change callback registered")
+
+    @staticmethod
+    def _normalize_relative_dir_entries(raw: Any) -> list[str]:
+        if isinstance(raw, str):
+            values = [raw]
+        elif isinstance(raw, (list, tuple, set)):
+            values = [str(item) for item in raw]
+        else:
+            values = []
+        out: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            normalized = str(value or "").strip().replace("\\", "/").strip("/")
+            if not normalized or normalized == ".":
+                continue
+            lowered = normalized.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            out.append(normalized)
+        return out
+
+    @staticmethod
+    def _normalize_glob_entries(raw: Any) -> list[str]:
+        if isinstance(raw, str):
+            values = [raw]
+        elif isinstance(raw, (list, tuple, set)):
+            values = [str(item) for item in raw]
+        else:
+            values = []
+        out: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            token = str(value or "").strip()
+            if not token:
+                continue
+            if token in seen:
+                continue
+            seen.add(token)
+            out.append(token)
+        return out
+
+    def _resolve_link_graph_patterns(self) -> list[str]:
+        configured = self._normalize_glob_entries(
+            get_setting("link_graph.watch_patterns", DEFAULT_LINK_GRAPH_PATTERNS)
+        )
+        if configured:
+            return configured
+        return list(DEFAULT_LINK_GRAPH_PATTERNS)
+
+    def _resolve_link_graph_root(self) -> Path:
+        raw = str(get_setting("link_graph.root_dir", "") or "").strip()
+        if raw:
+            candidate = Path(raw).expanduser()
+            if candidate.exists() and candidate.is_dir():
+                return candidate.resolve()
+        return self.project_root.resolve()
+
+    def _resolve_link_graph_watch_roots(self) -> list[Path]:
+        base_root = self._resolve_link_graph_root()
+        explicit_watch_dirs = self._normalize_relative_dir_entries(
+            get_setting("link_graph.watch_dirs", [])
+        )
+        if explicit_watch_dirs:
+            resolved = []
+            for item in explicit_watch_dirs:
+                path = Path(item).expanduser()
+                if not path.is_absolute():
+                    path = self.project_root / item
+                resolved.append(path.resolve())
+            return resolved
+
+        include_dirs = self._normalize_relative_dir_entries(
+            get_setting("link_graph.include_dirs", [])
+        )
+        if not include_dirs and bool(get_setting("link_graph.include_dirs_auto", True)):
+            include_dirs = [
+                item
+                for item in self._normalize_relative_dir_entries(
+                    get_setting(
+                        "link_graph.include_dirs_auto_candidates", DEFAULT_LINK_GRAPH_WATCH_DIRS
+                    )
+                )
+                if (base_root / item).is_dir()
+            ]
+
+        if include_dirs:
+            return [
+                (base_root / item).resolve() for item in include_dirs if (base_root / item).is_dir()
+            ]
+        return [base_root]
 
     async def start(self):
         """Start watching for file changes."""
@@ -197,10 +318,8 @@ class ReactiveSkillWatcher:
 
         if self._task:
             self._task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
 
         # Stop Rust watcher
         if self._watcher_handle:
@@ -234,8 +353,10 @@ class ReactiveSkillWatcher:
         """Process a batch of file change events."""
         logger.debug(f"[hot-reload] Batch received: {len(events)} events")
         for event in events:
-            if not self._is_skill_related(event.path):
-                logger.debug(f"[hot-reload] Skip (not skill-related): {event.path}")
+            is_skill_event = self._is_skill_related(event.path)
+            is_link_graph_event = self._is_link_graph_related(event.path)
+            if not is_skill_event and not is_link_graph_event:
+                logger.debug(f"[hot-reload] Skip (not tracked): {event.path}")
                 continue
 
             if self._should_debounce(event):
@@ -243,13 +364,19 @@ class ReactiveSkillWatcher:
                 continue
 
             try:
-                await self._handle_event(event)
+                if is_skill_event:
+                    await self._handle_event(event)
+                else:
+                    await self._handle_link_graph_only_event(event)
             except Exception as e:
                 logger.warning(f"[hot-reload] Event failed for {event.path}: {e}")
 
     def _is_skill_related(self, path: str) -> bool:
         """Check if the path is relevant to skills."""
         p = Path(path)
+
+        if not self._is_under_skills_dir(p):
+            return False
 
         # Skip directories
         if p.is_dir():
@@ -264,10 +391,35 @@ class ReactiveSkillWatcher:
             return False
 
         # Skip paths with __pycache__, .git, etc.
-        if any(part in p.parts for part in ["__pycache__", ".git", "target", ".venv"]):
+        return not any(part in p.parts for part in ["__pycache__", ".git", "target", ".venv"])
+
+    def _is_under_skills_dir(self, path: Path) -> bool:
+        """Whether path belongs to configured skills root."""
+        try:
+            resolved = path.expanduser().resolve()
+            skills_root = self.skills_dir.expanduser().resolve()
+            return resolved == skills_root or resolved.is_relative_to(skills_root)
+        except Exception:
             return False
 
-        return True
+    def _is_under_link_graph_watch_roots(self, path: Path) -> bool:
+        try:
+            resolved = path.expanduser().resolve()
+        except Exception:
+            resolved = path.expanduser()
+        for root in self._link_graph_watch_roots:
+            try:
+                if resolved == root or resolved.is_relative_to(root):
+                    return True
+            except ValueError:
+                continue
+        return False
+
+    def _is_link_graph_related(self, path: str) -> bool:
+        path_obj = Path(path)
+        if not self._is_link_graph_candidate(path_obj):
+            return False
+        return self._is_under_link_graph_watch_roots(path_obj)
 
     def _extract_skill_name(self, path: str) -> str | None:
         """Extract skill name from file path for ReactiveSkillWatcher.
@@ -323,6 +475,75 @@ class ReactiveSkillWatcher:
         self._last_event_time = now
         return False
 
+    @staticmethod
+    def _is_link_graph_candidate(path: Path) -> bool:
+        """Whether file changes should trigger LinkGraph delta refresh."""
+        if path.name == "SKILL.md":
+            return True
+        return path.suffix.lower() in {".md", ".markdown", ".mdx"}
+
+    async def _refresh_link_graph_for_event(
+        self,
+        path: str,
+        *,
+        event_type: FileChangeType,
+    ) -> None:
+        """Refresh LinkGraph index via common backend delta API."""
+        path_obj = Path(path)
+        if not self._is_link_graph_candidate(path_obj):
+            return
+        if event_type not in {
+            FileChangeType.CREATED,
+            FileChangeType.MODIFIED,
+            FileChangeType.CHANGED,
+            FileChangeType.DELETED,
+        }:
+            return
+        try:
+            from omni.rag.link_graph import get_link_graph_backend
+
+            backend = get_link_graph_backend(notebook_dir=str(self.project_root))
+            refresh_fn = getattr(backend, "refresh_with_delta", None)
+            if not callable(refresh_fn):
+                return
+            result = refresh_fn([path], force_full=False)
+            if asyncio.iscoroutine(result):
+                result = await result
+            if isinstance(result, dict):
+                logger.debug(
+                    "[hot-reload] LinkGraph refresh: mode=%s changed=%s fallback=%s file=%s",
+                    str(result.get("mode", "")),
+                    int(result.get("changed_count", 0) or 0),
+                    bool(result.get("fallback", False)),
+                    path_obj.name,
+                )
+            else:
+                logger.debug("[hot-reload] LinkGraph refresh complete: file=%s", path_obj.name)
+        except Exception as e:
+            logger.warning(f"[hot-reload] LinkGraph refresh failed for {path_obj.name}: {e}")
+
+    async def _handle_link_graph_only_event(self, event: FileChangeEvent) -> None:
+        """Handle markdown-only events for LinkGraph refresh (without skill indexing)."""
+        path = Path(event.path)
+        filename = path.name
+        effective_event_type = event.event_type
+        if (
+            event.event_type
+            in (
+                FileChangeType.CREATED,
+                FileChangeType.CHANGED,
+                FileChangeType.MODIFIED,
+            )
+            and not path.exists()
+        ):
+            logger.debug(
+                f"[hot-reload] File missing for {event.event_type.value}, treating as DELETED"
+            )
+            effective_event_type = FileChangeType.DELETED
+
+        logger.info(f"[hot-reload] LinkGraph file change: {effective_event_type.value} {filename}")
+        await self._refresh_link_graph_for_event(event.path, event_type=effective_event_type)
+
     async def _handle_event(self, event: FileChangeEvent):
         """Handle a single file change event."""
         path = Path(event.path)
@@ -335,16 +556,19 @@ class ReactiveSkillWatcher:
         # [WORKAROUND] Rust watcher may send created/changed instead of deleted
         # when a file is deleted. Check file existence for these event types.
         effective_event_type = event.event_type
-        if event.event_type in (
-            FileChangeType.CREATED,
-            FileChangeType.CHANGED,
-            FileChangeType.MODIFIED,
+        if (
+            event.event_type
+            in (
+                FileChangeType.CREATED,
+                FileChangeType.CHANGED,
+                FileChangeType.MODIFIED,
+            )
+            and not path.exists()
         ):
-            if not path.exists():
-                logger.debug(
-                    f"[hot-reload] File missing for {event.event_type.value}, treating as DELETED"
-                )
-                effective_event_type = FileChangeType.DELETED
+            logger.debug(
+                f"[hot-reload] File missing for {event.event_type.value}, treating as DELETED"
+            )
+            effective_event_type = FileChangeType.DELETED
 
         skill_name = self._extract_skill_name(event.path)
         if skill_name:
@@ -391,6 +615,8 @@ class ReactiveSkillWatcher:
         elif event.event_type == FileChangeType.ERROR:
             logger.warning(f"[hot-reload] Watcher error: {event.path}")
 
+        await self._refresh_link_graph_for_event(event.path, event_type=effective_event_type)
+
         if skill_name and self._kernel is not None:
             try:
                 await self._kernel.reload_skill(skill_name)
@@ -419,6 +645,9 @@ class ReactiveSkillWatcher:
             "project_root": str(self.project_root),
             "skills_dir": str(self.skills_dir),
             "patterns": self.patterns,
+            "watch_paths": list(self.config.paths),
+            "watch_patterns": list(self.config.patterns),
+            "link_graph_watch_roots": [str(path) for path in self._link_graph_watch_roots],
             "running": self._running,
             "poll_interval": self.poll_interval,
         }

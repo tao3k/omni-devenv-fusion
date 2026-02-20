@@ -1,7 +1,7 @@
 //! Omni-Scanner - Unified scanning for skills and knowledge.
 //!
 //! This crate provides unified scanning capabilities:
-//! - `skills/` - Scans SKILL.md and @skill_command scripts
+//! - `skills/` - Scans SKILL.md and @`skill_command` scripts
 //! - `knowledge/` - Scans knowledge documents with YAML frontmatter
 //!
 //! # Architecture
@@ -81,13 +81,15 @@ pub use knowledge::{
 // JSON Schema Generation
 // ============================================================================
 
-/// Generate JSON Schema for SkillIndexEntry.
+/// Generate JSON Schema for `SkillIndexEntry`.
+#[must_use]
 pub fn skill_index_schema() -> String {
     let schema = schemars::schema_for!(SkillIndexEntry);
     serde_json::to_string_pretty(&schema).unwrap_or_default()
 }
 
-/// Generate JSON Schema for KnowledgeEntry.
+/// Generate JSON Schema for `KnowledgeEntry`.
+#[must_use]
 pub fn knowledge_entry_schema() -> String {
     let schema = schemars::schema_for!(KnowledgeEntry);
     serde_json::to_string_pretty(&schema).unwrap_or_default()

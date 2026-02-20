@@ -13,7 +13,7 @@ use std::str::FromStr;
 use std::time::Instant;
 
 /// Query intent for strategy selection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryIntent {
     /// Exact name or command match → keyword-only when query_text present.
@@ -23,13 +23,8 @@ pub enum QueryIntent {
     /// Semantic similarity only (vector-only).
     Semantic,
     /// Hybrid vector + keyword (default).
+    #[default]
     Hybrid,
-}
-
-impl Default for QueryIntent {
-    fn default() -> Self {
-        Self::Hybrid
-    }
 }
 
 impl FromStr for QueryIntent {
@@ -40,7 +35,7 @@ impl FromStr for QueryIntent {
             "exact" => QueryIntent::Exact,
             "category" => QueryIntent::Category,
             "semantic" => QueryIntent::Semantic,
-            "hybrid" | _ => QueryIntent::Hybrid,
+            _ => QueryIntent::Hybrid,
         })
     }
 }
@@ -85,6 +80,10 @@ impl VectorStore {
     /// - **Exact**: keyword-only when query_text is present; otherwise hybrid.
     /// - **Semantic**: vector-only (no keyword fusion).
     /// - **Category** / **Hybrid**: full hybrid (vector + keyword + RRF).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when underlying vector or keyword search calls fail.
     pub async fn agentic_search(
         &self,
         table_name: &str,
@@ -173,7 +172,8 @@ impl VectorStore {
             results.retain(|r| r.score >= config.threshold);
         }
         results.truncate(config.limit);
-        self.record_query(table_name, start.elapsed().as_millis() as u64);
+        let elapsed_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+        self.record_query(table_name, elapsed_ms);
         Ok(results)
     }
 }

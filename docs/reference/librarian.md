@@ -1,6 +1,13 @@
 # Librarian
 
-> Unified Knowledge Ingestion with Smart Incremental Support
+> Vector ingestion for semantic search (recall and link_graph_hybrid_search). All project markdown is indexed by LinkGraph first; see [LinkGraph vs Librarian](../explanation/link-graph-vs-librarian.md).
+
+## Positioning
+
+- **LinkGraph** = primary index for _all_ project markdown (notebook = project root in the knowledge skill). Use for link reasoning and structural search (`link_graph_search`, `link_graph_hybrid_search`).
+- **Librarian** = builds the **vector index** only from `knowledge_dirs`. Use for semantic search (`knowledge.recall`) and the vector leg of `link_graph_hybrid_search`. Run `omni sync knowledge` to refresh that index.
+
+So: Librarian does not replace LinkGraph; it adds a vector/semantic layer on a configured subset of content. When to use which: [LinkGraph vs Librarian](../explanation/link-graph-vs-librarian.md).
 
 ## Overview
 
@@ -188,6 +195,7 @@ def on_file_change(file_path: str, event_type: str):
 
 ## Related Documentation
 
+- [LinkGraph vs Librarian](../explanation/link-graph-vs-librarian.md) - Roles and when to use LinkGraph vs Librarian
 - [Knowledge Matrix](../human/architecture/knowledge-matrix.md) - Unified knowledge architecture
 - [AST-grep Core](../developer/ast-grep-core.md) - Semantic code analysis
 - [RAG Search](../reference/rag-search.md) - Search protocols

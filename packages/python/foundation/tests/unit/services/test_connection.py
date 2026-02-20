@@ -153,7 +153,7 @@ class TestVectorStoreGracefulDegradation:
         assert not VectorStoreClient._is_table_not_found(Exception("permission denied"))
 
     @pytest.mark.asyncio
-    async def test_search_nonexistent_collection_returns_empty(self):
+    async def test_search_nonexistent_collection_returns_empty(self, mock_embedding_for_search):
         """Searching a non-existent collection should return empty list, not raise error."""
         vm = VectorStoreClient()
 
@@ -167,7 +167,7 @@ class TestVectorStoreGracefulDegradation:
         assert results == [], f"Expected empty list, got {results}"
 
     @pytest.mark.asyncio
-    async def test_search_nonexistent_collection_case_insensitive(self):
+    async def test_search_nonexistent_collection_case_insensitive(self, mock_embedding_for_search):
         """Error handling should be case-insensitive."""
         vm = VectorStoreClient()
 
@@ -179,7 +179,7 @@ class TestVectorStoreGracefulDegradation:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_search_parses_vector_schema_v1_payload(self):
+    async def test_search_parses_vector_schema_v1_payload(self, mock_embedding_for_search):
         """Vector search should parse canonical v1 payload."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
@@ -197,7 +197,7 @@ class TestVectorStoreGracefulDegradation:
         assert results[0].score == pytest.approx(0.8333)
 
     @pytest.mark.asyncio
-    async def test_search_rejects_unknown_vector_schema(self):
+    async def test_search_rejects_unknown_vector_schema(self, mock_embedding_for_search):
         """Vector search should reject unknown schema versions."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
@@ -210,7 +210,7 @@ class TestVectorStoreGracefulDegradation:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_search_prefers_optimized_api_when_available(self):
+    async def test_search_prefers_optimized_api_when_available(self, mock_embedding_for_search):
         """search() should use search_optimized when binding supports it."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
@@ -225,7 +225,7 @@ class TestVectorStoreGracefulDegradation:
         mock_store.search.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_search_forwards_optimized_options_payload(self):
+    async def test_search_forwards_optimized_options_payload(self, mock_embedding_for_search):
         """search() should serialize and pass scanner tuning options."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
@@ -254,8 +254,10 @@ class TestVectorStoreGracefulDegradation:
         assert options["scan_limit"] == 32
 
     @pytest.mark.asyncio
-    async def test_search_optimized_omits_options_payload_when_defaults(self):
-        """search() should pass None options_json when no scanner options are set."""
+    async def test_search_optimized_applies_adaptive_default_options(
+        self, mock_embedding_for_search
+    ):
+        """search() should apply adaptive scanner defaults when options are omitted."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
         mock_store.search_optimized.return_value = []
@@ -266,10 +268,16 @@ class TestVectorStoreGracefulDegradation:
         args = mock_store.search_optimized.call_args[0]
         assert args[0] == "knowledge"
         assert args[2] == 3
-        assert args[3] is None
+        options = json.loads(args[3])
+        assert options["batch_size"] == 256
+        assert options["fragment_readahead"] == 2
+        assert options["batch_readahead"] == 4
+        assert options["projection"] == ["id", "content", "_distance", "metadata"]
 
     @pytest.mark.asyncio
-    async def test_search_optimized_passes_string_where_filter_without_reencoding(self):
+    async def test_search_optimized_passes_string_where_filter_without_reencoding(
+        self, mock_embedding_for_search
+    ):
         """String where_filter should be forwarded directly to options_json."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
@@ -291,7 +299,7 @@ class TestVectorStoreGracefulDegradation:
         assert options["scan_limit"] == 7
 
     @pytest.mark.asyncio
-    async def test_search_optimized_binding_is_required(self):
+    async def test_search_optimized_binding_is_required(self, mock_embedding_for_search):
         """search() should reject legacy search-only bindings."""
 
         class _LegacyStore:
@@ -305,7 +313,7 @@ class TestVectorStoreGracefulDegradation:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_search_rejects_invalid_scanner_options(self):
+    async def test_search_rejects_invalid_scanner_options(self, mock_embedding_for_search):
         """Invalid scanner options should be rejected before Rust call."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
@@ -323,7 +331,7 @@ class TestVectorStoreGracefulDegradation:
         mock_store.search_optimized.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_search_rejects_invalid_n_results(self):
+    async def test_search_rejects_invalid_n_results(self, mock_embedding_for_search):
         """n_results must be within contract bounds."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
@@ -337,10 +345,12 @@ class TestVectorStoreGracefulDegradation:
         mock_store.search_optimized.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_search_logs_error_code_for_invalid_n_results(self):
+    async def test_search_logs_error_code_for_invalid_n_results(self, mock_embedding_for_search):
         """Request validation failures should emit stable error_code."""
         vm = VectorStoreClient()
-        with patch("omni.foundation.services.vector.logger.error") as mock_error:
+        with patch(
+            "omni.foundation.services.vector.store.VectorStoreClient._log_error"
+        ) as mock_error:
             results = await vm.search(query="typed", n_results=0, collection="knowledge")
         assert results == []
         assert mock_error.called
@@ -349,7 +359,7 @@ class TestVectorStoreGracefulDegradation:
         assert kwargs["cause"] == "request_validation"
 
     @pytest.mark.asyncio
-    async def test_search_logs_error_code_for_missing_binding_api(self):
+    async def test_search_logs_error_code_for_missing_binding_api(self, mock_embedding_for_search):
         """Binding contract violations should emit stable error_code."""
 
         class _LegacyStore:
@@ -359,7 +369,9 @@ class TestVectorStoreGracefulDegradation:
         vm = VectorStoreClient()
         vm._store = _LegacyStore()
 
-        with patch("omni.foundation.services.vector.logger.error") as mock_error:
+        with patch(
+            "omni.foundation.services.vector.store.VectorStoreClient._log_error"
+        ) as mock_error:
             results = await vm.search(query="typed", n_results=3, collection="knowledge")
         assert results == []
         assert mock_error.called
@@ -407,7 +419,7 @@ class TestVectorStoreGracefulDegradation:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_hippocampus_collection_search_graceful_handling(self):
+    async def test_hippocampus_collection_search_graceful_handling(self, mock_embedding_for_search):
         """Hippocampus collection search should handle missing table gracefully.
 
         This is the specific scenario that was failing:
@@ -490,7 +502,7 @@ class TestVectorStoreGracefulDegradation:
         assert count == 0, f"Expected 0 for non-existent collection, got {count}"
 
     @pytest.mark.asyncio
-    async def test_search_hybrid_parses_rust_results(self):
+    async def test_search_hybrid_parses_rust_results(self, mock_embedding_for_search):
         """Hybrid search should parse Rust hybrid payload to SearchResult."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
@@ -506,7 +518,7 @@ class TestVectorStoreGracefulDegradation:
         assert results[0].metadata["domain"] == "git"
 
     @pytest.mark.asyncio
-    async def test_search_hybrid_rejects_noncanonical_payload(self):
+    async def test_search_hybrid_rejects_noncanonical_payload(self, mock_embedding_for_search):
         """Hybrid parser should reject legacy payload missing canonical fields."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
@@ -519,7 +531,7 @@ class TestVectorStoreGracefulDegradation:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_search_hybrid_prefers_id_content_metadata_shape(self):
+    async def test_search_hybrid_prefers_id_content_metadata_shape(self, mock_embedding_for_search):
         """Hybrid parser should preserve normalized id/content/metadata payload."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
@@ -537,7 +549,9 @@ class TestVectorStoreGracefulDegradation:
         assert results[0].metadata.get("tag") == "docs"
 
     @pytest.mark.asyncio
-    async def test_search_hybrid_preserves_debug_scores_in_metadata(self):
+    async def test_search_hybrid_preserves_debug_scores_in_metadata(
+        self, mock_embedding_for_search
+    ):
         """Hybrid parser should keep optional engine debug scores under metadata.debug_scores."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
@@ -555,7 +569,7 @@ class TestVectorStoreGracefulDegradation:
         assert debug.get("keyword_score") == 0.6
 
     @pytest.mark.asyncio
-    async def test_search_hybrid_passes_keywords_to_store(self):
+    async def test_search_hybrid_passes_keywords_to_store(self, mock_embedding_for_search):
         """Hybrid search should forward explicit keyword hints to Rust binding."""
         vm = VectorStoreClient()
         mock_store = MagicMock()
@@ -575,7 +589,9 @@ class TestVectorStoreGracefulDegradation:
         assert args[3] == 4
 
     @pytest.mark.asyncio
-    async def test_search_hybrid_nonexistent_collection_returns_empty(self):
+    async def test_search_hybrid_nonexistent_collection_returns_empty(
+        self, mock_embedding_for_search
+    ):
         """Hybrid search should gracefully handle missing table errors."""
         vm = VectorStoreClient()
         mock_store = MagicMock()

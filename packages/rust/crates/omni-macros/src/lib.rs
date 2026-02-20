@@ -7,7 +7,7 @@
 //! ### Code Generation
 //! - [`patterns!`] - Generate pattern constants for symbol extraction
 //! - [`topics!`] - Generate topic/event constants
-//! - [`py_from!`] - Generate PyO3 From implementations
+//! - [`py_from!`] - Generate `PyO3` From implementations
 //!
 //! ### Testing Utilities
 //! - [`temp_dir!`] - Create a temporary directory for tests
@@ -16,31 +16,43 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Expr, parse::Parser};
+use syn::{Expr, parse_macro_input};
 
 /// Generate pattern constants for symbol extraction.
 #[proc_macro]
 pub fn patterns(input: TokenStream) -> TokenStream {
-    let items: syn::punctuated::Punctuated<Expr, syn::Token![,]> =
-        syn::punctuated::Punctuated::parse_terminated
-            .parse(input)
-            .expect("Failed to parse patterns");
+    let items = parse_macro_input!(
+        input with syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated
+    );
 
-    let expanded = items.into_iter().map(|expr| {
-        if let Expr::Tuple(tuple) = expr {
-            let elems = tuple.elems;
-            if elems.len() != 2 {
-                panic!("patterns! requires tuple of (NAME, pattern_string)");
+    let mut expanded = Vec::with_capacity(items.len());
+    for expr in items {
+        match expr {
+            Expr::Tuple(tuple) if tuple.elems.len() == 2 => {
+                let name = &tuple.elems[0];
+                let pattern = &tuple.elems[1];
+                expanded.push(quote! {
+                    pub const #name: &str = #pattern;
+                });
             }
-            let name = &elems[0];
-            let pattern = &elems[1];
-            quote! {
-                pub const #name: &str = #pattern;
+            Expr::Tuple(tuple) => {
+                return syn::Error::new_spanned(
+                    tuple,
+                    "patterns! requires tuple of (NAME, pattern_string)",
+                )
+                .to_compile_error()
+                .into();
             }
-        } else {
-            panic!("patterns! requires tuple of (NAME, pattern_string)");
+            other => {
+                return syn::Error::new_spanned(
+                    other,
+                    "patterns! requires tuple of (NAME, pattern_string)",
+                )
+                .to_compile_error()
+                .into();
+            }
         }
-    });
+    }
 
     quote! {
         #(#expanded)*
@@ -51,26 +63,38 @@ pub fn patterns(input: TokenStream) -> TokenStream {
 /// Generate topic/event constants.
 #[proc_macro]
 pub fn topics(input: TokenStream) -> TokenStream {
-    let items: syn::punctuated::Punctuated<Expr, syn::Token![,]> =
-        syn::punctuated::Punctuated::parse_terminated
-            .parse(input)
-            .expect("Failed to parse topics");
+    let items = parse_macro_input!(
+        input with syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated
+    );
 
-    let expanded = items.into_iter().map(|expr| {
-        if let Expr::Tuple(tuple) = expr {
-            let elems = tuple.elems;
-            if elems.len() != 2 {
-                panic!("topics! requires tuple of (CONST_NAME, string_value)");
+    let mut expanded = Vec::with_capacity(items.len());
+    for expr in items {
+        match expr {
+            Expr::Tuple(tuple) if tuple.elems.len() == 2 => {
+                let name = &tuple.elems[0];
+                let value = &tuple.elems[1];
+                expanded.push(quote! {
+                    pub const #name: &str = #value;
+                });
             }
-            let name = &elems[0];
-            let value = &elems[1];
-            quote! {
-                pub const #name: &str = #value;
+            Expr::Tuple(tuple) => {
+                return syn::Error::new_spanned(
+                    tuple,
+                    "topics! requires tuple of (CONST_NAME, string_value)",
+                )
+                .to_compile_error()
+                .into();
             }
-        } else {
-            panic!("topics! requires tuple of (CONST_NAME, string_value)");
+            other => {
+                return syn::Error::new_spanned(
+                    other,
+                    "topics! requires tuple of (CONST_NAME, string_value)",
+                )
+                .to_compile_error()
+                .into();
+            }
         }
-    });
+    }
 
     quote! {
         #(#expanded)*
@@ -78,16 +102,22 @@ pub fn topics(input: TokenStream) -> TokenStream {
     .into()
 }
 
-/// Generate PyO3 From implementations for wrapper types.
+/// Generate `PyO3` From implementations for wrapper types.
 #[proc_macro]
 pub fn py_from(input: TokenStream) -> TokenStream {
-    let items: syn::punctuated::Punctuated<Expr, syn::Token![,]> =
-        syn::punctuated::Punctuated::parse_terminated
-            .parse(input)
-            .expect("Failed to parse py_from");
+    let items: Vec<Expr> = parse_macro_input!(
+        input with syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated
+    )
+    .into_iter()
+    .collect();
 
     if items.len() != 2 {
-        panic!("py_from! requires exactly 2 arguments: (PyType, InnerType)");
+        return syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "py_from! requires exactly 2 arguments: (PyType, InnerType)",
+        )
+        .to_compile_error()
+        .into();
     }
 
     let py_type = &items[0];
@@ -112,12 +142,10 @@ pub fn py_from(input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```rust
-/// #[test]
-/// fn test_with_temp_dir() {
-///     let temp_path = temp_dir!();
-///     std::fs::write(temp_path.join("test.txt"), "hello").unwrap();
-///     assert!(temp_path.exists());
-/// }
+/// let temp_path = omni_macros::temp_dir!();
+/// std::fs::write(temp_path.join("test.txt"), "hello")
+///     .expect("temporary write should succeed");
+/// assert!(temp_path.exists());
 /// ```
 #[proc_macro]
 pub fn temp_dir(_input: TokenStream) -> TokenStream {
@@ -138,23 +166,25 @@ pub fn temp_dir(_input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```rust
-/// #[test]
-/// fn test_performance() {
-///     assert_timing!(100, {
-///         // Code to benchmark
-///         std::thread::sleep(std::time::Duration::from_millis(1));
-///     });
-/// }
+/// let _elapsed = omni_macros::assert_timing!(100.0, {
+///     std::thread::sleep(std::time::Duration::from_millis(1));
+/// });
 /// ```
 #[proc_macro]
 pub fn assert_timing(input: TokenStream) -> TokenStream {
-    let items: syn::punctuated::Punctuated<Expr, syn::Token![,]> =
-        syn::punctuated::Punctuated::parse_terminated
-            .parse(input)
-            .expect("Failed to parse assert_timing");
+    let items: Vec<Expr> = parse_macro_input!(
+        input with syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated
+    )
+    .into_iter()
+    .collect();
 
     if items.len() != 2 {
-        panic!("assert_timing! requires 2 arguments: (max_ms, block)");
+        return syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "assert_timing! requires 2 arguments: (max_ms, block)",
+        )
+        .to_compile_error()
+        .into();
     }
 
     let max_ms = &items[0];
@@ -183,17 +213,15 @@ pub fn assert_timing(input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```rust
-/// #[test]
-/// fn bench_my_function() {
-///     let elapsed = bench_case!(|| {
-///         my_function();
-///     });
-///     println!("Function took {:?}", elapsed);
-/// }
+/// let elapsed = omni_macros::bench_case!(|| {
+///     let value = 1 + 1;
+///     assert_eq!(value, 2);
+/// });
+/// let _ = elapsed;
 /// ```
 #[proc_macro]
 pub fn bench_case(input: TokenStream) -> TokenStream {
-    let block: syn::Expr = syn::parse(input).expect("Failed to parse bench_case");
+    let block = parse_macro_input!(input as syn::Expr);
 
     quote! {
         {

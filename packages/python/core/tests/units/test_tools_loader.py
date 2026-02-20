@@ -9,7 +9,7 @@ PEP 420 Namespace Package Tests:
 from __future__ import annotations
 
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -19,6 +19,9 @@ from omni.core.skills.tools_loader import (
 )
 from omni.foundation.api.decorators import skill_command
 from omni.foundation.config.skills import SKILLS_DIR
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestSkillCommand:
@@ -155,6 +158,106 @@ class TestToolsLoader:
 
         # Native functions should be collected even without decorator
         assert len(loader.native_functions) >= 0  # May be 0 or more
+
+
+class TestToolsLoaderTargetedLoad:
+    """Test command-targeted loading via Rust scanner index."""
+
+    def test_load_command_uses_rust_scanner_index(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Targeted load should only load modules returned by Rust scanner records."""
+        skill_root = tmp_path / "test_skill"
+        scripts_dir = skill_root / "scripts"
+        scripts_dir.mkdir(parents=True)
+
+        (scripts_dir / "recall.py").write_text(
+            """
+from omni.foundation.api.decorators import skill_command
+
+@skill_command(name="recall", description="Recall")
+def recall():
+    return "recall"
+""".strip()
+        )
+        (scripts_dir / "other.py").write_text(
+            """
+from omni.foundation.api.decorators import skill_command
+
+@skill_command(name="other", description="Other")
+def other():
+    return "other"
+""".strip()
+        )
+
+        class _Tool:
+            def __init__(self, tool_name: str, file_path: str):
+                self.tool_name = tool_name
+                self.file_path = file_path
+                self.description = "Recall"
+                self.skill_name = "test_skill"
+                self.function_name = "recall"
+                self.execution_mode = "sync"
+                self.keywords = []
+                self.input_schema = "{}"
+                self.docstring = ""
+                self.file_hash = "abc123"
+                self.category = "search"
+
+        class _Scanner:
+            def __init__(self, _base_path: str):
+                pass
+
+            def scan_skill_with_tools(self, _skill_name: str):
+                return (
+                    object(),
+                    [_Tool("test_skill.recall", str(scripts_dir / "recall.py"))],
+                )
+
+        import omni_core_rs
+
+        monkeypatch.setattr(omni_core_rs, "PySkillScanner", _Scanner)
+
+        loader = ToolsLoader(scripts_dir, "test_skill")
+        ok = loader.load_command("recall")
+
+        assert ok is True
+        assert "test_skill.recall" in loader.list_commands()
+        assert "test_skill.other" not in loader.list_commands()
+
+    def test_load_command_no_python_fallback_when_rust_record_missing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """When Rust returns no command record, loader should not use Python AST fallback."""
+        skill_root = tmp_path / "test_skill"
+        scripts_dir = skill_root / "scripts"
+        scripts_dir.mkdir(parents=True)
+        (scripts_dir / "recall.py").write_text(
+            """
+from omni.foundation.api.decorators import skill_command
+
+@skill_command(name="recall", description="Recall")
+def recall():
+    return "recall"
+""".strip()
+        )
+
+        class _Scanner:
+            def __init__(self, _base_path: str):
+                pass
+
+            def scan_skill_with_tools(self, _skill_name: str):
+                return (object(), [])
+
+        import omni_core_rs
+
+        monkeypatch.setattr(omni_core_rs, "PySkillScanner", _Scanner)
+
+        loader = ToolsLoader(scripts_dir, "test_skill")
+        ok = loader.load_command("recall")
+
+        assert ok is False
+        assert loader.list_commands() == []
 
 
 class TestToolsLoaderWithNamespacePackages:

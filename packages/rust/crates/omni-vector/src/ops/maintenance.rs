@@ -1,6 +1,6 @@
 //! Maintenance operations: auto-indexing and compaction.
 //!
-//! Phase 2 of the LanceDB 2.0 roadmap: automatic index creation when thresholds
+//! Phase 2 of the `LanceDB` 2.0 roadmap: automatic index creation when thresholds
 //! are met, and table compaction to reduce fragmentation.
 
 use std::sync::Arc;
@@ -14,6 +14,7 @@ use crate::error::VectorStoreError;
 use crate::ops::types::{CompactionStats, IndexStats, IndexThresholds};
 use crate::{CATEGORY_COLUMN, SKILL_NAME_COLUMN, VectorStore};
 
+#[allow(clippy::missing_errors_doc, clippy::doc_markdown)]
 impl VectorStore {
     /// Returns true if the table has any vector index (e.g. IVF_FLAT, IVF_PQ).
     pub async fn has_vector_index(&self, table_name: &str) -> Result<bool, VectorStoreError> {
@@ -77,6 +78,7 @@ impl VectorStore {
     }
 
     /// Like [Self::auto_index_if_needed] with custom thresholds.
+    #[allow(clippy::collapsible_if)]
     pub async fn auto_index_if_needed_with_thresholds(
         &self,
         table_name: &str,
@@ -91,13 +93,13 @@ impl VectorStore {
 
         if !self.has_vector_index(table_name).await? && count >= thresholds.auto_index_at {
             if let Err(e) = self.create_index(table_name).await {
-                log::warn!("auto_index: create vector index failed: {}", e);
+                log::warn!("auto_index: create vector index failed: {e}");
             }
         }
 
         if !self.has_fts_index(table_name).await? && count >= thresholds.auto_index_at {
             if let Err(e) = self.create_fts_index(table_name).await {
-                log::warn!("auto_index: create FTS index failed: {}", e);
+                log::warn!("auto_index: create FTS index failed: {e}");
             }
         }
 
@@ -107,18 +109,12 @@ impl VectorStore {
             if let Ok(s) = self.create_btree_index(table_name, SKILL_NAME_COLUMN).await {
                 last_stats = Some(s);
             } else {
-                log::warn!(
-                    "auto_index: create btree index on {} failed",
-                    SKILL_NAME_COLUMN
-                );
+                log::warn!("auto_index: create btree index on {SKILL_NAME_COLUMN} failed");
             }
             if let Ok(s) = self.create_bitmap_index(table_name, CATEGORY_COLUMN).await {
                 last_stats = Some(s);
             } else {
-                log::warn!(
-                    "auto_index: create bitmap index on {} failed",
-                    CATEGORY_COLUMN
-                );
+                log::warn!("auto_index: create bitmap index on {CATEGORY_COLUMN} failed");
             }
         }
 
@@ -155,7 +151,7 @@ impl VectorStore {
             .map_err(VectorStoreError::LanceDB)?;
 
         let fragments_after = dataset.get_fragments().len();
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         Ok(CompactionStats {
             fragments_before,

@@ -232,7 +232,7 @@ Result: LLM "sees" git status without tool calls.
 
 ### Dynamic Skill Loading
 
-Skills are configured in `agent/settings.yaml`:
+Skills are configured in `packages/conf/settings.yaml` and `packages/conf/skills.yaml` (user overrides: `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml`):
 
 ```yaml
 skills:

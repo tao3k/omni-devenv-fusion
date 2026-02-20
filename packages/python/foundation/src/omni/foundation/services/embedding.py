@@ -1,72 +1,142 @@
 """
 omni.foundation.embedding - Unified Embedding Service
 
-Provides text embedding using local sentence-transformers models.
-Supports two modes:
-1. Local mode: Load model directly (default)
-2. Client mode: Connect to remote embedding HTTP server
+Embeddings via LiteLLM only (Ollama, Xinference, or other backends). No in-process
+model loading; run the model in Ollama or Xinference and point LiteLLM at it.
 
-Auto-detection:
-- First MCP: starts HTTP server immediately, loads model after MCP is connected
-- Other MCPs: detect port in use, automatically connect as clients
-
-Configuration (settings.yaml):
-- embedding.provider: "" (auto), "client", "fallback"
-- embedding.model: HuggingFace model name
-- embedding.dimension: Vector dimension
-- embedding.http_port: HTTP server port (default: 18501)
+Configuration (packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml):
+- embedding.provider: "ollama" | "xinference" | "litellm" (LiteLLM), "client" (HTTP), "fallback", "" (auto)
+- embedding.litellm_model: e.g. "ollama/nomic-embed-text", "xinference/<uid>" (Xinference deploys Qwen etc.)
+- embedding.litellm_api_base: e.g. "http://127.0.0.1:11434" (Ollama), "http://127.0.0.1:9997/v1" (Xinference)
+- embedding.dimension: must match model (768 nomic, 1024 Qwen3-Embedding-0.6B)
 """
 
 from __future__ import annotations
 
 import os
-import sys
-import threading
-from errno import EADDRINUSE
-
-# Workaround for Python 3.13 + torch.distributed compatibility issue
-if sys.version_info >= (3, 13):
-    if "TORCH_DISTRIBUTED_DETECTION" not in os.environ:
-        os.environ["TORCH_DISTRIBUTED_DETECTION"] = "1"
-
-from typing import Any
+import time
+from contextvars import ContextVar
+from typing import Any, Protocol
+from urllib.parse import urlsplit, urlunsplit
 
 import structlog
 
-from omni.foundation.config.prj import PRJ_DATA
 from omni.foundation.config.settings import get_setting
 
 logger = structlog.get_logger(__name__)
 
+# Context override so skill execution can use MCP-first embedding (set by agent via skill hooks).
+_embedding_override: ContextVar[Any | None] = ContextVar("embedding_override", default=None)
+
+
+class EmbeddingOverrideProtocol(Protocol):
+    """Protocol for embedding override (e.g. MCP-first wrapper). Used during skill execution."""
+
+    def embed(self, text: str) -> list[list[float]]: ...
+    def embed_batch(self, texts: list[str]) -> list[list[float]]: ...
+
+
+def get_embedding_override() -> EmbeddingOverrideProtocol | None:
+    """Return the current embedding override, if any (used by skill execution path)."""
+    return _embedding_override.get()
+
+
+def set_embedding_override(provider: EmbeddingOverrideProtocol | None) -> None:
+    """Set the embedding override for the current context (e.g. MCP-first when running skills from CLI)."""
+    _embedding_override.set(provider)
+
+
+class EmbeddingUnavailableError(Exception):
+    """Raised when embedding HTTP service is unavailable and fallback is disabled."""
+
+
+class EmbeddingPortInUseError(Exception):
+    """Raised when embedding port is in use by a non-embedding service. User must change port."""
+
 
 class EmbeddingService:
-    """Singleton service for generating text embeddings.
-
-    Auto-detection behavior:
-    - First process: starts HTTP server immediately, loads model after start_model_loading()
-    - Other processes: detect server, connect as client
-    """
+    """Singleton embedding service. Uses LiteLLM (Ollama/Xinference) for local models; no in-process load."""
 
     _instance: "EmbeddingService | None" = None
-    _model: Any = None
     _dimension: int = 1024
-    _truncate_dim: int | None = None  # MRL dimension truncation
-    _backend: str = "local"
+    _backend: str = "fallback"
     _initialized: bool = False
     _client_mode: bool = False
     _client_url: str | None = None
-    _http_server_started: bool = False
-    _model_loading: bool = False
-    _model_loaded: bool = False
-    _port_conflict_logged: bool = False
-    _load_lock: threading.Lock
     _embed_cache_key: str | None = None
     _embed_cache_value: list[list[float]] | None = None
+    _litellm_model: str | None = None
+    _litellm_api_base: str | None = None
+    _client_retried: bool = False
+    _litellm_circuit_open_until: float = 0.0
+    _litellm_last_error: str | None = None
+
+    @staticmethod
+    def _default_litellm_api_base(provider: str) -> str | None:
+        if provider == "ollama":
+            ollama_host = (os.environ.get("OLLAMA_HOST") or "").strip()
+            if ollama_host:
+                if "://" not in ollama_host:
+                    ollama_host = f"http://{ollama_host}"
+                return ollama_host.rstrip("/")
+            return "http://127.0.0.1:11434"
+        if provider == "xinference":
+            return "http://127.0.0.1:9997/v1"
+        return None
+
+    @staticmethod
+    def _normalize_loopback_api_base(
+        api_base: str | None,
+        *,
+        is_ollama: bool,
+    ) -> str | None:
+        """Normalize local loopback hostnames to reduce localhost/IPv6 ambiguity."""
+        if not api_base or not is_ollama:
+            return api_base
+        raw = api_base if "://" in api_base else f"http://{api_base}"
+        parsed = urlsplit(raw)
+        host = (parsed.hostname or "").lower()
+        if host not in {"localhost", "0.0.0.0", "::"}:
+            return api_base
+        port = parsed.port or 11434
+        netloc = f"127.0.0.1:{port}"
+        normalized = urlunsplit(
+            (parsed.scheme or "http", netloc, parsed.path, parsed.query, parsed.fragment)
+        )
+        return normalized
+
+    @staticmethod
+    def _loopback_alias_candidates(
+        api_base: str | None,
+        *,
+        is_ollama: bool,
+    ) -> list[str | None]:
+        if not api_base:
+            return [None]
+        if not is_ollama:
+            return [api_base]
+        raw = api_base if "://" in api_base else f"http://{api_base}"
+        parsed = urlsplit(raw)
+        host = (parsed.hostname or "").lower()
+        port = parsed.port or 11434
+        path = parsed.path
+        query = parsed.query
+        fragment = parsed.fragment
+        scheme = parsed.scheme or "http"
+        candidates: list[str | None] = [api_base]
+        if host == "localhost":
+            alt = urlunsplit((scheme, f"127.0.0.1:{port}", path, query, fragment))
+            if alt not in candidates:
+                candidates.append(alt)
+        elif host == "127.0.0.1":
+            alt = urlunsplit((scheme, f"localhost:{port}", path, query, fragment))
+            if alt not in candidates:
+                candidates.append(alt)
+        return candidates
 
     def __new__(cls) -> "EmbeddingService":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._load_lock = threading.Lock()
         return cls._instance
 
     def _is_port_in_use(self, port: int, timeout: float = 0.5) -> bool:
@@ -100,278 +170,262 @@ class EmbeddingService:
         except (urllib.error.URLError, TimeoutError, ValueError):
             return False
 
-    def _is_address_in_use_error(self, exc: Exception) -> bool:
-        """Return True when exception indicates HTTP port is already bound."""
-        if isinstance(exc, OSError) and getattr(exc, "errno", None) in {
-            EADDRINUSE,
-            48,  # macOS
-            98,  # Linux
-            10048,  # Windows
-        }:
-            return True
-        return "address already in use" in str(exc).lower()
+    def _verify_embedding_service_works(self, url: str, timeout: float = 5.0) -> bool:
+        """Verify embedding service actually returns vectors (real client connectivity test).
+
+        Health check alone is insufficient: /health may pass while /embed/single fails
+        (e.g. wrong service on port, model not loaded). Only use client mode if we get
+        a real embedding back.
+        """
+        import json
+        import urllib.error
+        import urllib.request
+
+        try:
+            body = json.dumps({"text": "_probe"}).encode("utf-8")
+            req = urllib.request.Request(
+                f"{url}/embed/single",
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                if response.status != 200:
+                    return False
+                payload = response.read().decode("utf-8")
+                data = json.loads(payload) if payload else {}
+                vector = data.get("vector", [])
+                if not isinstance(vector, list) or len(vector) < 1:
+                    return False
+                return all(isinstance(x, (int, float)) for x in vector[:10])
+        except (urllib.error.URLError, TimeoutError, ValueError, TypeError):
+            return False
 
     def initialize(self) -> None:
-        """Initialize embedding service with auto-detection.
-
-        Flow:
-        1. Check explicit provider override (client/fallback/local)
-        2. Auto-detect: Check if HTTP port is in use
-        3. Health check: Verify server is responsive
-        4. Connect or start server accordingly
-        """
+        """Initialize embedding service: LiteLLM, HTTP client, or fallback. No in-process model."""
         if self._initialized:
             return
 
         provider = (get_setting("embedding.provider") or "").lower()
         http_port = int(get_setting("embedding.http_port"))
-        http_url = f"http://127.0.0.1:{http_port}"
+        http_url = get_setting("embedding.client_url") or f"http://127.0.0.1:{http_port}"
 
-        # Handle explicit overrides
-        if provider == "client":
-            self._client_mode = True
-            self._client_url = get_setting("embedding.client_url") or http_url
-            self._backend = "http"
+        # LiteLLM backend
+        if provider in ("ollama", "xinference", "litellm"):
+            self._backend = "litellm"
+            self._litellm_model = get_setting("embedding.litellm_model") or (
+                "ollama/nomic-embed-text"
+                if provider == "ollama"
+                else "xinference/bge-base-en"
+                if provider == "xinference"
+                else str(get_setting("embedding.model") or "ollama/nomic-embed-text")
+            )
+            raw_api_base = get_setting(
+                "embedding.litellm_api_base"
+            ) or self._default_litellm_api_base(provider)
+            self._litellm_api_base = self._normalize_loopback_api_base(
+                raw_api_base,
+                is_ollama=provider == "ollama" or str(self._litellm_model).startswith("ollama/"),
+            )
             self._dimension = int(get_setting("embedding.dimension"))
             self._initialized = True
-            logger.info("Embedding: force client mode", client_url=self._client_url)
+            logger.info(
+                "Embedding: LiteLLM backend",
+                model=self._litellm_model,
+                api_base=self._litellm_api_base,
+            )
+            return
+
+        if provider == "client":
+            client_url = get_setting("embedding.client_url") or http_url
+            if self._check_http_server_healthy(
+                client_url, timeout=2.0
+            ) and self._verify_embedding_service_works(client_url, timeout=5.0):
+                self._client_mode = True
+                self._client_url = client_url
+                self._backend = "http"
+                self._dimension = int(get_setting("embedding.dimension"))
+                self._initialized = True
+                logger.info("Embedding: client mode", client_url=self._client_url)
+            else:
+                if os.environ.get("OMNI_EMBEDDING_CLIENT_ONLY") == "1":
+                    self._backend = "unavailable"
+                    self._dimension = int(get_setting("embedding.dimension"))
+                    self._initialized = True
+                    logger.warning(
+                        "Embedding: client_url unreachable; client-only, embedding unavailable."
+                    )
+                else:
+                    raise EmbeddingUnavailableError(
+                        f"embedding.client_url unreachable: {client_url}. "
+                        "Start an embedding server (e.g. Ollama) or set embedding.provider=ollama/fallback."
+                    )
             return
 
         if provider == "fallback":
             self._backend = "fallback"
             self._dimension = int(get_setting("embedding.dimension"))
             self._initialized = True
-            logger.info("Embedding: force fallback mode")
+            logger.info("Embedding: fallback mode")
             return
 
-        port_in_use = self._is_port_in_use(http_port)
-        logger.info("Embedding: auto-detecting", port=http_port, port_in_use=port_in_use)
+        # Auto: try HTTP server on default port, else fallback
+        if self._is_port_in_use(http_port):
+            if self._check_http_server_healthy(http_url) and self._verify_embedding_service_works(
+                http_url, timeout=5.0
+            ):
+                self._client_mode = True
+                self._client_url = http_url
+                self._backend = "http"
+                self._dimension = int(get_setting("embedding.dimension"))
+                self._initialized = True
+                logger.info("Embedding: auto client mode", server_url=self._client_url)
+            else:
+                raise EmbeddingPortInUseError(
+                    f"Port {http_port} is in use but not a working embedding service. "
+                    "Change embedding.http_port or set embedding.provider=ollama/fallback."
+                )
+        else:
+            # No server on port: use fallback so route test/reindex work without Ollama
+            self._backend = "fallback"
+            self._dimension = int(get_setting("embedding.dimension"))
+            self._initialized = True
+            logger.info(
+                "Embedding: auto fallback (no server on port); set provider=ollama for LiteLLM"
+            )
 
-        if port_in_use:
-            # Port is in use - perform health check to verify server is responsive
-            server_healthy = self._check_http_server_healthy(http_url)
+    def _retry_client_once(self) -> None:
+        """When backend is unavailable and provider is client, try once to connect to client_url.
 
-            if server_healthy:
-                # Server is healthy, connect as client
+        Allows the embedding server to start after MCP (e.g. sidecar on 3302); first embed
+        will retry and use client mode if the server is now reachable.
+        """
+        if self._backend != "unavailable" or self._client_retried:
+            return
+        provider = (get_setting("embedding.provider") or "").lower()
+        if provider != "client":
+            return
+        self._client_retried = True
+        http_port = int(get_setting("embedding.http_port"))
+        client_url = get_setting("embedding.client_url") or f"http://127.0.0.1:{http_port}"
+        if self._check_http_server_healthy(
+            client_url, timeout=2.0
+        ) and self._verify_embedding_service_works(client_url, timeout=5.0):
+            self._client_mode = True
+            self._client_url = client_url
+            self._backend = "http"
+            self._dimension = int(get_setting("embedding.dimension"))
+            logger.info(
+                "Embedding: client mode (reconnected on first embed)", client_url=self._client_url
+            )
+
+    def start_model_loading(self) -> None:
+        """No-op: embeddings via LiteLLM (Ollama/Xinference), no in-process model."""
+
+    def reset_litellm_circuit(self) -> None:
+        """Clear transient LiteLLM circuit state after upstream recovery."""
+        self._litellm_circuit_open_until = 0.0
+        self._litellm_last_error = None
+
+    def _auto_detect_and_init(self) -> None:
+        """Auto-detect HTTP embedding server or use config (client-only when MCP already running).
+
+        When provider is "client", trust config and skip health check so first
+        recall does not pay an extra GET /health round-trip (MCP backend already
+        has the model loaded). This path is client-only: no server startup, no
+        local model load, no locks — just HTTP client to the existing MCP service.
+        Otherwise one GET /health with short timeout, then client mode.
+        """
+        if self._initialized:
+            return
+
+        provider = (get_setting("embedding.provider") or "").lower()
+        http_port = int(get_setting("embedding.http_port"))
+        http_url = get_setting("embedding.client_url") or f"http://127.0.0.1:{http_port}"
+
+        if provider in ("ollama", "xinference", "litellm"):
+            self._backend = "litellm"
+            self._litellm_model = get_setting("embedding.litellm_model") or (
+                "ollama/nomic-embed-text"
+                if provider == "ollama"
+                else "xinference/bge-base-en"
+                if provider == "xinference"
+                else str(get_setting("embedding.model") or "ollama/nomic-embed-text")
+            )
+            raw_api_base = get_setting(
+                "embedding.litellm_api_base"
+            ) or self._default_litellm_api_base(provider)
+            self._litellm_api_base = self._normalize_loopback_api_base(
+                raw_api_base,
+                is_ollama=provider == "ollama" or str(self._litellm_model).startswith("ollama/"),
+            )
+            self._dimension = int(get_setting("embedding.dimension"))
+            self._initialized = True
+            logger.info(
+                "Embedding: LiteLLM backend (no in-process model)",
+                model=self._litellm_model,
+                api_base=self._litellm_api_base,
+            )
+            return
+
+        if provider == "client":
+            if self._check_http_server_healthy(
+                http_url, timeout=2.0
+            ) and self._verify_embedding_service_works(http_url, timeout=5.0):
                 self._client_mode = True
                 self._client_url = http_url
                 self._backend = "http"
                 self._dimension = int(get_setting("embedding.dimension"))
                 self._initialized = True
                 logger.info(
-                    "✓ Embedding: auto-detected healthy HTTP server, using client mode",
-                    server_url=self._client_url,
+                    "✓ Embedding: client mode (health + embed verified)", url=self._client_url
                 )
             else:
-                # Port in use but server not healthy - start our own
-                logger.info("Embedding: port in use but server unhealthy, retrying HTTP startup")
-                self._start_http_server_immediate(http_port)
-        else:
-            # No server running, start HTTP server immediately
-            logger.info("Embedding: no existing server, starting HTTP server...")
-            self._start_http_server_immediate(http_port)
-
-    def _start_http_server_immediate(self, http_port: int) -> None:
-        """Start HTTP server immediately (no model loading yet)."""
-        self._initialized = True
-        self._http_server_started = True
-
-        def _run_server():
-            """Run HTTP server in background thread."""
-            from omni.foundation.embedding_server import EmbeddingHTTPServer
-            from omni.foundation.utils.asyncio import run_async_blocking
-
-            async def _main():
-                server = EmbeddingHTTPServer(port=http_port)
-                await server.start()
-                # HTTP server is running, now wait for model loading signal
-                # Keep server running forever
-                import asyncio
-
-                while True:
-                    await asyncio.sleep(3600)
-
-            try:
-                run_async_blocking(_main())
-            except Exception as e:
-                if self._is_address_in_use_error(e):
-                    # Benign race: another process bound the port between detection and bind.
-                    if not self._port_conflict_logged:
-                        logger.info(
-                            "Embedding HTTP server already running; switching to client mode",
-                            port=http_port,
-                        )
-                        self._port_conflict_logged = True
-                    self._client_mode = True
-                    self._client_url = f"http://127.0.0.1:{http_port}"
-                    self._backend = "http"
+                if os.environ.get("OMNI_EMBEDDING_CLIENT_ONLY") == "1":
+                    self._backend = "unavailable"
                     self._dimension = int(get_setting("embedding.dimension"))
-                    self._http_server_started = False
+                    self._initialized = True
+                    logger.warning(
+                        "Embedding: client_url unreachable; client-only mode, embedding unavailable.",
+                        url=http_url,
+                    )
                 else:
-                    logger.warning(f"Embedding HTTP server error: {e}")
-
-        thread = threading.Thread(target=_run_server, daemon=True)
-        thread.start()
-        logger.info(f"Embedding HTTP server started on port {http_port}")
-
-    def start_model_loading(self) -> None:
-        """Start loading the model in background.
-
-        Call this after MCP connection is fully established.
-        This triggers model loading without blocking the MCP server.
-        """
-        # Skip if in client mode (using HTTP server)
-        if self._client_mode:
-            logger.debug("Embedding: skipping model load in client mode")
+                    logger.warning(
+                        "Embedding: client_url unreachable or embed test failed; will use initialize() path.",
+                        url=http_url,
+                    )
+                    self.initialize()
             return
 
-        # Use lock to prevent race conditions
-        with self._load_lock:
-            if self._model_loaded or self._model_loading:
-                return
-
-            self._model_loading = True
-            logger.info("Embedding: starting model loading in background...")
-
-        def _load_model_bg():
-            """Load model in background thread."""
-            try:
-                self._load_local_model()
-                logger.info("Embedding: model loading complete")
-            except Exception as e:
-                logger.warning(f"Embedding model loading error: {e}")
-                with self._load_lock:
-                    self._model_loading = False
-
-        thread = threading.Thread(target=_load_model_bg, daemon=True)
-        thread.start()
-
-    def _load_local_model(self) -> None:
-        """Load the sentence-transformers model.
-
-        Thread-safe with proper locking to prevent concurrent loads.
-        """
-        # Fast path: already loaded
-        if self._model_loaded:
-            return
-
-        # Acquire lock to prevent concurrent loading
-        with self._load_lock:
-            # Double-check after acquiring lock
-            if self._model_loaded:
-                return
-
-            # Mark as loading
-            self._model_loading = True
-
-            # Set HuggingFace cache
-            self._cache_dir = str(PRJ_DATA("models"))
-            os.environ["HF_HOME"] = self._cache_dir
-            os.environ["HF_DATASETS_CACHE"] = str(PRJ_DATA("datasets"))
-            os.makedirs(self._cache_dir, exist_ok=True)
-
-            model_name = get_setting("embedding.model")
-
-            # [FIX] Memory optimization settings from config
-            device_setting = get_setting("embedding.device")
-            dtype_setting = get_setting("embedding.torch_dtype")
-            quantize = get_setting("embedding.quantize")
-
-            logger.info(
-                "Loading embedding model",
-                model=model_name,
-                cache_dir=self._cache_dir,
-                device_setting=device_setting,
-                dtype_setting=dtype_setting,
-                quantize=quantize or "none",
-            )
-
-            try:
-                import torch
-                from sentence_transformers import SentenceTransformer
-
-                # Resolve device: "auto" detects MPS on Apple Silicon
-                if device_setting == "auto":
-                    device = "mps" if torch.backends.mps.is_available() else "cpu"
-                else:
-                    device = device_setting
-
-                # Resolve dtype: FP16 requires MPS, otherwise FP32
-                if dtype_setting == "float16" and device == "mps":
-                    dtype = torch.float16
-                else:
-                    dtype = torch.float32
-
-                # Build model kwargs with optional quantization
-                model_kwargs: dict[str, Any] = {"dtype": dtype}
-                if quantize == "int8":
-                    model_kwargs["load_in_8bit"] = True
-                elif quantize == "int4":
-                    model_kwargs["load_in_4bit"] = True
-
-                # MRL dimension truncation - Note: Qwen3-Embedding doesn't support
-                # truncate_dim in model init, so we apply it in encode() instead
-                truncate_dim = get_setting("embedding.truncate_dim")
-                if truncate_dim:
-                    self._truncate_dim = truncate_dim
-
-                self._model = SentenceTransformer(
-                    model_name,
-                    device=device,
-                    model_kwargs=model_kwargs,
-                )
-                self._backend = "local"
-                # Use truncate_dim if set, otherwise use model's native dimension
-                if truncate_dim:
-                    self._dimension = truncate_dim
-                    self._truncate_dim = truncate_dim
-                else:
-                    self._dimension = self._model.get_sentence_embedding_dimension() or 1024
-                self._model_loaded = True
-                logger.info(
-                    "Embedding model loaded",
-                    model=model_name,
-                    dimension=self._dimension,
-                    truncate_dim=truncate_dim,
-                    device=device,
-                    dtype=str(dtype),
-                    quantize=quantize or "none",
-                )
-
-            except Exception as e:
-                logger.error(f"Failed to load embedding model {model_name}: {e}")
-                self._backend = "fallback"
-                self._dimension = int(get_setting("embedding.dimension"))
-                self._model_loaded = True
-            finally:
-                self._model_loading = False
-
-    def _auto_detect_and_init(self) -> None:
-        """Auto-detect HTTP embedding server with a single health check (fast path).
-
-        One GET /health with short timeout; no separate port check.
-        """
-        if self._initialized:
-            return
-
-        http_port = int(get_setting("embedding.http_port"))
-        http_url = f"http://127.0.0.1:{http_port}"
-
-        if self._check_http_server_healthy(http_url, timeout=1.0):
+        if self._check_http_server_healthy(
+            http_url, timeout=1.0
+        ) and self._verify_embedding_service_works(http_url, timeout=5.0):
             self._client_mode = True
             self._client_url = http_url
             self._backend = "http"
             self._dimension = int(get_setting("embedding.dimension"))
             self._initialized = True
             logger.info(
-                "✓ Embedding: auto-detected healthy MCP server, using client mode",
+                "✓ Embedding: verified working server, using client mode",
                 server_url=self._client_url,
             )
         else:
-            self.initialize()
+            if os.environ.get("OMNI_EMBEDDING_CLIENT_ONLY") == "1":
+                self._backend = "unavailable"
+                self._dimension = int(get_setting("embedding.dimension"))
+                self._initialized = True
+                logger.warning(
+                    "Embedding: no server reachable; client-only mode, embedding unavailable."
+                )
+            else:
+                self.initialize()
 
     def embed(self, text: str) -> list[list[float]]:
         """Generate embedding for text."""
+        override = get_embedding_override()
+        if override is not None:
+            return override.embed(text)
+
         if not self._initialized:
             self._auto_detect_and_init()
 
@@ -380,29 +434,27 @@ class EmbeddingService:
             if self._embed_cache_value is not None:
                 return self._embed_cache_value
 
-        if self._client_mode:
-            out = self._embed_http_with_fallback([text])
+        if self._backend == "unavailable":
+            self._retry_client_once()
+            if self._backend == "unavailable":
+                _url = (
+                    get_setting("embedding.client_url")
+                    or f"http://127.0.0.1:{int(get_setting('embedding.http_port') or 18501)}"
+                )
+                raise EmbeddingUnavailableError(
+                    f"Embedding unavailable (client-only mode). Run an embedding server at {_url} "
+                    "(GET /health, POST /embed/single) or set embedding.provider=ollama."
+                )
+        if self._backend == "litellm":
+            out = self._embed_litellm([text])
+        elif self._client_mode:
+            out = self._embed_http([text])
         else:
-            if not self._model_loaded:
-                self._load_local_model()
-            out = self._embed_local([text])
+            out = self._embed_fallback([text])
 
         self._embed_cache_key = text
         self._embed_cache_value = out
         return out
-
-    def _embed_local(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings using local model."""
-        if self._backend != "local" or self._model is None:
-            return self._embed_fallback(texts)
-
-        embeddings = self._model.encode(texts, normalize_embeddings=True)
-
-        # Apply MRL dimension truncation if configured
-        if self._truncate_dim is not None:
-            embeddings = embeddings[:, : self._truncate_dim]
-
-        return embeddings.tolist()
 
     def _embed_fallback(self, texts: list[str]) -> list[list[float]]:
         """Generate hash-based pseudo-embeddings."""
@@ -423,81 +475,169 @@ class EmbeddingService:
         return result
 
     def _embed_http(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings via HTTP client."""
+        """Generate embeddings via HTTP client. Raises EmbeddingUnavailableError on failure."""
         from omni.foundation.embedding_client import get_embedding_client
 
-        client = get_embedding_client(self._client_url)
-        return client.sync_embed_batch(texts)
-
-    def _embed_http_with_fallback(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings via HTTP, with graceful fallback on failure."""
         try:
-            return self._embed_http(texts)
+            client = get_embedding_client(self._client_url)
+            return client.sync_embed_batch(texts)
         except Exception as exc:
-            logger.warning(
-                "Embedding HTTP unavailable; switching to fallback embedding",
-                error=str(exc),
-                client_url=self._client_url,
-            )
-            self._client_mode = False
-            self._backend = "fallback"
-            try:
-                from omni.foundation.services.index_dimension import (
-                    get_effective_embedding_dimension,
-                )
+            raise EmbeddingUnavailableError(
+                f"Embedding HTTP service unavailable at {self._client_url}: {exc}"
+            ) from exc
 
-                self._dimension = get_effective_embedding_dimension()
-            except Exception:
-                self._dimension = int(get_setting("embedding.dimension"))
-            return self._embed_fallback(texts)
+    def _embed_litellm(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings via LiteLLM (Ollama, Xinference, or other backends). No in-process model."""
+        import litellm
+
+        if self._litellm_model is None:
+            raise EmbeddingUnavailableError(
+                "LiteLLM embedding not configured (embedding.litellm_model missing)."
+            )
+        now = time.monotonic()
+        if self._litellm_circuit_open_until > now:
+            remaining = self._litellm_circuit_open_until - now
+            last_error = self._litellm_last_error or "unknown"
+            raise EmbeddingUnavailableError(
+                "LiteLLM embedding temporarily unavailable "
+                f"(circuit_open_remaining_secs={remaining:.1f}, model={self._litellm_model}, "
+                f"api_base={self._litellm_api_base}, last_error={last_error})"
+            )
+        timeout: float = float(get_setting("embedding.timeout") or 60)
+        retry_attempts = max(1, int(get_setting("embedding.litellm_connect_retries") or 2))
+        retry_backoff_ms = max(0, int(get_setting("embedding.litellm_retry_backoff_ms") or 250))
+        circuit_open_secs = max(
+            1.0, float(get_setting("embedding.litellm_circuit_open_secs") or 5.0)
+        )
+        provider = str(get_setting("embedding.provider") or "").lower()
+        is_ollama = provider == "ollama" or str(self._litellm_model).startswith("ollama/")
+        api_base_candidates = self._loopback_alias_candidates(
+            self._litellm_api_base,
+            is_ollama=is_ollama,
+        )
+        base_kwargs: dict = {"model": self._litellm_model, "input": texts, "timeout": timeout}
+
+        def _is_transient_litellm_error(exc: Exception) -> bool:
+            message = str(exc).lower()
+            transient_markers = (
+                "connection refused",
+                "server disconnected without sending a response",
+                "apiconnectionerror",
+                "connecterror",
+                "failed to connect",
+                "remoteprotocolerror",
+                "temporarily unavailable",
+                "read timeout",
+                "connect timeout",
+                "connection reset",
+                "broken pipe",
+            )
+            return any(marker in message for marker in transient_markers)
+
+        response = None
+        last_error: Exception | None = None
+        current_api_base: str | None = self._litellm_api_base
+        for attempt in range(1, retry_attempts + 1):
+            current_api_base = api_base_candidates[(attempt - 1) % len(api_base_candidates)]
+            kwargs = dict(base_kwargs)
+            if current_api_base:
+                kwargs["api_base"] = current_api_base
+            try:
+                response = litellm.embedding(**kwargs)
+                if current_api_base:
+                    self._litellm_api_base = current_api_base
+                self._litellm_circuit_open_until = 0.0
+                self._litellm_last_error = None
+                break
+            except Exception as exc:
+                last_error = exc
+                transient = _is_transient_litellm_error(exc)
+                logger.warning(
+                    "embedding_litellm_request_failed",
+                    model=self._litellm_model,
+                    api_base=current_api_base,
+                    configured_api_base=self._litellm_api_base,
+                    attempt=attempt,
+                    retries=retry_attempts,
+                    transient=transient,
+                    error=str(exc),
+                )
+                if not transient or attempt >= retry_attempts:
+                    break
+                if retry_backoff_ms > 0:
+                    sleep_seconds = min(
+                        (retry_backoff_ms / 1000.0) * (2 ** (attempt - 1)),
+                        2.0,
+                    )
+                    time.sleep(sleep_seconds)
+
+        if response is None and last_error is not None:
+            error_message = str(last_error)
+            transient = _is_transient_litellm_error(last_error)
+            if transient:
+                self._litellm_circuit_open_until = time.monotonic() + circuit_open_secs
+                self._litellm_last_error = error_message
+                raise EmbeddingUnavailableError(
+                    "LiteLLM embedding endpoint unavailable "
+                    f"(model={self._litellm_model}, api_base={self._litellm_api_base}, "
+                    f"retries={retry_attempts}, circuit_open_secs={circuit_open_secs:.0f}, "
+                    f"cause={error_message})"
+                ) from last_error
+            raise EmbeddingUnavailableError(
+                f"LiteLLM embedding failed (model={self._litellm_model}, api_base={self._litellm_api_base}): {error_message}"
+            ) from last_error
+
+        # OpenAI-style: response.data[i].embedding (items may be objects or dicts)
+        def _vec(d: Any) -> list[float]:
+            if isinstance(d, dict):
+                return list(d["embedding"])
+            return list(getattr(d, "embedding", d))
+
+        if hasattr(response, "data"):
+            return [_vec(d) for d in response.data]
+        if isinstance(response, dict) and "data" in response:
+            return [_vec(d) for d in response["data"]]
+        raise EmbeddingUnavailableError(f"LiteLLM returned unexpected shape: {type(response)}")
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts."""
         if not texts:
             return []
 
+        override = get_embedding_override()
+        if override is not None:
+            return override.embed_batch(texts)
+
         # Auto-detect MCP server if not already initialized
         if not self._initialized:
             self._auto_detect_and_init()
 
+        if self._backend == "unavailable":
+            self._retry_client_once()
+            if self._backend == "unavailable":
+                _url = (
+                    get_setting("embedding.client_url")
+                    or f"http://127.0.0.1:{int(get_setting('embedding.http_port') or 18501)}"
+                )
+                raise EmbeddingUnavailableError(
+                    f"Embedding unavailable (client-only mode). Run an embedding server at {_url} "
+                    "(GET /health, POST /embed/single) or set embedding.provider=ollama."
+                )
+        if self._backend == "litellm":
+            return self._embed_litellm(texts)
         if self._client_mode:
-            return self._embed_http_with_fallback(texts)
-
-        # Load model if needed (thread-safe with lock)
-        if not self._model_loaded:
-            self._load_local_model()
-        return self._embed_local(texts)
+            return self._embed_http(texts)
+        return self._embed_fallback(texts)
 
     def embed_force_local(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings using only the local model (no HTTP/MCP client).
-
-        Use this when dimension must match the vector index (e.g. route test with
-        --local after `omni sync`). Bypasses auto-detected MCP/HTTP to avoid
-        dimension mismatch (client may return a different dimension than the index).
-        """
+        """Embed without HTTP client: use LiteLLM or fallback (e.g. route test)."""
         if not texts:
             return []
-        saved_client = self._client_mode
-        saved_initialized = self._initialized
-        try:
-            self._client_mode = False
-            if not self._initialized:
-                self._initialized = True
-                self._backend = "fallback"
-                try:
-                    from omni.foundation.services.index_dimension import (
-                        get_effective_embedding_dimension,
-                    )
-
-                    self._dimension = get_effective_embedding_dimension()
-                except Exception:
-                    self._dimension = int(get_setting("embedding.dimension"))
-            if not self._model_loaded:
-                self._load_local_model()
-            return self._embed_local(texts)
-        finally:
-            self._client_mode = saved_client
-            self._initialized = saved_initialized
+        if not self._initialized:
+            self._auto_detect_and_init()
+        if self._backend == "litellm":
+            return self._embed_litellm(texts)
+        return self._embed_fallback(texts)
 
     @property
     def backend(self) -> str:
@@ -511,13 +651,13 @@ class EmbeddingService:
 
     @property
     def is_loaded(self) -> bool:
-        """Check if model is loaded."""
-        return self._model_loaded
+        """True when initialized. No in-process model."""
+        return self._initialized
 
     @property
     def is_loading(self) -> bool:
-        """Check if model is currently loading."""
-        return self._model_loading
+        """Always False (no in-process model)."""
+        return False
 
 
 # Singleton accessor
@@ -549,8 +689,13 @@ def get_dimension() -> int:
 
 
 __all__ = [
+    "EmbeddingOverrideProtocol",
     "EmbeddingService",
+    "EmbeddingUnavailableError",
+    "EmbeddingPortInUseError",
+    "get_embedding_override",
     "get_embedding_service",
+    "set_embedding_override",
     "embed_text",
     "embed_batch",
     "get_dimension",

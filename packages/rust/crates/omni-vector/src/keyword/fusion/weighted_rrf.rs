@@ -19,6 +19,8 @@ use super::types::HybridSearchResult;
 ///
 /// Algorithm: weighted vector + keyword streams, smart fallback for sparse keyword results,
 /// dynamic field boosting (name token match, exact phrase, metadata alignment).
+#[must_use]
+#[allow(clippy::too_many_lines, clippy::needless_pass_by_value)]
 pub fn apply_weighted_rrf(
     vector_results: Vec<(String, f32)>,
     keyword_results: Vec<ToolSearchResult>,
@@ -110,12 +112,14 @@ pub fn apply_weighted_rrf(
                 exact_phrase,
             } = ac_and_exact
                 .as_ref()
-                .map(|(ac, exact_id)| count_name_token_matches_and_exact(ac, name_lower, *exact_id))
-                .unwrap_or(NameMatchResult::default());
+                .map_or_else(NameMatchResult::default, |(ac, exact_id)| {
+                    count_name_token_matches_and_exact(ac, name_lower, *exact_id)
+                });
 
             let mut delta = 0.0;
             if match_count > 0 {
-                delta += (match_count as f32) * NAME_TOKEN_BOOST;
+                delta +=
+                    f32::from(u16::try_from(match_count).unwrap_or(u16::MAX)) * NAME_TOKEN_BOOST;
             }
             if exact_phrase {
                 delta += EXACT_PHRASE_BOOST;

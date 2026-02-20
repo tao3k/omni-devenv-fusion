@@ -19,6 +19,8 @@ from typing import Any
 
 import httpx
 
+from omni.foundation.api.mcp_schema import extract_text_content
+
 # Default MCP server URL for SSE mode
 DEFAULT_MCP_URL = "http://127.0.0.1:3000"
 
@@ -77,11 +79,9 @@ class MCPClient:
             result = response.json()
 
             # Extract result from JSON-RPC response
-            if "result" in result and result["result"]:
-                content = result["result"].get("content", [])
-                if content and isinstance(content, list):
-                    # Return the text content
-                    return content[0].get("text", "")
+            text = extract_text_content(result)
+            if text is not None:
+                return text
             return None
 
         except httpx.HTTPError as e:
@@ -102,6 +102,21 @@ class MCPClient:
         Returns:
             List of embedding vectors
         """
+        client = await self._ensure_client()
+        try:
+            response = await client.post(
+                f"{self.base_url}/embed/batch",
+                json={"texts": texts},
+                headers={"Content-Type": "application/json"},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                vectors = data.get("vectors")
+                if isinstance(vectors, list):
+                    return vectors
+        except Exception:
+            pass
+
         result = await self.call_tool("embed_texts", {"texts": texts})
         if result:
             try:
@@ -119,6 +134,21 @@ class MCPClient:
         Returns:
             Single embedding vector
         """
+        client = await self._ensure_client()
+        try:
+            response = await client.post(
+                f"{self.base_url}/embed/single",
+                json={"text": text},
+                headers={"Content-Type": "application/json"},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                vector = data.get("vector")
+                if isinstance(vector, list):
+                    return vector
+        except Exception:
+            pass
+
         result = await self.call_tool("embed_single", {"text": text})
         if result:
             try:

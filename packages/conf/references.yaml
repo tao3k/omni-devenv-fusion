@@ -9,11 +9,15 @@
 # =============================================================================
 
 # =============================================================================
-# Zettelkasten (zk) Notebook Configuration
+# LinkGraph Notebook Configuration
 # =============================================================================
-zk:
+# When the LinkGraph notebook_dir is project root (e.g. in knowledge skill),
+# notes under harvested are indexed by link-graph search commands.
+link_graph:
   notebook: "assets/knowledge"
-  config: "{{notebook}}/.zk/zk.toml"
+  # Config path is resolved via settings.link_graph.config_relative_path.
+  # Research reports from researcher skill; indexed when notebook = project root
+  harvested: ".data/harvested"
 
 # =============================================================================
 # Harvested Knowledge (User-Created Knowledge Entries)
@@ -72,7 +76,7 @@ ast_symbols_external:
 # =============================================================================
 trinity:
   architecture: "docs/explanation/trinity-architecture.md"
-  core: "docs/human/architecture/trinity-core.md"
+  core: "docs/human/architecture/omega-architecture.md"
   skills: "docs/human/architecture/skills-architecture.md"
 
 skills:

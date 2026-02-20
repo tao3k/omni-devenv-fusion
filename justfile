@@ -365,9 +365,54 @@ rust-check:
     @cargo check --workspace --all-targets
 
 [group('validate')]
+rust-lint-inheritance-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Checking Rust crate lint inheritance..."
+    missing="$(for f in packages/rust/crates/*/Cargo.toml; do if ! rg -q '^\[lints\]' "$f"; then echo "$f"; fi; done)"
+    if [ -n "$missing" ]; then
+        echo "Missing [lints] workspace = true in:"
+        echo "$missing"
+        exit 1
+    fi
+    echo "All Rust crates inherit workspace lint policy."
+
+[group('validate')]
+rust-clippy:
+    @echo "Running Rust clippy baseline (lint-ready crate set, warnings denied)..."
+    @cargo clippy -p omni-types -p omni-events -p omni-tokenizer -p omni-window -p omni-security -p omni-io -p omni-executor -p omni-mcp-client -p omni-ast -p omni-macros -p omni-lance -p omni-scanner -- -D warnings
+
+[group('validate')]
+rust-nextest:
+    @echo "Running Rust tests via cargo-nextest..."
+    @if ! command -v cargo-nextest >/dev/null 2>&1; then \
+        echo "cargo-nextest is required but not installed."; \
+        echo "Install with: nix profile add nixpkgs#cargo-nextest"; \
+        exit 1; \
+    fi
+    @cargo nextest run --workspace --no-fail-fast
+
+[group('validate')]
+rust-quality-gate: rust-lint-inheritance-check rust-check rust-clippy rust-nextest
+    @echo "Rust quality gates passed (check + strict clippy baseline + nextest)."
+
+[group('validate')]
 rust-test-snapshots:
     @echo "Running Rust snapshot contract tests..."
     @cargo test -p omni-vector --test test_fusion_snapshots
+
+# KG cache (xiuxian-wendao) and search cache (omni-vector) unit tests
+[group('validate')]
+rust-test-cache:
+    @echo "Running Rust cache tests (test_kg_cache, test_search_cache)..."
+    @cargo test -p xiuxian-wendao --test test_kg_cache -- --test-threads=1
+    @cargo test -p omni-vector --test test_search_cache -- --test-threads=1
+
+# omni-agent: config, session, MCP, gateway (HTTP 400/404), agent loop
+[group('validate')]
+rust-test-agent:
+    @echo "Running Rust agent tests (omni-agent)..."
+    @cargo test -p omni-agent
 
 # Regenerate Tantivy vs Lance FTS decision report from v4_large snapshot
 # See docs/testing/keyword-backend-decision.md for full loop (snapshots + report).
@@ -388,13 +433,19 @@ keyword-backend-statistical:
 test:
     @echo "TEST PIPELINE"
     @echo "========================================"
-    @echo "[1/3] Rust compile gate"
+    @echo "[1/5] Rust compile gate"
     @just rust-check
     @echo ""
-    @echo "[2/3] Rust snapshot contract gate"
+    @echo "[2/5] Rust snapshot contract gate"
     @just rust-test-snapshots
     @echo ""
-    @echo "[3/3] Python test suites"
+    @echo "[3/5] Rust cache tests (kg_cache, search_cache)"
+    @just rust-test-cache
+    @echo ""
+    @echo "[4/5] Rust agent tests (omni-agent)"
+    @just rust-test-agent
+    @echo ""
+    @echo "[5/5] Python test suites"
     @uv run pytest packages/python/foundation/tests/ packages/python/core/tests/ \
         -v --tb=short
     @echo ""
@@ -422,9 +473,37 @@ test-quick:
         --ignore=tests/unit/test_transport/test_sse.py
 
 [group('validate')]
+ci-local-recall-gates runs="3" warm_runs="1" query="x" limit="2" report_dir=".run/reports/knowledge-recall-perf":
+    @bash scripts/ci-local-recall-gates.sh "{{runs}}" "{{warm_runs}}" "{{query}}" "{{limit}}" "{{report_dir}}"
+
+[group('validate')]
+test-contract-freeze:
+    @bash scripts/ci-contract-freeze.sh
+
+[group('validate')]
+benchmark-wendao-search query="architecture" runs="5" warm_runs="2":
+    @bash scripts/benchmark_wendao_search.sh "{{query}}" "{{runs}}" "{{warm_runs}}" debug no-build
+
+[group('validate')]
+benchmark-wendao-search-build query="architecture" runs="5" warm_runs="2":
+    @bash scripts/benchmark_wendao_search.sh "{{query}}" "{{runs}}" "{{warm_runs}}" debug build
+
+[group('validate')]
+benchmark-wendao-search-release query="architecture" runs="5" warm_runs="2":
+    @bash scripts/benchmark_wendao_search.sh "{{query}}" "{{runs}}" "{{warm_runs}}" release no-build
+
+[group('validate')]
+benchmark-wendao-search-release-build query="architecture" runs="5" warm_runs="2":
+    @bash scripts/benchmark_wendao_search.sh "{{query}}" "{{runs}}" "{{warm_runs}}" release build
+
+[group('validate')]
 test-skills:
     @echo "Running skill tests via omni skill test --all..."
     @uv run omni skill test --all
+
+# Run Rust MCP client integration test (requires MCP server: omni mcp --transport sse --port 3002)
+test-mcp-integration:
+    OMNI_MCP_URL=http://127.0.0.1:3002/sse cargo test -p omni-mcp-client --test streamable_http_integration -- --ignored
 
 [group('validate')]
 test-parallel:
@@ -444,6 +523,18 @@ vulture:
 test-stress:
     @echo "Running stress tests (slow)..."
     @uv run pytest packages/python/agent/tests/stress_tests/ -v
+
+# Contract tests: data interface shape for run_skill, reindex, sync, run_entry (no xdist)
+[group('validate')]
+test-contracts:
+    @echo "Running data interface contract tests..."
+    @uv run pytest packages/python/agent/tests/contracts/ -v --tb=short --override-ini addopts="-v --tb=short"
+
+# Scale benchmarks: in test-kit (run_skill, reindex_status, sync; latency thresholds)
+[group('validate')]
+test-benchmarks:
+    @echo "Running scale benchmarks (omni-test-kit)..."
+    @cd packages/python/test-kit && uv run pytest tests/benchmarks/ -v --tb=short
 
 # ==============================================================================
 # CHANGELOG MANAGEMENT
@@ -955,6 +1046,398 @@ agent-ci: agent-validate
 agent-test: test
 agent-lint: lint
 agent-format: fmt
+
+# ==============================================================================
+# RUST BUILD
+# ==============================================================================
+
+# ==============================================================================
+# TELEGRAM CHANNEL
+# ==============================================================================
+
+# Run Telegram channel in polling mode (no tunnel needed; for local testing).
+# Bootstraps local Valkey automatically before starting the agent.
+# Usage: TELEGRAM_BOT_TOKEN=xxx just agent-channel [valkey_port]
+[group('channel')]
+agent-channel valkey_port="6379":
+    bash scripts/channel/agent-channel-polling.sh "{{valkey_port}}"
+
+# Run Telegram channel in webhook mode via modular script entrypoint.
+# Usage: TELEGRAM_BOT_TOKEN=xxx just agent-channel-webhook [valkey_port]
+# Requires: ngrok installed, TELEGRAM_BOT_TOKEN in env, valkey-server in PATH
+# Note: defaults to verbose debug logs (`--verbose`, `RUST_LOG=omni_agent=debug` when unset).
+# Logs are mirrored to `${OMNI_CHANNEL_LOG_FILE:-.run/logs/omni-agent-webhook.log}` for black-box probes.
+[group('channel')]
+agent-channel-webhook valkey_port="6379":
+    bash scripts/channel/agent-channel-webhook.sh "{{valkey_port}}"
+
+# Black-box probe: inject one synthetic Telegram update into local webhook and wait for bot reply log.
+# Usage: just agent-channel-blackbox "your prompt" [max_wait_secs]
+# Behavior: event-driven by default (no hard timeout when max_wait_secs is omitted).
+# Optional env: OMNI_TEST_CHAT_ID, OMNI_TEST_USER_ID, OMNI_TEST_USERNAME, OMNI_TEST_THREAD_ID, OMNI_WEBHOOK_URL,
+#               OMNI_BLACKBOX_MAX_WAIT_SECS, OMNI_BLACKBOX_MAX_IDLE_SECS
+# Advanced flags (expect/forbid regex, allow-no-bot, fail-fast tuning):
+#   bash scripts/channel/agent-channel-blackbox.sh --help
+# Implementation: Python (`scripts/channel/agent_channel_blackbox.py`) via shell wrapper.
+[group('channel')]
+agent-channel-blackbox prompt max_wait_secs="":
+    if [ -n "{{max_wait_secs}}" ]; then \
+        bash scripts/channel/agent-channel-blackbox.sh --prompt "{{prompt}}" --max-wait "{{max_wait_secs}}"; \
+    else \
+        bash scripts/channel/agent-channel-blackbox.sh --prompt "{{prompt}}"; \
+    fi
+
+# Run strict black-box command matrix with command-level event assertions.
+# Usage: just agent-channel-blackbox-commands [max_wait_secs] [max_idle_secs]
+# Optional env: OMNI_TEST_USERNAME, OMNI_TEST_CHAT_ID, OMNI_TEST_USER_ID, OMNI_TEST_THREAD_ID, OMNI_WEBHOOK_URL
+[group('channel')]
+agent-channel-blackbox-commands max_wait_secs="25" max_idle_secs="25":
+    bash scripts/channel/test-omni-agent-command-events.sh --max-wait "{{max_wait_secs}}" --max-idle-secs "{{max_idle_secs}}"
+
+# Run dedup black-box probe by posting the same update_id twice and asserting accepted/duplicate events.
+# Usage: just agent-channel-blackbox-dedup [max_wait_secs]
+# Optional env: OMNI_TEST_CHAT_ID, OMNI_TEST_USER_ID, OMNI_TEST_USERNAME, OMNI_WEBHOOK_URL
+[group('channel')]
+agent-channel-blackbox-dedup max_wait_secs="25":
+    bash scripts/channel/test-omni-agent-dedup-events.sh --max-wait "{{max_wait_secs}}"
+
+# Run concurrent dual-session black-box probe (same chat, different users).
+# Usage: just agent-channel-blackbox-concurrent [max_wait_secs]
+# Optional env: OMNI_TEST_CHAT_ID, OMNI_TEST_USER_ID, OMNI_TEST_USERNAME, OMNI_WEBHOOK_URL
+[group('channel')]
+agent-channel-blackbox-concurrent max_wait_secs="30":
+    bash scripts/channel/test-omni-agent-concurrent-sessions.sh --max-wait "{{max_wait_secs}}"
+
+# Capture and persist Telegram test-group mappings (for Test1/Test2/Test3 workflows).
+# Usage:
+#   just agent-channel-capture-groups
+#   just agent-channel-capture-groups "Test1,Test2,Test3"
+# Outputs:
+#   .run/config/agent-channel-groups.json
+#   .run/config/agent-channel-groups.env
+[group('channel')]
+agent-channel-capture-groups titles="Test1,Test2,Test3" log_file=".run/logs/omni-agent-webhook.log" output_json=".run/config/agent-channel-groups.json" output_env=".run/config/agent-channel-groups.env" user_id="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(--titles "{{titles}}" --log-file "{{log_file}}" --output-json "{{output_json}}" --output-env "{{output_env}}")
+    if [ -n "{{user_id}}" ]; then
+      args+=(--user-id "{{user_id}}")
+    fi
+    python3 scripts/channel/capture_telegram_group_profile.py "${args[@]}"
+
+# Run end-to-end channel acceptance pipeline and emit one summary report.
+# Pipeline:
+#   capture-groups -> commands -> dedup -> concurrent -> matrix -> complex -> memory-evolution
+# Usage:
+#   just agent-channel-acceptance
+# Reports:
+#   .run/reports/agent-channel-acceptance.json
+#   .run/reports/agent-channel-acceptance.md
+[group('channel')]
+agent-channel-acceptance max_wait_secs="40" max_idle_secs="25" evolution_max_wait_secs="90" evolution_max_idle_secs="60" evolution_max_parallel="4" titles="Test1,Test2,Test3" log_file=".run/logs/omni-agent-webhook.log" output_json=".run/reports/agent-channel-acceptance.json" output_markdown=".run/reports/agent-channel-acceptance.md" retries="2":
+    bash scripts/channel/agent-channel-acceptance.sh "{{max_wait_secs}}" "{{max_idle_secs}}" "{{evolution_max_wait_secs}}" "{{evolution_max_idle_secs}}" "{{evolution_max_parallel}}" "{{titles}}" "{{log_file}}" "{{output_json}}" "{{output_markdown}}" "{{retries}}"
+
+# Run session isolation matrix (concurrent baseline + cross reset/resume validation).
+# Usage: just agent-channel-blackbox-matrix [max_wait_secs] [max_idle_secs]
+# Advanced:
+#   just agent-channel-blackbox-matrix 35 25 "-1002000000001" "-1002000000002" "1001" "1002" "1304799692" "1304799693" "Please reply ok"
+# Reports:
+#   .run/reports/agent-channel-session-matrix.json
+#   .run/reports/agent-channel-session-matrix.md
+[group('channel')]
+agent-channel-blackbox-matrix max_wait_secs="35" max_idle_secs="25" chat_b="" chat_c="" thread_b="" thread_c="" user_b="" user_c="" mixed_plain_prompt="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(--max-wait "{{max_wait_secs}}" --max-idle-secs "{{max_idle_secs}}")
+    if [ -n "{{chat_b}}" ]; then
+      args+=(--chat-b "{{chat_b}}")
+    fi
+    if [ -n "{{chat_c}}" ]; then
+      args+=(--chat-c "{{chat_c}}")
+    fi
+    if [ -n "{{thread_b}}" ]; then
+      args+=(--thread-b "{{thread_b}}")
+    fi
+    if [ -n "{{thread_c}}" ]; then
+      args+=(--thread-c "{{thread_c}}")
+    fi
+    if [ -n "{{user_b}}" ]; then
+      args+=(--user-b "{{user_b}}")
+    fi
+    if [ -n "{{user_c}}" ]; then
+      args+=(--user-c "{{user_c}}")
+    fi
+    if [ -n "{{mixed_plain_prompt}}" ]; then
+      args+=(--mixed-plain-prompt "{{mixed_plain_prompt}}")
+    fi
+    bash scripts/channel/test-omni-agent-session-matrix.sh "${args[@]}"
+
+# Run complex workflow black-box scenarios with dependency-graph complexity gates.
+# Complexity is evaluated by workflow structure:
+#   - step count
+#   - dependency edges
+#   - critical path length
+#   - parallel wave count
+# Usage:
+#   just agent-channel-blackbox-complex
+#   just agent-channel-blackbox-complex "scripts/channel/fixtures/complex_blackbox_scenarios.json" "" 40 30 4 14 14 6 3
+# Reports:
+#   .run/reports/agent-channel-complex-scenarios.json
+#   .run/reports/agent-channel-complex-scenarios.md
+[group('channel')]
+agent-channel-blackbox-complex dataset="scripts/channel/fixtures/complex_blackbox_scenarios.json" scenario="" max_wait_secs="40" max_idle_secs="30" max_parallel="4" execute_wave_parallel="false" min_steps="14" min_dependency_edges="14" min_critical_path="6" min_parallel_waves="3" output_json=".run/reports/agent-channel-complex-scenarios.json" output_markdown=".run/reports/agent-channel-complex-scenarios.md":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(--dataset "{{dataset}}" --max-wait "{{max_wait_secs}}" --max-idle-secs "{{max_idle_secs}}" --max-parallel "{{max_parallel}}" --min-steps "{{min_steps}}" --min-dependency-edges "{{min_dependency_edges}}" --min-critical-path "{{min_critical_path}}" --min-parallel-waves "{{min_parallel_waves}}" --min-error-signals "0" --min-negative-feedback-events "0" --min-correction-checks "0" --min-successful-corrections "0" --min-planned-hits "0" --min-natural-language-steps "0" --output-json "{{output_json}}" --output-markdown "{{output_markdown}}")
+    if [ -n "{{scenario}}" ]; then
+      args+=(--scenario "{{scenario}}")
+    fi
+    if [ "{{execute_wave_parallel}}" = "true" ]; then
+      args+=(--execute-wave-parallel)
+    fi
+    bash scripts/channel/test-omni-agent-complex-scenarios.sh "${args[@]}"
+
+# Run behavior-first memory evolution / self-correction black-box scenario.
+# This suite validates:
+#   - corrected memory persists across delayed turns
+#   - feedback updates are observed in runtime logs
+#   - cross-session distractors do not pollute target session memory
+# Usage:
+#   just agent-channel-blackbox-memory-evolution
+# Reports:
+#   .run/reports/agent-channel-memory-evolution.json
+#   .run/reports/agent-channel-memory-evolution.md
+[group('channel')]
+agent-channel-blackbox-memory-evolution scenario="memory_self_correction_high_complexity_dag" max_wait_secs="80" max_idle_secs="60" max_parallel="4" execute_wave_parallel="false" output_json=".run/reports/agent-channel-memory-evolution.json" output_markdown=".run/reports/agent-channel-memory-evolution.md":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(--dataset "scripts/channel/fixtures/memory_evolution_complex_scenarios.json" --scenario "{{scenario}}" --max-wait "{{max_wait_secs}}" --max-idle-secs "{{max_idle_secs}}" --max-parallel "{{max_parallel}}" --output-json "{{output_json}}" --output-markdown "{{output_markdown}}")
+    if [ "{{execute_wave_parallel}}" = "true" ]; then
+      args+=(--execute-wave-parallel)
+    fi
+    bash scripts/channel/test-omni-agent-complex-scenarios.sh "${args[@]}"
+
+# Restart local MCP SSE server and wait for /health to become ready.
+# Usage:
+#   just mcp-restart
+#   just mcp-restart 127.0.0.1 3002 false 25 .run/omni-mcp-sse.pid .run/logs/omni-mcp-sse.log
+[group('channel')]
+mcp-restart host="127.0.0.1" port="3002" no_embedding="false" health_timeout_secs="25" pid_file=".run/omni-mcp-sse.pid" log_file=".run/logs/omni-mcp-sse.log":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(--host "{{host}}" --port "{{port}}" --health-timeout-secs "{{health_timeout_secs}}" --pid-file "{{pid_file}}" --log-file "{{log_file}}")
+    if [ "{{no_embedding}}" = "true" ]; then
+      args+=(--no-embedding)
+    fi
+    bash scripts/channel/restart-omni-mcp.sh "${args[@]}"
+
+# Stress MCP startup by repeatedly launching omni-agent gateway probes.
+# Usage:
+#   just agent-channel-mcp-startup-stress
+#   just agent-channel-mcp-startup-stress 8 4 50 0.2 ".mcp.json" "http://127.0.0.1:3002/health" "just mcp-restart" 0.2 true
+# Reports:
+#   .run/reports/omni-agent-mcp-startup-stress.json
+#   .run/reports/omni-agent-mcp-startup-stress.md
+[group('channel')]
+agent-channel-mcp-startup-stress rounds="6" parallel="3" startup_timeout_secs="45" cooldown_secs="0.2" mcp_config=".mcp.json" health_url="http://127.0.0.1:3002/health" restart_mcp_cmd="" restart_mcp_settle_secs="2.0" strict_health_check="false" health_probe_interval_secs="0.2" health_probe_timeout_secs="1.0" output_json=".run/reports/omni-agent-mcp-startup-stress.json" output_markdown=".run/reports/omni-agent-mcp-startup-stress.md":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(--rounds "{{rounds}}" --parallel "{{parallel}}" --startup-timeout-secs "{{startup_timeout_secs}}" --cooldown-secs "{{cooldown_secs}}" --mcp-config "{{mcp_config}}" --output-json "{{output_json}}" --output-markdown "{{output_markdown}}" --restart-mcp-settle-secs "{{restart_mcp_settle_secs}}" --health-probe-interval-secs "{{health_probe_interval_secs}}" --health-probe-timeout-secs "{{health_probe_timeout_secs}}")
+    if [ -n "{{health_url}}" ]; then
+      args+=(--health-url "{{health_url}}")
+    fi
+    if [ -n "{{restart_mcp_cmd}}" ]; then
+      args+=(--restart-mcp-cmd "{{restart_mcp_cmd}}")
+    fi
+    if [ "{{strict_health_check}}" = "true" ]; then
+      args+=(--strict-health-check)
+    fi
+    bash scripts/channel/test-omni-agent-mcp-startup-stress.sh "${args[@]}"
+
+# Run MCP startup regression suite (hot + cold start).
+# Usage:
+#   just agent-channel-mcp-startup-suite
+#   just agent-channel-mcp-startup-suite 20 8 8 4 60 0.2 127.0.0.1 3002 ".mcp.json" false false
+#   just agent-channel-mcp-startup-suite 20 8 8 4 60 0.2 127.0.0.1 3002 ".mcp.json" false false 0 1200 1500 "" 0.5 0.5
+# Reports:
+#   .run/reports/omni-agent-mcp-startup-suite.json
+#   .run/reports/omni-agent-mcp-startup-suite.md
+[group('channel')]
+agent-channel-mcp-startup-suite hot_rounds="20" hot_parallel="8" cold_rounds="8" cold_parallel="4" startup_timeout_secs="60" cooldown_secs="0.2" mcp_host="127.0.0.1" mcp_port="3002" mcp_config=".mcp.json" skip_hot="false" skip_cold="false" health_probe_interval_secs="0.2" health_probe_timeout_secs="1.0" quality_max_failed_probes="0" quality_max_hot_p95_ms="1200" quality_max_cold_p95_ms="1500" quality_min_health_samples="1" quality_max_health_failure_rate="0.02" quality_max_health_p95_ms="350" quality_baseline_json="" quality_max_hot_p95_regression_ratio="0.5" quality_max_cold_p95_regression_ratio="0.5":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(--hot-rounds "{{hot_rounds}}" --hot-parallel "{{hot_parallel}}" --cold-rounds "{{cold_rounds}}" --cold-parallel "{{cold_parallel}}" --startup-timeout-secs "{{startup_timeout_secs}}" --cooldown-secs "{{cooldown_secs}}" --mcp-host "{{mcp_host}}" --mcp-port "{{mcp_port}}" --mcp-config "{{mcp_config}}" --health-probe-interval-secs "{{health_probe_interval_secs}}" --health-probe-timeout-secs "{{health_probe_timeout_secs}}" --quality-max-failed-probes "{{quality_max_failed_probes}}" --quality-max-hot-p95-ms "{{quality_max_hot_p95_ms}}" --quality-max-cold-p95-ms "{{quality_max_cold_p95_ms}}" --quality-min-health-samples "{{quality_min_health_samples}}" --quality-max-health-failure-rate "{{quality_max_health_failure_rate}}" --quality-max-health-p95-ms "{{quality_max_health_p95_ms}}" --quality-max-hot-p95-regression-ratio "{{quality_max_hot_p95_regression_ratio}}" --quality-max-cold-p95-regression-ratio "{{quality_max_cold_p95_regression_ratio}}")
+    if [ -n "{{quality_baseline_json}}" ]; then
+      args+=(--quality-baseline-json "{{quality_baseline_json}}")
+    fi
+    if [ "{{skip_hot}}" = "true" ]; then
+      args+=(--skip-hot)
+    fi
+    if [ "{{skip_cold}}" = "true" ]; then
+      args+=(--skip-cold)
+    fi
+    bash scripts/channel/test-omni-agent-mcp-startup-suite.sh "${args[@]}"
+
+# Run memory-focused black-box + regression suite.
+# Usage:
+#   just test-omni-agent-memory-suite
+#   just test-omni-agent-memory-suite full 30 30 tao3k true true redis://127.0.0.1:6379/0 false false false scripts/channel/fixtures/memory_evolution_complex_scenarios.json memory_self_correction_high_complexity_dag 1 "" ""
+[group('channel')]
+test-omni-agent-memory-suite suite="quick" max_wait_secs="25" max_idle_secs="25" username="" require_live_turn="false" with_valkey="false" valkey_url="redis://127.0.0.1:6379/0" skip_blackbox="false" skip_rust="false" skip_evolution="false" evolution_dataset="scripts/channel/fixtures/memory_evolution_complex_scenarios.json" evolution_scenario="memory_self_correction_high_complexity_dag" evolution_max_parallel="1" evolution_output_json="" evolution_output_markdown="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(--suite "{{suite}}" --max-wait "{{max_wait_secs}}" --max-idle-secs "{{max_idle_secs}}")
+    if [ -n "{{username}}" ]; then
+      args+=(--username "{{username}}")
+    fi
+    if [ "{{require_live_turn}}" = "true" ]; then
+      args+=(--require-live-turn)
+    fi
+    if [ "{{with_valkey}}" = "true" ]; then
+      args+=(--with-valkey --valkey-url "{{valkey_url}}")
+    fi
+    if [ "{{skip_blackbox}}" = "true" ]; then
+      args+=(--skip-blackbox)
+    fi
+    if [ "{{skip_rust}}" = "true" ]; then
+      args+=(--skip-rust)
+    fi
+    if [ "{{skip_evolution}}" = "true" ]; then
+      args+=(--skip-evolution)
+    fi
+    if [ -n "{{evolution_dataset}}" ]; then
+      args+=(--evolution-dataset "{{evolution_dataset}}")
+    fi
+    if [ -n "{{evolution_scenario}}" ]; then
+      args+=(--evolution-scenario "{{evolution_scenario}}")
+    fi
+    if [ -n "{{evolution_max_parallel}}" ]; then
+      args+=(--evolution-max-parallel "{{evolution_max_parallel}}")
+    fi
+    if [ -n "{{evolution_output_json}}" ]; then
+      args+=(--evolution-output-json "{{evolution_output_json}}")
+    fi
+    if [ -n "{{evolution_output_markdown}}" ]; then
+      args+=(--evolution-output-markdown "{{evolution_output_markdown}}")
+    fi
+    bash scripts/channel/test-omni-agent-memory-suite.sh "${args[@]}"
+
+# Run memory A/B benchmark suite (baseline vs adaptive feedback).
+# Usage:
+#   just test-omni-agent-memory-benchmark
+#   just test-omni-agent-memory-benchmark baseline 1 60 40 tao3k scripts/channel/fixtures/memory_benchmark_scenarios.json
+[group('channel')]
+test-omni-agent-memory-benchmark mode="both" iterations="1" max_wait_secs="40" max_idle_secs="30" username="" dataset="scripts/channel/fixtures/memory_benchmark_scenarios.json" output_json="" output_markdown="" skip_reset="false" fail_on_mcp_error="false" feedback_policy="deadband" feedback_down_threshold="0.34":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(--iterations "{{iterations}}" --max-wait "{{max_wait_secs}}" --max-idle-secs "{{max_idle_secs}}" --dataset "{{dataset}}" --feedback-policy "{{feedback_policy}}" --feedback-down-threshold "{{feedback_down_threshold}}")
+    if [ -n "{{username}}" ]; then
+      args+=(--username "{{username}}")
+    fi
+    if [ "{{mode}}" = "baseline" ]; then
+      args+=(--mode baseline)
+    elif [ "{{mode}}" = "adaptive" ]; then
+      args+=(--mode adaptive)
+    elif [ "{{mode}}" != "both" ]; then
+      echo "invalid mode: {{mode}} (expected: both|baseline|adaptive)" >&2
+      exit 2
+    fi
+    if [ -n "{{output_json}}" ]; then
+      args+=(--output-json "{{output_json}}")
+    fi
+    if [ -n "{{output_markdown}}" ]; then
+      args+=(--output-markdown "{{output_markdown}}")
+    fi
+    if [ "{{skip_reset}}" = "true" ]; then
+      args+=(--skip-reset)
+    fi
+    if [ "{{fail_on_mcp_error}}" = "true" ]; then
+      args+=(--fail-on-mcp-error)
+    fi
+    bash scripts/channel/test-omni-agent-memory-benchmark.sh "${args[@]}"
+
+# Aggregate evolution + benchmark + session matrix into one SLO gate report.
+# Usage:
+#   just test-omni-agent-memory-slo-report
+#   just test-omni-agent-memory-slo-report .run/reports/omni-agent-memory-evolution.json .run/reports/omni-agent-memory-benchmark.json .run/reports/agent-channel-session-matrix.json .run/logs/omni-agent-webhook.log true
+[group('channel')]
+test-omni-agent-memory-slo-report evolution_report_json=".run/reports/omni-agent-memory-evolution.json" benchmark_report_json=".run/reports/omni-agent-memory-benchmark.json" session_matrix_report_json=".run/reports/agent-channel-session-matrix.json" runtime_log_file="" enable_stream_gate="false" output_json=".run/reports/omni-agent-memory-slo-report.json" output_markdown=".run/reports/omni-agent-memory-slo-report.md":
+    bash scripts/channel/test-omni-agent-memory-slo-report.sh "{{evolution_report_json}}" "{{benchmark_report_json}}" "{{session_matrix_report_json}}" "{{runtime_log_file}}" "{{enable_stream_gate}}" "{{output_json}}" "{{output_markdown}}"
+
+# Start local Valkey daemon for webhook dedup / stress tests.
+# Usage: just valkey-start [port]
+[group('channel')]
+valkey-start port="6379":
+    bash scripts/channel/valkey-start.sh "{{port}}"
+
+# Stop local Valkey daemon started by `just valkey-start`.
+# Usage: just valkey-stop [port]
+[group('channel')]
+valkey-stop port="6379":
+    bash scripts/channel/valkey-stop.sh "{{port}}"
+
+# Show local Valkey status for a given port.
+# Usage: just valkey-status [port]
+[group('channel')]
+valkey-status port="6379":
+    bash scripts/channel/valkey-status.sh "{{port}}"
+
+# Run ignored omni-agent stress tests that require live Valkey.
+# Usage: just test-omni-agent-valkey-stress [valkey_url]
+[group('channel')]
+test-omni-agent-valkey-stress valkey_url="redis://127.0.0.1:6379/0":
+    bash scripts/channel/test-omni-agent-valkey-stress.sh "{{valkey_url}}"
+
+# Run focused distributed SessionGate verification against live Valkey.
+# Usage: just test-omni-agent-valkey-session-gate [valkey_url]
+[group('channel')]
+test-omni-agent-valkey-session-gate valkey_url="redis://127.0.0.1:6379/0":
+    bash scripts/channel/test-omni-agent-valkey-session-gate.sh "{{valkey_url}}"
+
+# Run focused cross-instance session-context restore verification against live Valkey.
+# Usage: just test-omni-agent-valkey-session-context [valkey_url]
+[group('channel')]
+test-omni-agent-valkey-session-context valkey_url="redis://127.0.0.1:6379/0":
+    bash scripts/channel/test-omni-agent-valkey-session-context.sh "{{valkey_url}}"
+
+# Run focused multi-HTTP Valkey dedup verification.
+# Usage: just test-omni-agent-valkey-multi-http [valkey_url]
+[group('channel')]
+test-omni-agent-valkey-multi-http valkey_url="redis://127.0.0.1:6379/0":
+    bash scripts/channel/test-omni-agent-valkey-multi-http.sh "{{valkey_url}}"
+
+# Run focused multi-process Valkey dedup verification.
+# Usage: just test-omni-agent-valkey-multi-process [valkey_url]
+[group('channel')]
+test-omni-agent-valkey-multi-process valkey_url="redis://127.0.0.1:6379/0":
+    bash scripts/channel/test-omni-agent-valkey-multi-process.sh "{{valkey_url}}"
+
+# Run full live Valkey webhook verification suite
+# (stress + distributed session gate + session-context + multi-http + multi-process).
+# Usage: just test-omni-agent-valkey-full [valkey_url]
+[group('channel')]
+test-omni-agent-valkey-full valkey_url="redis://127.0.0.1:6379/0":
+    bash scripts/channel/test-omni-agent-valkey-full.sh "{{valkey_url}}"
+
+# Validate observability event sequence from a captured agent log file.
+# Usage:
+#   just check-omni-agent-event-sequence <log_file>
+#   just check-omni-agent-event-sequence <log_file> true true valkey
+[group('channel')]
+check-omni-agent-event-sequence log_file strict="false" require_memory="false" expect_memory_backend="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=()
+    if [ "{{strict}}" = "true" ]; then
+      args+=(--strict)
+    fi
+    if [ "{{require_memory}}" = "true" ]; then
+      args+=(--require-memory)
+    fi
+    if [ -n "{{expect_memory_backend}}" ]; then
+      args+=(--expect-memory-backend "{{expect_memory_backend}}")
+    fi
+    bash scripts/channel/check-omni-agent-event-sequence.sh "{{log_file}}" "${args[@]}"
 
 # ==============================================================================
 # RUST BUILD

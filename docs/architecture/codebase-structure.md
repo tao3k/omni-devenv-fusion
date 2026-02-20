@@ -2,7 +2,9 @@
 
 > Complete architectural documentation of the Omni-Dev-Fusion project
 > Trinity Architecture with Python Trinity (Foundation, Core, MCP-Server) + Rust Crates
-> Last Updated: 2026-01-20
+> Last Updated: 2026-02-15
+
+**See also**: [Architecture by Package Storage](packages-storage.md) — architecture driven by the actual `packages/` directory layout (paths, modules, and dependency flow).
 
 ---
 
@@ -74,7 +76,7 @@ Omni-Dev-Fusion is an AI-powered development environment that unifies multiple t
 omni-dev-fusion/
 ├── assets/                          # Core assets (skills, configs, templates)
 │   ├── skills/                      # 21 Zero-Code skills
-│   ├── settings.yaml                # Central configuration
+│   ├── settings.yaml                # Central config (system: packages/conf/settings.yaml; user override)
 │   ├── prompts/                     # LLM prompts
 │   ├── templates/                   # File templates
 │   ├── knowledge/                   # RAG knowledge base
@@ -114,18 +116,25 @@ omni-dev-fusion/
 │   │   └── agent/                   # Agent implementation
 │   │
 │   └── rust/                        # Rust crates
-│       ├── crates/                  # 11 Rust crates
+│       ├── crates/                  # 19 Rust crates
 │       │   ├── omni-ast/            # AST utilities
 │       │   ├── omni-edit/           # Structural refactoring
+│       │   ├── omni-events/         # Event topics
+│       │   ├── omni-executor/       # Nushell/OmniCell
 │       │   ├── omni-io/             # File I/O
+│       │   ├── xiuxian-wendao/      # Knowledge graph, LinkGraph
 │       │   ├── omni-lance/          # LanceDB utilities
+│       │   ├── omni-macros/         # Procedural macros
+│       │   ├── omni-memory/         # Episode store, Q-table
+│       │   ├── omni-sandbox/        # Nickel sandbox
+│       │   ├── omni-scanner/        # Skill directory scanning
 │       │   ├── omni-security/       # Secret scanning
 │       │   ├── omni-sniffer/        # Environment sniffer
 │       │   ├── omni-tags/           # Symbol extraction
 │       │   ├── omni-tokenizer/      # Token counting
+│       │   ├── omni-tui/            # TUI support
 │       │   ├── omni-types/          # Common types
-│       │   ├── omni-vector/         # Vector database
-│       │   └── skills-scanner/      # Skill scanning
+│       │   └── omni-vector/         # Vector database
 │       │
 │       └── bindings/
 │           └── python/              # PyO3 Python bindings
@@ -173,11 +182,10 @@ omni/foundation/
 │   ├── __init__.py                 # Bridge exports
 │   ├── interfaces.py               # Protocol definitions (VectorStoreProvider, etc.)
 │   ├── types.py                    # Bridge type definitions
-│   ├── rust_impl.py                # Rust implementation wrapper
 │   ├── rust_analyzer.py            # Rust code analyzer bindings
 │   ├── rust_scanner.py             # Rust file scanner bindings
 │   ├── rust_vector.py              # Rust vector store bindings
-│   └── scanner.py                  # Scanner interface
+│   └── tool_record_validation.py   # Tool record validation
 │
 ├── config/                         # Configuration management
 │   ├── __init__.py
@@ -187,7 +195,10 @@ omni/foundation/
 │   ├── dirs.py                     # PRJ_DIRS, PRJ_DATA, PRJ_CACHE
 │   ├── logging.py                  # configure_logging()
 │   ├── skills.py                   # Skills-related config
-│   └── config_paths.py             # Config path utilities
+│   ├── database.py                 # Database config
+│   ├── prj.py                      # PRJ_DATA, PRJ_CACHE, etc.
+│   ├── link_graph.py               # Link graph notebook/config path resolver
+│   └── link_graph_runtime.py       # Link graph runtime defaults and settings
 │
 ├── runtime/                        # Runtime operations
 │   ├── __init__.py
@@ -209,25 +220,17 @@ omni/foundation/
 │   │   └── inference.py            # Inference utilities
 │   │
 │   ├── embedding.py                # Embedding service
-│   ├── vector_store.py             # Vector store service
+│   ├── vector/                      # Vector store service (store, crud, search, hybrid)
+│   │   ├── __init__.py
+│   │   ├── store.py
+│   │   ├── crud.py
+│   │   ├── search.py
+│   │   └── hybrid.py
 │   │
 │   └── memory/                     # Memory service
 │       ├── __init__.py
 │       ├── base.py                 # Memory base class
-│       └── vector.py               # Vector memory implementation
-│
-├── mcp_core/                       # MCP core functionality
-│   ├── __init__.py
-│   ├── api/                        # API utilities
-│   ├── context/                    # Context management
-│   ├── inference/                  # Inference services
-│   ├── instructions/               # Instruction loading
-│   ├── lazy_cache/                 # Caching system
-│   ├── memory/                     # Memory management
-│   ├── protocol.py                 # Protocol definitions
-│   ├── reference_library.py        # Reference library
-│   ├── rich_utils.py               # Rich terminal utilities
-│   └── utils/                      # Utility functions
+│       └── stores/                 # LanceDB-backed store
 │
 └── utils/                          # Utility modules
     ├── __init__.py
@@ -284,28 +287,25 @@ omni/core/
 ├── router/                         # Semantic Routing (The Cortex)
 │   ├── __init__.py                 # OmniRouter, HiveRouter, IntentSniffer exports
 │   ├── main.py                     # OmniRouter - unified router facade
-│   ├── router.py                   # SemanticRouter, FallbackRouter, UnifiedRouter
+│   ├── router.py                   # SemanticRouter, UnifiedRouter
 │   ├── hive.py                     # HiveRouter - multi-hive routing strategy
+│   ├── hybrid_search.py            # HybridSearch (Rust vector + Tantivy)
 │   ├── cache.py                    # Router caching
-│   ├── indexer.py                  # SkillIndexer - builds semantic index
+│   ├── indexer.py                  # Router indexer (semantic index)
 │   ├── sniffer.py                  # IntentSniffer - context detection
-│   ├── models.py                   # Router models
-│   └── semantic/                   # Semantic routing
-│       ├── __init__.py
-│       ├── cortex.py               # Semantic cortex
-│       ├── fallback.py             # Fallback router
-│       └── router.py               # Semantic router implementation
+│   ├── config.py                   # Router config
+│   └── query_normalizer.py        # Query normalization
 │
 ├── skills/                         # Skills System
 │   ├── __init__.py                 # All skill exports
-│   ├── discovery.py                # SkillDiscoveryService, DiscoveredSkill
-│   ├── registry.py                 # SkillRegistry - skill metadata management
-│   ├── runtime.py                  # SkillContext, SkillManager - execution context
-│   ├── memory.py                   # SkillMemory - skill memory management
-│   ├── script_loader.py            # ScriptLoader, skill_command decorator
-│   ├── universal.py                # UniversalScriptSkill - Zero-Code skill container
+│   ├── discovery.py                # SkillDiscoveryService (uses omni-scanner)
+│   ├── indexer.py                  # SkillIndexer - embed → vector store
+│   ├── state.py                    # SkillContext - in-memory skill registry
+│   ├── runner.py                   # run_skill (fast path / kernel path)
+│   ├── universal.py                # UniversalScriptSkill, UniversalSkillFactory
 │   ├── structure.py                # Skill structure definitions
-│   ├── state.py                    # Skill state management
+│   ├── tools_loader.py             # Tool schema loading
+│   ├── memory.py                   # SkillMemory - skill memory management
 │   │
 │   ├── extensions/                 # Extension loading system
 │   │   ├── __init__.py
@@ -323,8 +323,10 @@ omni/core/
 │   │       ├── loader.py
 │   │       └── decorators.py
 │   │
-│   └── registry/                   # Skill registry (per-skill storage)
-│       └── __init__.py
+│   ├── registry/                   # HolographicRegistry (LanceDB-backed tool list)
+│   │   └── holographic.py
+│   └── runtime/                    # OmniCell, Nushell executor
+│       └── omni_cell.py
 │
 └── knowledge/                      # Knowledge management
     ├── __init__.py
@@ -333,12 +335,13 @@ omni/core/
 
 #### Key Modules
 
-| Module                    | Purpose            | Key Exports                     |
-| ------------------------- | ------------------ | ------------------------------- |
-| `kernel/engine.py`        | Microkernel engine | `Kernel`                        |
-| `router/main.py`          | Unified router     | `OmniRouter`                    |
-| `skills/discovery.py`     | Skill discovery    | `SkillDiscoveryService`         |
-| `skills/script_loader.py` | Script loading     | `ScriptLoader`, `skill_command` |
+| Module                | Purpose            | Key Exports                                 |
+| --------------------- | ------------------ | ------------------------------------------- |
+| `kernel/engine.py`    | Microkernel engine | `Kernel`                                    |
+| `router/main.py`      | Unified router     | `OmniRouter`                                |
+| `skills/discovery.py` | Skill discovery    | `SkillDiscoveryService` (Rust omni-scanner) |
+| `skills/state.py`     | Skill context      | `SkillContext`                              |
+| `skills/runner.py`    | Skill execution    | `run_skill`                                 |
 
 ---
 
@@ -397,15 +400,22 @@ For detailed Rust crate documentation, see [Rust Crates](rust-crates.md).
 packages/rust/crates/
 ├── omni-ast/              # Unified AST utilities using ast-grep
 ├── omni-edit/             # Structural refactoring (The Surgeon)
+├── omni-events/           # Event topics (file_changed, agent_think, etc.)
+├── omni-executor/         # Nushell/OmniCell
 ├── omni-io/               # File I/O utilities with encoding detection
+├── xiuxian-wendao/        # Knowledge graph, LinkGraph, dependency index
 ├── omni-lance/            # LanceDB RecordBatch utilities
+├── omni-macros/           # Procedural macros
+├── omni-memory/           # Episode store, Q-table, two-phase search
+├── omni-sandbox/          # Nickel sandbox executor
+├── omni-scanner/          # Skill directory scanning (replaces legacy skills-scanner)
 ├── omni-security/         # High-performance secret scanning
 ├── omni-sniffer/          # Environment sniffer (Git + scratchpad)
 ├── omni-tags/             # Code symbol extraction (The Cartographer)
 ├── omni-tokenizer/        # Token counting (tiktoken)
+├── omni-tui/              # TUI support
 ├── omni-types/            # Common type definitions
-├── omni-vector/           # High-Performance Vector Database (LanceDB)
-└── skills-scanner/        # Modular skill directory scanning
+└── omni-vector/           # High-Performance Vector Database (LanceDB)
 ```
 
 ---
@@ -527,13 +537,14 @@ assets/skills/
 
 ### Core Configuration
 
-| File                          | Purpose                                                                        |
-| ----------------------------- | ------------------------------------------------------------------------------ |
-| `packages/conf/settings.yaml` | System defaults (merged with `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml`) |
-| `pyproject.toml`              | Python project configuration (uv workspace, ruff, mypy)                        |
-| `Cargo.toml`                  | Rust workspace configuration (11 crates)                                       |
-| `justfile`                    | Task automation (build, test, lint commands)                                   |
-| `.mcp.json`                   | MCP server configuration                                                       |
+| File                          | Purpose                                                                                |
+| ----------------------------- | -------------------------------------------------------------------------------------- |
+| `packages/conf/settings.yaml` | System defaults (merged with `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml`)         |
+| `packages/conf/wendao.yaml`   | LinkGraph/Wendao defaults (merged with `$PRJ_CONFIG_HOME/omni-dev-fusion/wendao.yaml`) |
+| `pyproject.toml`              | Python project configuration (uv workspace, ruff, mypy)                                |
+| `Cargo.toml`                  | Rust workspace configuration (19 crates)                                               |
+| `justfile`                    | Task automation (build, test, lint commands)                                           |
+| `.mcp.json`                   | MCP server configuration                                                               |
 
 ### Git Configuration
 

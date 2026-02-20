@@ -70,7 +70,7 @@ impl Default for SecurityConfig {
     }
 }
 
-/// SecurityScanner - AST-based security analysis
+/// `SecurityScanner` - AST-based security analysis.
 ///
 /// Uses ast-grep for pattern matching and custom analysis
 /// to detect dangerous code patterns in Python skills.
@@ -81,6 +81,7 @@ pub struct SecurityScanner {
 
 impl SecurityScanner {
     /// Create a new scanner with default security rules
+    #[must_use]
     pub fn new() -> Self {
         Self {
             config: SecurityConfig::default(),
@@ -88,6 +89,7 @@ impl SecurityScanner {
     }
 
     /// Create a scanner with custom configuration
+    #[must_use]
     pub fn with_config(config: SecurityConfig) -> Self {
         Self { config }
     }
@@ -96,32 +98,30 @@ impl SecurityScanner {
     ///
     /// Returns Ok(()) if code passes all security checks.
     /// Returns Err(SecurityViolation) if a violation is found.
+    ///
+    /// # Errors
+    /// Returns the first detected violation.
     pub fn scan(&self, code: &str) -> Result<(), SecurityViolation> {
         // Check for forbidden imports using pattern matching
-        if let Err(v) = self.check_forbidden_imports(code) {
-            return Err(v);
-        }
+        self.check_forbidden_imports(code)?;
 
         // Check for dangerous function calls
-        if let Err(v) = self.check_forbidden_calls(code) {
-            return Err(v);
-        }
+        self.check_forbidden_calls(code)?;
 
         // Check for suspicious patterns
-        if let Err(v) = self.check_suspicious_patterns(code) {
-            return Err(v);
-        }
+        Self::check_suspicious_patterns(code)?;
 
         Ok(())
     }
 
     /// Scan and return all violations (non-fail-fast)
+    #[must_use]
     pub fn scan_all(&self, code: &str) -> Vec<SecurityViolation> {
         let mut violations = Vec::new();
 
         violations.extend(self.check_forbidden_imports_all(code));
         violations.extend(self.check_forbidden_calls_all(code));
-        violations.extend(self.check_suspicious_patterns_all(code));
+        violations.extend(Self::check_suspicious_patterns_all(code));
 
         violations
     }
@@ -133,53 +133,49 @@ impl SecurityScanner {
 
         for forbidden in &self.config.forbidden_imports {
             // Check: `import <forbidden>`
-            let pattern = format!("import {}", forbidden);
-            if let Ok(matches) = scan(code, &pattern, crate::Lang::Python) {
-                if let Some(first_match) = matches.first() {
-                    let (line, snippet) = self.extract_line_info(code, first_match.start);
-                    violations.push(SecurityViolation {
-                        rule_id: format!(
-                            "SEC-IMPORT-{:03}",
-                            self.config
-                                .forbidden_imports
-                                .iter()
-                                .position(|&x| x == *forbidden)
-                                .unwrap_or(0)
-                                + 1
-                        ),
-                        description: format!(
-                            "Forbidden import: '{}' is not allowed in skills",
-                            forbidden
-                        ),
-                        line,
-                        snippet,
-                    });
-                }
+            let pattern = format!("import {forbidden}");
+            if let Ok(matches) = scan(code, &pattern, crate::Lang::Python)
+                && let Some(first_match) = matches.first()
+            {
+                let (line, snippet) = Self::extract_line_info(code, first_match.start);
+                violations.push(SecurityViolation {
+                    rule_id: format!(
+                        "SEC-IMPORT-{:03}",
+                        self.config
+                            .forbidden_imports
+                            .iter()
+                            .position(|&x| x == *forbidden)
+                            .unwrap_or(0)
+                            + 1
+                    ),
+                    description: format!(
+                        "Forbidden import: '{forbidden}' is not allowed in skills"
+                    ),
+                    line,
+                    snippet,
+                });
             }
 
             // Check: `from <forbidden> import ...`
-            let pattern = format!("from {} import", forbidden);
-            if let Ok(matches) = scan(code, &pattern, crate::Lang::Python) {
-                if let Some(first_match) = matches.first() {
-                    let (line, snippet) = self.extract_line_info(code, first_match.start);
-                    violations.push(SecurityViolation {
-                        rule_id: format!(
-                            "SEC-IMPORT-{:03}",
-                            self.config
-                                .forbidden_imports
-                                .iter()
-                                .position(|&x| x == *forbidden)
-                                .unwrap_or(0)
-                                + 1
-                        ),
-                        description: format!(
-                            "Forbidden import from: '{}' is not allowed",
-                            forbidden
-                        ),
-                        line,
-                        snippet,
-                    });
-                }
+            let pattern = format!("from {forbidden} import");
+            if let Ok(matches) = scan(code, &pattern, crate::Lang::Python)
+                && let Some(first_match) = matches.first()
+            {
+                let (line, snippet) = Self::extract_line_info(code, first_match.start);
+                violations.push(SecurityViolation {
+                    rule_id: format!(
+                        "SEC-IMPORT-{:03}",
+                        self.config
+                            .forbidden_imports
+                            .iter()
+                            .position(|&x| x == *forbidden)
+                            .unwrap_or(0)
+                            + 1
+                    ),
+                    description: format!("Forbidden import from: '{forbidden}' is not allowed"),
+                    line,
+                    snippet,
+                });
             }
         }
 
@@ -192,25 +188,25 @@ impl SecurityScanner {
         let mut violations = Vec::new();
 
         for forbidden in &self.config.forbidden_calls {
-            let pattern = format!("{}($ARGS)", forbidden);
-            if let Ok(matches) = scan(code, &pattern, crate::Lang::Python) {
-                if let Some(first_match) = matches.first() {
-                    let (line, snippet) = self.extract_line_info(code, first_match.start);
-                    violations.push(SecurityViolation {
-                        rule_id: format!(
-                            "SEC-CALL-{:03}",
-                            self.config
-                                .forbidden_calls
-                                .iter()
-                                .position(|&x| x == *forbidden)
-                                .unwrap_or(0)
-                                + 1
-                        ),
-                        description: format!("Dangerous call: '{}()' is not allowed", forbidden),
-                        line,
-                        snippet,
-                    });
-                }
+            let pattern = format!("{forbidden}($ARGS)");
+            if let Ok(matches) = scan(code, &pattern, crate::Lang::Python)
+                && let Some(first_match) = matches.first()
+            {
+                let (line, snippet) = Self::extract_line_info(code, first_match.start);
+                violations.push(SecurityViolation {
+                    rule_id: format!(
+                        "SEC-CALL-{:03}",
+                        self.config
+                            .forbidden_calls
+                            .iter()
+                            .position(|&x| x == *forbidden)
+                            .unwrap_or(0)
+                            + 1
+                    ),
+                    description: format!("Dangerous call: '{forbidden}()' is not allowed"),
+                    line,
+                    snippet,
+                });
             }
         }
 
@@ -218,7 +214,7 @@ impl SecurityScanner {
     }
 
     /// Check for suspicious patterns and return all violations
-    fn check_suspicious_patterns_all(&self, code: &str) -> Vec<SecurityViolation> {
+    fn check_suspicious_patterns_all(code: &str) -> Vec<SecurityViolation> {
         use crate::scan;
         let mut violations = Vec::new();
 
@@ -232,16 +228,16 @@ impl SecurityScanner {
         ];
 
         for (pattern, description) in suspicious {
-            if let Ok(matches) = scan(code, pattern, crate::Lang::Python) {
-                if let Some(first_match) = matches.first() {
-                    let (line, snippet) = self.extract_line_info(code, first_match.start);
-                    violations.push(SecurityViolation {
-                        rule_id: "SEC-PATTERN-001".to_string(),
-                        description: description.to_string(),
-                        line,
-                        snippet,
-                    });
-                }
+            if let Ok(matches) = scan(code, pattern, crate::Lang::Python)
+                && let Some(first_match) = matches.first()
+            {
+                let (line, snippet) = Self::extract_line_info(code, first_match.start);
+                violations.push(SecurityViolation {
+                    rule_id: "SEC-PATTERN-001".to_string(),
+                    description: description.to_string(),
+                    line,
+                    snippet,
+                });
             }
         }
 
@@ -267,8 +263,8 @@ impl SecurityScanner {
     }
 
     /// Check for suspicious patterns (first violation only)
-    fn check_suspicious_patterns(&self, code: &str) -> Result<(), SecurityViolation> {
-        let violations = self.check_suspicious_patterns_all(code);
+    fn check_suspicious_patterns(code: &str) -> Result<(), SecurityViolation> {
+        let violations = Self::check_suspicious_patterns_all(code);
         if let Some(v) = violations.into_iter().next() {
             return Err(v);
         }
@@ -279,7 +275,7 @@ impl SecurityScanner {
     ///
     /// Uses the match's byte offset from ast-grep to accurately locate
     /// the violation in the source code.
-    fn extract_line_info(&self, code: &str, byte_pos: usize) -> (usize, String) {
+    fn extract_line_info(code: &str, byte_pos: usize) -> (usize, String) {
         // Count lines up to the byte position
         let line_number = code[..byte_pos.min(code.len())].lines().count();
 

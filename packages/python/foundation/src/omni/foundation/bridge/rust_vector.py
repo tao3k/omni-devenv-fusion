@@ -7,8 +7,10 @@ Provides high-performance semantic search capabilities.
 
 from __future__ import annotations
 
+import atexit
 import asyncio
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor
 from functools import cached_property
 from typing import Any
@@ -20,6 +22,18 @@ from .types import FileContent, IngestResult
 # Thread pool for blocking embedding operations (prevents event loop blocking)
 _EMBEDDING_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="embedding")
 
+
+def _shutdown_embedding_executor() -> None:
+    """Shutdown executor on process exit. Mark threads daemon so they don't block exit."""
+    threads = getattr(_EMBEDDING_EXECUTOR, "_threads", None)
+    if threads:
+        for t in threads:
+            t.daemon = True
+    _EMBEDDING_EXECUTOR.shutdown(wait=False)
+
+
+atexit.register(_shutdown_embedding_executor)
+
 try:
     import omni_core_rs as _rust
 
@@ -30,9 +44,11 @@ except ImportError:
 
 logger = get_logger("omni.bridge.vector")
 
-# Bounded defaults when settings.yaml has null (avoids unbounded LanceDB cache growth in long-lived MCP)
+# Bounded defaults when settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) have null (avoids unbounded LanceDB cache growth in long-lived MCP)
 _DEFAULT_INDEX_CACHE_BYTES = 256 * 1024 * 1024  # 256 MiB
 _DEFAULT_MAX_CACHED_TABLES = 8
+_SKILL_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+_CANONICAL_TOOL_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$")
 
 
 def _list_of_dicts_to_table(rows: list[dict[str, Any]]) -> Any:
@@ -90,7 +106,7 @@ def _rerank_enabled() -> bool:
     """Resolve rerank flag from unified search settings."""
     from omni.foundation.config.settings import get_setting
 
-    return bool(get_setting("router.search.rerank"))
+    return bool(get_setting("router.search.rerank", True))
 
 
 class RustVectorStore:
@@ -109,10 +125,10 @@ class RustVectorStore:
         Args:
             index_path: Path to the vector index/database. Defaults to get_vector_db_path()
             dimension: Vector dimension. If None, uses get_effective_embedding_dimension()
-                (which considers truncate_dim from settings.yaml).
+                (which considers truncate_dim from settings).
             enable_keyword_index: Enable Tantivy keyword index for BM25 search
             index_cache_size_bytes: Optional LanceDB index cache size in bytes.
-                If None, falls back to settings.yaml vector.index_cache_size_bytes.
+                If None, falls back to settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml) vector.index_cache_size_bytes.
             max_cached_tables: Optional cap on in-memory dataset cache (LRU eviction when exceeded).
                 Phase 2: use e.g. 2 or 4 for memory-constrained or many-table setups.
         """
@@ -133,7 +149,7 @@ class RustVectorStore:
 
             index_path = str(get_vector_db_path())
 
-        # Index cache: explicit arg overrides settings.yaml. Use bounded default when null to avoid MCP memory growth.
+        # Index cache: explicit arg overrides settings. Use bounded default when null to avoid MCP memory growth.
         if index_cache_size_bytes is None:
             from omni.foundation.config.settings import get_setting
 
@@ -581,6 +597,24 @@ class RustVectorStore:
             logger.error(f"Delete by file path failed: {e}")
             raise
 
+    def delete_by_metadata_source(self, table_name: str, source: str) -> int:
+        """Delete rows whose metadata.source equals or ends with source.
+
+        Used for idempotent ingest: delete existing chunks before re-ingesting.
+
+        Args:
+            table_name: Name of the table (e.g. knowledge_chunks)
+            source: Source string to match (e.g. document path)
+
+        Returns:
+            Number of rows deleted.
+        """
+        try:
+            return int(self._inner.delete_by_metadata_source(table_name, source))
+        except Exception as e:
+            logger.error("Delete by metadata source failed: %s", e)
+            raise
+
     async def create_index(
         self,
         name: str,
@@ -754,19 +788,97 @@ class RustVectorStore:
             logger.debug(f"auto_index_if_needed failed: {e}")
             raise
 
+    def _flatten_list_all_entry(self, entry: dict[str, Any]) -> dict[str, Any]:
+        """Thin flatten: promote metadata to top-level. No inference - Rust is source of truth."""
+        meta = entry.get("metadata")
+        if not isinstance(meta, dict):
+            return entry
+        out = {k: v for k, v in entry.items() if k != "metadata"}
+        for key in ("skill_name", "tool_name", "file_path", "category", "description"):
+            if key not in out or (not out.get(key) and meta.get(key)):
+                out[key] = meta.get(key, out.get(key))
+        if not out.get("description") and out.get("content"):
+            out["description"] = out["content"]
+        return out
+
+    @staticmethod
+    def _is_valid_skill_name(value: str) -> bool:
+        """Validate public skill name format."""
+        return bool(_SKILL_NAME_PATTERN.fullmatch(value))
+
+    @staticmethod
+    def _is_valid_canonical_tool_name(value: str) -> bool:
+        """Validate canonical tool id format (skill.command)."""
+        return bool(_CANONICAL_TOOL_NAME_PATTERN.fullmatch(value))
+
+    def _normalize_list_all_tool_entry(self, entry: dict[str, Any]) -> dict[str, Any] | None:
+        """Normalize one raw Lance row to canonical command record.
+
+        Keep only command rows and return canonical `skill_name` / `tool_name`.
+        """
+        flat = self._flatten_list_all_entry(entry)
+        meta = entry.get("metadata") if isinstance(entry.get("metadata"), dict) else {}
+        record_type = str(meta.get("type") or "").strip().lower()
+        if record_type and record_type != "command":
+            return None
+
+        row_id = str(flat.get("id") or "").strip()
+        skill_name = str(flat.get("skill_name") or "").strip()
+        tool_name = str(flat.get("tool_name") or "").strip()
+
+        canonical = ""
+        if self._is_valid_canonical_tool_name(tool_name):
+            canonical = tool_name
+        elif self._is_valid_skill_name(skill_name):
+            candidate = f"{skill_name}.{tool_name}" if tool_name else ""
+            if self._is_valid_canonical_tool_name(candidate):
+                canonical = candidate
+        elif self._is_valid_canonical_tool_name(row_id):
+            canonical = row_id
+
+        if not canonical:
+            return None
+
+        normalized_skill = canonical.split(".", 1)[0]
+        # Internal/private skills are not exposed as public command tools.
+        if normalized_skill.startswith("_"):
+            return None
+
+        flat["skill_name"] = normalized_skill
+        flat["tool_name"] = canonical
+        if not flat.get("description") and flat.get("content"):
+            flat["description"] = flat["content"]
+        return flat
+
     def list_all_tools(self) -> list[dict]:
         """List all tools from LanceDB.
 
-        Returns tools with: name, description, skill_name, category, input_schema.
+        Returns tools with: id, content, skill_name, tool_name, file_path, category, description.
+        Flattens metadata to top-level for discovery compatibility.
 
         Returns:
             List of tool dictionaries, or empty list if table doesn't exist.
         """
         try:
-            json_result = self._inner.list_all_tools(self._default_table_name())
-            tools = json.loads(json_result) if json_result else []
+            from omni.foundation.bridge.tool_record_validation import (
+                ToolRecordValidationError,
+                validate_tool_records,
+            )
+
+            json_result = self._inner.list_all_tools(self._default_table_name(), None)
+            raw = json.loads(json_result) if json_result else []
+            tools: list[dict[str, Any]] = []
+            for record in raw:
+                if not isinstance(record, dict):
+                    continue
+                normalized = self._normalize_list_all_tool_entry(record)
+                if normalized is not None:
+                    tools.append(normalized)
+            validate_tool_records(tools)
             logger.debug(f"Listed {len(tools)} tools from LanceDB")
             return tools
+        except ToolRecordValidationError:
+            raise
         except Exception as e:
             logger.debug(f"Failed to list tools from LanceDB: {e}")
             return []
@@ -818,17 +930,21 @@ class RustVectorStore:
         """
         return self.get_skill_index_sync(base_path)
 
-    async def list_all(self, table_name: str = "knowledge") -> list[dict]:
+    async def list_all(
+        self, table_name: str = "knowledge", source_filter: str | None = None
+    ) -> list[dict]:
         """List all entries from a table.
 
         Args:
             table_name: Name of the table to list (default: "knowledge")
+            source_filter: When set (e.g. "2601.03192.pdf"), only rows with metadata.source
+                containing this string are returned (Rust predicate pushdown, ~98% I/O reduction).
 
         Returns:
             List of entry dictionaries with id, content, metadata.
         """
         try:
-            json_result = self._inner.list_all_tools(table_name)
+            json_result = self._inner.list_all_tools(table_name, source_filter)
             entries = json.loads(json_result) if json_result else []
             logger.debug(f"Listed {len(entries)} entries from {table_name}")
             return entries
@@ -861,7 +977,7 @@ class RustVectorStore:
         Nested dict/list fields are JSON-encoded as strings.
         """
         try:
-            json_result = self._inner.list_all_tools(table_name)
+            json_result = self._inner.list_all_tools(table_name, None)
             entries = json.loads(json_result) if json_result else []
             return _list_of_dicts_to_table(entries)
         except Exception as e:
@@ -1023,7 +1139,7 @@ def get_vector_store(
 
     Args:
         index_path: Path to the vector database. Defaults to get_vector_db_path()
-        dimension: Vector dimension (default: from settings.yaml embedding.dimension)
+        dimension: Vector dimension (default: from settings embedding.dimension)
         enable_keyword_index: Enable keyword index for hybrid search (default: True)
     """
     from omni.foundation.config.dirs import get_vector_db_path
@@ -1050,9 +1166,42 @@ def get_vector_store(
     return store
 
 
+def evict_vector_store_cache(index_path: str | None = None) -> int:
+    """Evict vector store(s) from the process cache so the next use opens a fresh instance.
+
+    When index_path is given, only that path is evicted. When None, all cached stores
+    are evicted. Dropping the store may allow the allocator/OS to reclaim memory
+    (best-effort; "owned unmapped" can still persist on some platforms).
+
+    Returns:
+        Number of stores evicted.
+    """
+    global _vector_stores
+    normalized_path = str(index_path) if index_path is not None else None
+
+    if normalized_path is not None:
+        py_evicted = 0
+        if normalized_path in _vector_stores:
+            del _vector_stores[normalized_path]
+            py_evicted = 1
+    else:
+        py_evicted = len(_vector_stores)
+        _vector_stores = {}
+
+    rust_evicted = 0
+    try:
+        if _rust is not None and hasattr(_rust, "evict_vector_store_cache"):
+            rust_evicted = int(_rust.evict_vector_store_cache(normalized_path))
+    except Exception as e:
+        logger.debug("Failed to evict Rust-side vector store cache: %s", e)
+
+    return max(py_evicted, rust_evicted)
+
+
 __all__ = [
     "RUST_AVAILABLE",
     "RustVectorStore",
     "get_vector_store",
+    "evict_vector_store_cache",
     "_DEFAULT_MAX_CACHED_TABLES",  # Re-export for PyVectorStore users
 ]

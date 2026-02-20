@@ -1,0 +1,17 @@
+[package]
+name = "xiuxian-qianhuan"
+version.workspace = true
+edition.workspace = true
+description = "Xiuxian-Qianhuan prompt injection engine with XML Q&A contracts"
+authors = ["Omni-Dev-Fusion Team"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

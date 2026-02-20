@@ -268,9 +268,13 @@ assets/skills/knowledge/scripts/
 
 ## 7. Configuration
 
-**File**: merged `settings.yaml` runtime view
-System defaults come from `packages/conf/settings.yaml`; user overrides from
-`$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` (set via `--conf` or environment).
+**Files**:
+
+- General settings: `packages/conf/settings.yaml` + `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml`
+- LinkGraph/Wendao settings: `packages/conf/wendao.yaml` + `$PRJ_CONFIG_HOME/omni-dev-fusion/wendao.yaml`
+
+System defaults come from `packages/conf/*.yaml`; user overrides come from
+`$PRJ_CONFIG_HOME/omni-dev-fusion/*.yaml` (set via `--conf` or environment).
 
 ```yaml
 knowledge:

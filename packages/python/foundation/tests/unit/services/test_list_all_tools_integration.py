@@ -71,7 +71,7 @@ async def test_list_all_tools_returns_v2_native_columns() -> None:
         skill_names = {t["skill_name"] for t in tools}
         assert skill_names == {"git", "knowledge"}
         assert tools[0]["content"] == "Commit changes"
-        assert tools[0]["tool_name"] == "commit"
+        assert tools[0]["tool_name"] == "git.commit"
         assert tools[0]["file_path"] == "git/scripts/commit.py"
 
         # list_all_tools_arrow 基于 list_all_tools，列名应一致

@@ -8,13 +8,13 @@ use std::path::PathBuf;
 /// Options for file discovery.
 #[derive(Debug, Clone)]
 pub struct DiscoverOptions {
-    /// File extensions to include (e.g., [".py", ".md"])
+    /// File extensions to include (e.g., `[".py", ".md"]`)
     pub extensions: Vec<String>,
     /// Maximum file size in bytes (default: 1MB)
     pub max_file_size: u64,
     /// Skip hidden files and directories
     pub skip_hidden: bool,
-    /// Skip directories by name (e.g., ["target", "node_modules"])
+    /// Skip directories by name (e.g., `["target", "node_modules"]`)
     pub skip_dirs: Vec<String>,
     /// Maximum files to return (None for unlimited)
     pub max_files: Option<usize>,
@@ -36,6 +36,7 @@ impl Default for DiscoverOptions {
 }
 
 /// Discover files recursively in a directory matching extensions.
+#[must_use]
 pub fn discover_files(root: &str, options: &DiscoverOptions) -> Vec<String> {
     let root_path = PathBuf::from(root);
 
@@ -85,7 +86,7 @@ pub fn discover_files(root: &str, options: &DiscoverOptions) -> Vec<String> {
     files.sort();
     files
         .into_iter()
-        .filter_map(|p| p.to_str().map(|s| s.to_string()))
+        .filter_map(|p| p.to_str().map(ToString::to_string))
         .collect()
 }
 
@@ -134,7 +135,7 @@ fn walk_directory(
                 // Check extension - path.extension() returns "py", we need ".py" to match
                 if let Some(ext_os) = path.extension() {
                     let ext = ext_os.to_string_lossy().to_lowercase();
-                    let ext_with_dot = format!(".{}", ext);
+                    let ext_with_dot = format!(".{ext}");
                     if extensions.contains(&ext_with_dot) || extensions.contains(&ext) {
                         // Check file size
                         if let Ok(metadata) = entry.metadata()
@@ -176,7 +177,7 @@ fn read_directory(
                 // Check extension - path.extension() returns "py", we need ".py" to match
                 if let Some(ext_os) = path.extension() {
                     let ext = ext_os.to_string_lossy().to_lowercase();
-                    let ext_with_dot = format!(".{}", ext);
+                    let ext_with_dot = format!(".{ext}");
                     if extensions.contains(&ext_with_dot) || extensions.contains(&ext) {
                         // Check file size
                         if let Ok(metadata) = entry.metadata()
@@ -193,6 +194,7 @@ fn read_directory(
 }
 
 /// Discover files in a single directory (non-recursive).
+#[must_use]
 pub fn discover_files_in_dir(
     dir: &str,
     extensions: &[String],
@@ -231,7 +233,7 @@ pub fn discover_files_in_dir(
             if let Some(ext_os) = path.extension() {
                 let ext = ext_os.to_string_lossy().to_lowercase();
                 // Check both with and without dot prefix
-                let ext_with_dot = format!(".{}", ext);
+                let ext_with_dot = format!(".{ext}");
                 if extensions.contains(&ext_with_dot) || extensions.contains(&ext) {
                     // Check file size
                     if let Ok(metadata) = entry.metadata()
@@ -247,16 +249,18 @@ pub fn discover_files_in_dir(
     files.sort();
     files
         .into_iter()
-        .filter_map(|p| p.to_str().map(|s| s.to_string()))
+        .filter_map(|p| p.to_str().map(ToString::to_string))
         .collect()
 }
 
 /// Count files matching extensions in a directory.
+#[must_use]
 pub fn count_files_in_dir(dir: &str, extensions: &[String], skip_hidden: bool) -> usize {
     discover_files_in_dir(dir, extensions, u64::MAX, skip_hidden).len()
 }
 
 /// Check if a path should be skipped.
+#[must_use]
 pub fn should_skip_path(path: &str, skip_hidden: bool, skip_dirs: &[String]) -> bool {
     let path = PathBuf::from(path);
 
@@ -286,7 +290,7 @@ pub fn should_skip_path(path: &str, skip_hidden: bool, skip_dirs: &[String]) -> 
 fn normalize_extension(ext: &str) -> String {
     let mut ext = ext.to_lowercase();
     if !ext.starts_with('.') {
-        ext = format!(".{}", ext);
+        ext = format!(".{ext}");
     }
     ext
 }
@@ -298,50 +302,53 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn test_discover_files_in_dir() {
-        let temp = TempDir::new().unwrap();
-        let dir = temp.path().to_str().unwrap();
-        let dir_path = std::path::Path::new(dir);
+    fn test_discover_files_in_dir() -> std::io::Result<()> {
+        let temp = TempDir::new()?;
+        let dir = temp.path().to_string_lossy().to_string();
+        let dir_path = std::path::Path::new(&dir);
 
         // Create test files
-        File::create(dir_path.join("test.py")).unwrap();
-        File::create(dir_path.join("readme.md")).unwrap();
-        File::create(dir_path.join("data.txt")).unwrap();
+        File::create(dir_path.join("test.py"))?;
+        File::create(dir_path.join("readme.md"))?;
+        File::create(dir_path.join("data.txt"))?;
 
         let extensions = vec!["py".to_string(), "md".to_string()];
-        let files = discover_files_in_dir(dir, &extensions, 1024 * 1024, true);
+        let files = discover_files_in_dir(&dir, &extensions, 1024 * 1024, true);
 
         // Debug: print what we got
-        if files.is_empty() {
-            let entries: Vec<_> = std::fs::read_dir(dir_path).unwrap().collect();
-            println!("Directory entries: {:?}", entries);
+        if files.is_empty()
+            && let Ok(entries) = std::fs::read_dir(dir_path)
+        {
+            let entries: Vec<_> = entries
+                .collect::<Result<Vec<_>, std::io::Error>>()
+                .unwrap_or_default();
+            println!("Directory entries: {entries:?}");
         }
 
-        assert_eq!(files.len(), 2, "Expected 2 files, got: {:?}", files);
+        assert_eq!(files.len(), 2, "Expected 2 files, got: {files:?}");
         assert!(
             files.iter().any(|f| f.ends_with("test.py")),
-            "Missing test.py in {:?}",
-            files
+            "Missing test.py in {files:?}"
         );
         assert!(
             files.iter().any(|f| f.ends_with("readme.md")),
-            "Missing readme.md in {:?}",
-            files
+            "Missing readme.md in {files:?}"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_discover_files_recursive() {
-        let temp = TempDir::new().unwrap();
-        let dir = temp.path().to_str().unwrap();
-        let dir_path = std::path::Path::new(dir);
+    fn test_discover_files_recursive() -> std::io::Result<()> {
+        let temp = TempDir::new()?;
+        let dir = temp.path().to_string_lossy().to_string();
+        let dir_path = std::path::Path::new(&dir);
 
         // Create test structure
-        File::create(dir_path.join("root.py")).unwrap();
-        std::fs::create_dir(dir_path.join("src")).unwrap();
-        File::create(dir_path.join("src").join("module.py")).unwrap();
-        std::fs::create_dir(dir_path.join("src").join("nested")).unwrap();
-        File::create(dir_path.join("src").join("nested").join("deep.py")).unwrap();
+        File::create(dir_path.join("root.py"))?;
+        std::fs::create_dir(dir_path.join("src"))?;
+        File::create(dir_path.join("src").join("module.py"))?;
+        std::fs::create_dir(dir_path.join("src").join("nested"))?;
+        File::create(dir_path.join("src").join("nested").join("deep.py"))?;
 
         let extensions = vec!["py".to_string()];
         let options = DiscoverOptions {
@@ -350,29 +357,27 @@ mod tests {
             ..Default::default()
         };
 
-        let files = discover_files(dir, &options);
+        let files = discover_files(&dir, &options);
 
         // Debug: print what we got
         if files.len() < 3 {
-            println!("Expected >=3 files, got: {:?}", files);
+            println!("Expected >=3 files, got: {files:?}");
         }
 
-        assert!(files.len() >= 3, "Expected >=3 files, got: {:?}", files);
+        assert!(files.len() >= 3, "Expected >=3 files, got: {files:?}");
         assert!(
             files.iter().any(|f| f.ends_with("root.py")),
-            "Missing root.py in {:?}",
-            files
+            "Missing root.py in {files:?}"
         );
         assert!(
             files.iter().any(|f| f.ends_with("module.py")),
-            "Missing module.py in {:?}",
-            files
+            "Missing module.py in {files:?}"
         );
         assert!(
             files.iter().any(|f| f.ends_with("deep.py")),
-            "Missing deep.py in {:?}",
-            files
+            "Missing deep.py in {files:?}"
         );
+        Ok(())
     }
 
     #[test]

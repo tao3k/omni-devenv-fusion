@@ -38,6 +38,6 @@
 
 This document previously described the old skill discovery system which has been completely rewritten for the Trinity Architecture (Foundation/Core/MCP-Server). The new system uses:
 
-- **Rust Scanner**: High-performance skill scanning via `skills-scanner` crate
+- **Rust Scanner**: High-performance skill scanning via `omni-scanner` crate
 - **Skill Index**: JSON-based index (`skill_index.json`)
 - **Intent Sniffer**: Context-aware routing

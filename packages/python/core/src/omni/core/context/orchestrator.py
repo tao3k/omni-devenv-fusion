@@ -127,10 +127,11 @@ def create_omni_loop_context() -> ContextOrchestrator:
     """Create orchestrator for the Main ReAct Loop (Omni-Orchestrator).
 
     Uses agent-specific RoutingGuidanceProvider for meta-cognition protocol.
-    Includes EpisodicMemoryProvider for automatic memory recall.
+    Python-side skill/memory injection is disabled because Rust omni-agent owns
+    authoritative prompt/session injection.
 
     Returns:
-        ContextOrchestrator with Persona + Routing Protocol + Tools + Active Skill + Memory
+        ContextOrchestrator with Persona + Routing Protocol + Tools.
     """
     # Import from agent package (agent depends on core, not vice versa)
     # This allows core to remain framework-agnostic while agent provides
@@ -140,15 +141,18 @@ def create_omni_loop_context() -> ContextOrchestrator:
     except ImportError:
         # Fallback if agent package not available
         logger.warning("RoutingGuidanceProvider not found, using basic orchestrator")
-        return create_executor_orchestrator()
+        return ContextOrchestrator(
+            [
+                SystemPersonaProvider(role="developer"),
+                AvailableToolsProvider(),
+            ]
+        )
 
     return ContextOrchestrator(
         [
             SystemPersonaProvider(role="developer"),  # Main role for Omni Loop
             RoutingGuidanceProvider(),  # Meta-cognition protocol
             AvailableToolsProvider(),  # Tool index
-            ActiveSkillProvider(),  # Active skill context
-            EpisodicMemoryProvider(top_k=3),  # [NEW] Automatic memory recall
         ]
     )
 
@@ -156,6 +160,6 @@ def create_omni_loop_context() -> ContextOrchestrator:
 __all__ = [
     "ContextOrchestrator",
     "create_executor_orchestrator",
-    "create_planner_orchestrator",
     "create_omni_loop_context",
+    "create_planner_orchestrator",
 ]

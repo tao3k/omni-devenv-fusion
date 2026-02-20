@@ -23,6 +23,7 @@ pub use executor::{ExecutionResult, MountConfig, SandboxConfig};
 
 /// Platform detection
 #[pyfunction]
+#[must_use]
 pub fn detect_platform() -> String {
     if cfg!(target_os = "linux") {
         "linux".to_string()
@@ -35,12 +36,14 @@ pub fn detect_platform() -> String {
 
 /// Check if nsjail is available
 #[pyfunction]
+#[must_use]
 pub fn is_nsjail_available() -> bool {
     which::which("nsjail").is_ok()
 }
 
 /// Check if sandbox-exec is available (macOS)
 #[pyfunction]
+#[must_use]
 pub fn is_seatbelt_available() -> bool {
     if cfg!(target_os = "macos") {
         which::which("sandbox-exec").is_ok()

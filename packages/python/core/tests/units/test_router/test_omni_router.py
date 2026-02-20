@@ -28,6 +28,9 @@ def _mock_hybrid_hit(
         "score": score,
         "final_score": final_score,
         "confidence": confidence,
+        "ranking_reason": "vector=0.91 | keyword=0.12 | confidence=high | raw=0.850 | final=0.850",
+        "input_schema_digest": "sha256:mockdigest123456",
+        "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}},
         "file_path": file_path or f"{skill_name}/{command}.py",
     }
 
@@ -85,7 +88,35 @@ class TestOmniRouter:
             results = await router.route_hybrid("git status", threshold=0.1, use_cache=False)
         assert len(results) == 1
         assert results[0].confidence == "high"
+        assert results[0].final_score == 0.7
+        assert isinstance(results[0].ranking_reason, str)
+        assert isinstance(results[0].input_schema_digest, str)
         assert_route_result_shape(results[0])
+
+    @pytest.mark.asyncio
+    async def test_route_hybrid_populates_discover_contract_fields(self):
+        """Hybrid route result should always include discover contract ranking metadata."""
+        router = OmniRouter(storage_path=":memory:")
+        mock_results = [
+            _mock_hybrid_hit(
+                score=0.61,
+                final_score=0.83,
+                confidence="high",
+                command="discover",
+            ),
+        ]
+
+        with patch.object(router._hybrid, "search", AsyncMock(return_value=mock_results)):
+            results = await router.route_hybrid(
+                "discover capabilities", threshold=0.1, use_cache=False
+            )
+
+        assert len(results) == 1
+        row = results[0]
+        assert row.score == 0.61
+        assert row.final_score == 0.83
+        assert row.ranking_reason
+        assert row.input_schema_digest == "sha256:mockdigest123456"
 
     @pytest.mark.asyncio
     async def test_route_hybrid_uses_configurable_adaptive_retry(self):

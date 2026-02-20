@@ -6,10 +6,11 @@ Implements the prepare_commit command for /commit workflow:
 2. Run quality checks (lefthook pre-commit)
 3. Return staged diff for commit analysis with template output
 
-Uses cascading template pattern with configuration via settings.yaml.
+Uses cascading template pattern with configuration via settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml).
 """
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -17,11 +18,36 @@ from omni.foundation.config.logging import get_logger
 
 logger = get_logger("git.prepare")
 
+# Summary-only scenario: enough for commit message (see skill-tool-context-practices.md)
+DIFF_SUMMARY_MAX_CHARS = 4000
+
+
+def _is_non_blocking_pre_commit_error(output: str) -> bool:
+    """Whether pre-commit hook failure should be treated as non-blocking.
+
+    We only downgrade known "hook not configured" cases. Real hook failures
+    (lint/test/format errors) must still block commit preparation.
+    """
+    text = (output or "").lower()
+    patterns = (
+        "cannot find a hook named pre-commit",
+        "hook named pre-commit not found",
+        "no hook named pre-commit",
+    )
+    return any(pattern in text for pattern in patterns)
+
 
 def _run(cmd: list[str], cwd: Path | None = None) -> tuple[str, str, int]:
     """Run command and return stdout, stderr, returncode."""
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
     return result.stdout.strip(), result.stderr.strip(), result.returncode
+
+
+def run_pre_commit_hook(cwd: Path | None = None) -> tuple[str, str, int]:
+    """Run pre-commit hook with lefthook when available, else git hook runner."""
+    if shutil.which("lefthook"):
+        return _run(["lefthook", "run", "pre-commit"], cwd=cwd)
+    return _run(["git", "hook", "run", "pre-commit"], cwd=cwd)
 
 
 def _check_sensitive_files(staged_files: list[str]) -> list[str]:
@@ -135,14 +161,11 @@ def _check_lefthook(cwd: Path | None = None) -> tuple[bool, str, str]:
     Returns:
         Tuple of (success, report_message, lefthook_output)
     """
-    lh_out, lh_err, lh_rc = _run(["git", "hook", "run", "pre-commit"], cwd=cwd)
+    lh_out, lh_err, lh_rc = run_pre_commit_hook(cwd=cwd)
 
     lefthook_output = lh_err or lh_out
 
-    if lefthook_output.strip():
-        lefthook_report = f"pre-commit hook:\n{lefthook_output}"
-    else:
-        lefthook_report = ""
+    lefthook_report = f"pre-commit hook:\n{lefthook_output}" if lefthook_output.strip() else ""
 
     if lh_rc != 0:
         return False, lefthook_report, lefthook_output
@@ -205,10 +228,14 @@ def stage_and_scan(root_dir: str = ".") -> dict:
     lefthook_output = ""
     lefthook_summary = ""
 
-    # Run git pre-commit hook (lefthook is installed as the hook)
-    lh_out, lh_err, lh_rc = _run(["git", "hook", "run", "pre-commit"], cwd=root_path)
+    # Run pre-commit hook (prefer lefthook binary when available)
+    lh_out, lh_err, lh_rc = run_pre_commit_hook(cwd=root_path)
     lefthook_output = lh_err or lh_out
     lefthook_failed = lh_rc != 0
+    if lefthook_failed and _is_non_blocking_pre_commit_error(lefthook_output):
+        lefthook_failed = False
+        if not lefthook_summary:
+            lefthook_summary = "pre-commit hook not configured; skipped"
 
     # Extract summary - look for "summary:" keyword in output (stderr)
     for line in reversed(lh_err.splitlines()):
@@ -230,9 +257,13 @@ def stage_and_scan(root_dir: str = ".") -> dict:
 
     if lefthook_failed:
         # Re-run hook on newly staged files
-        lh_out, lh_err, lh_rc = _run(["git", "hook", "run", "pre-commit"], cwd=root_path)
+        lh_out, lh_err, lh_rc = run_pre_commit_hook(cwd=root_path)
         lefthook_output = lh_err or lh_out
         lefthook_failed = lh_rc != 0
+        if lefthook_failed and _is_non_blocking_pre_commit_error(lefthook_output):
+            lefthook_failed = False
+            if not lefthook_summary:
+                lefthook_summary = "pre-commit hook not configured; skipped"
 
         # Re-extract summary after retry
         for line in reversed(lh_err.splitlines()):
@@ -266,9 +297,11 @@ def stage_and_scan(root_dir: str = ".") -> dict:
 
 
 __all__ = [
+    "DIFF_SUMMARY_MAX_CHARS",
     "_check_lefthook",
     "_check_sensitive_files",
     "_get_cog_scopes",
+    "_is_non_blocking_pre_commit_error",
     "_run",
     "_validate_and_fix_scope",
     "stage_and_scan",

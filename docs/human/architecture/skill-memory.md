@@ -44,7 +44,7 @@ all_refs = memory.get_all_require_refs(active_skills={"git", "writer"})
 
 ### Core Skills
 
-Always loaded in context, configured in `settings.yaml`:
+Always loaded in context, configured in settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml):
 
 ```yaml
 skills:

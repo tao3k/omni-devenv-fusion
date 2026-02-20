@@ -10,9 +10,8 @@ Tests cover:
 
 import pytest
 import socket
-from unittest.mock import patch, MagicMock, AsyncMock
-import threading
 import time
+from unittest.mock import patch, MagicMock
 
 
 class TestEmbeddingServicePortDetection:
@@ -47,22 +46,6 @@ class TestEmbeddingServicePortDetection:
         result = service._is_port_in_use(19999, timeout=0.5)
         assert result is False
 
-    def test_is_address_in_use_error_detects_known_oserror(self):
-        """Should identify address-in-use OSError variants."""
-        from omni.foundation.services.embedding import EmbeddingService
-
-        service = EmbeddingService()
-        err = OSError(48, "address already in use")
-        assert service._is_address_in_use_error(err) is True
-
-    def test_is_address_in_use_error_detects_message_fallback(self):
-        """Should identify address-in-use from exception message fallback."""
-        from omni.foundation.services.embedding import EmbeddingService
-
-        service = EmbeddingService()
-        err = RuntimeError("error while attempting to bind on address: address already in use")
-        assert service._is_address_in_use_error(err) is True
-
 
 class TestEmbeddingServiceInitialization:
     """Tests for EmbeddingService initialization with auto-detection."""
@@ -73,10 +56,7 @@ class TestEmbeddingServiceInitialization:
 
         EmbeddingService._instance = None
         EmbeddingService._initialized = False
-        EmbeddingService._model_loaded = False
-        EmbeddingService._model_loading = False
         EmbeddingService._client_mode = False
-        EmbeddingService._http_server_started = False
 
     def teardown_method(self):
         """Cleanup after each test."""
@@ -84,57 +64,22 @@ class TestEmbeddingServiceInitialization:
 
         EmbeddingService._instance = None
         EmbeddingService._initialized = False
-        EmbeddingService._model_loaded = False
-        EmbeddingService._model_loading = False
         EmbeddingService._client_mode = False
-        EmbeddingService._http_server_started = False
 
     def test_initialization_with_explicit_client_provider(self):
-        """Should use client mode when provider='client' in settings."""
+        """Should use client mode when provider='client' and HTTP server is healthy."""
         from omni.foundation.services.embedding import EmbeddingService
 
-        with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
-            mock_setting.side_effect = lambda key, default=None: {
-                "embedding.provider": "client",
-                "embedding.client_url": "http://127.0.0.1:18501",
-                "embedding.dimension": 2560,
-            }.get(key, default)
-
-            service = EmbeddingService()
-            service.initialize()
-
-            assert service._client_mode is True
-            assert service._backend == "http"
-            assert service._client_url == "http://127.0.0.1:18501"
-
-    def test_initialization_with_explicit_fallback_provider(self):
-        """Should use fallback mode when provider='fallback' in settings."""
-        from omni.foundation.services.embedding import EmbeddingService
-
-        with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
-            mock_setting.side_effect = lambda key, default=None: {
-                "embedding.provider": "fallback",
-                "embedding.dimension": 2560,
-            }.get(key, default)
-
-            service = EmbeddingService()
-            service.initialize()
-
-            assert service._backend == "fallback"
-            assert service._client_mode is False
-
-    def test_initialization_auto_detects_server(self):
-        """Should connect as client when server port is already in use."""
-        from omni.foundation.services.embedding import EmbeddingService
-
-        # Mock port_in_use to return True (server already running)
-        with patch.object(EmbeddingService, "_is_port_in_use", return_value=True):
-            with patch.object(EmbeddingService, "_check_http_server_healthy", return_value=True):
+        with patch.object(EmbeddingService, "_check_http_server_healthy", return_value=True):
+            with patch.object(
+                EmbeddingService, "_verify_embedding_service_works", return_value=True
+            ):
                 with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
                     mock_setting.side_effect = lambda key, default=None: {
-                        "embedding.provider": "",
-                        "embedding.http_port": 18501,
+                        "embedding.provider": "client",
+                        "embedding.client_url": "http://127.0.0.1:18501",
                         "embedding.dimension": 2560,
+                        "embedding.http_port": 18501,
                     }.get(key, default)
 
                     service = EmbeddingService()
@@ -144,11 +89,71 @@ class TestEmbeddingServiceInitialization:
                     assert service._backend == "http"
                     assert service._client_url == "http://127.0.0.1:18501"
 
-    def test_initialization_starts_server_when_port_free(self):
-        """Should start HTTP server when port is not in use."""
+    def test_initialization_with_explicit_fallback_provider(self):
+        """Should use fallback mode when provider='fallback' in settings."""
         from omni.foundation.services.embedding import EmbeddingService
 
-        # Mock port_in_use to return False (no server running)
+        with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
+            mock_setting.side_effect = lambda key, default=None: {
+                "embedding.provider": "fallback",
+                "embedding.dimension": 2560,
+                "embedding.http_port": 18501,
+            }.get(key, default)
+
+            service = EmbeddingService()
+            service.initialize()
+
+            assert service._backend == "fallback"
+            assert service._client_mode is False
+
+    def test_initialization_ollama_normalizes_localhost_to_ipv4(self):
+        """Should normalize localhost API base to IPv4 loopback for Ollama."""
+        from omni.foundation.services.embedding import EmbeddingService
+
+        with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
+            mock_setting.side_effect = lambda key, default=None: {
+                "embedding.provider": "ollama",
+                "embedding.litellm_model": "ollama/qwen3-embedding:0.6b",
+                "embedding.litellm_api_base": "http://localhost:11434",
+                "embedding.dimension": 1024,
+                "embedding.http_port": 18501,
+            }.get(key, default)
+
+            service = EmbeddingService()
+            service.initialize()
+
+            assert service._backend == "litellm"
+            assert service._litellm_api_base == "http://127.0.0.1:11434"
+
+    def test_initialization_auto_detects_server(self):
+        """Should connect as client when server port is already in use."""
+        from omni.foundation.services.embedding import EmbeddingService
+
+        # Mock port_in_use and health/embed check (server already running)
+        with patch.object(EmbeddingService, "_is_port_in_use", return_value=True):
+            with patch.object(EmbeddingService, "_check_http_server_healthy", return_value=True):
+                with patch.object(
+                    EmbeddingService, "_verify_embedding_service_works", return_value=True
+                ):
+                    with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
+                        mock_setting.side_effect = lambda key, default=None: {
+                            "embedding.provider": "",
+                            "embedding.http_port": 18501,
+                            "embedding.dimension": 2560,
+                            "embedding.client_url": "http://127.0.0.1:18501",
+                        }.get(key, default)
+
+                        service = EmbeddingService()
+                        service.initialize()
+
+                        assert service._client_mode is True
+                        assert service._backend == "http"
+                        assert service._client_url == "http://127.0.0.1:18501"
+
+    def test_initialization_uses_fallback_when_port_free(self):
+        """When port is not in use (auto), should use fallback backend."""
+        from omni.foundation.services.embedding import EmbeddingService
+
         with patch.object(EmbeddingService, "_is_port_in_use", return_value=False):
             with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
                 mock_setting.side_effect = lambda key, default=None: {
@@ -157,46 +162,33 @@ class TestEmbeddingServiceInitialization:
                     "embedding.dimension": 2560,
                 }.get(key, default)
 
-                # Mock the HTTP server startup by patching time.sleep
-                with patch("time.sleep"):  # Skip sleep
-                    service = EmbeddingService()
-                    service.initialize()
+                service = EmbeddingService()
+                service.initialize()
 
-                    # Should have started HTTP server
-                    assert service._http_server_started is True
+                assert service._backend == "fallback"
+                assert service._client_mode is False
+                assert service._dimension == 2560
 
     def test_initialization_idempotent(self):
         """Calling initialize multiple times should not re-initialize."""
         from omni.foundation.services.embedding import EmbeddingService
 
-        call_count = 0
+        with patch.object(EmbeddingService, "_is_port_in_use", return_value=False):
+            with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
+                mock_setting.side_effect = lambda key, default=None: {
+                    "embedding.provider": "",
+                    "embedding.http_port": 18501,
+                    "embedding.dimension": 2560,
+                }.get(key, default)
 
-        def mock_is_port_in_use(port, timeout=0.5):
-            return False
+                service = EmbeddingService()
+                service.initialize()
+                first_backend = service._backend
 
-        def mock_get_setting(key, default=None):
-            return {
-                "embedding.provider": "",
-                "embedding.http_port": 18501,
-                "embedding.dimension": 2560,
-            }.get(key, default)
+                service.initialize()
+                second_backend = service._backend
 
-        with patch.object(EmbeddingService, "_is_port_in_use", mock_is_port_in_use):
-            with patch("omni.foundation.services.embedding.get_setting", mock_get_setting):
-                with patch("time.sleep"):  # Skip sleep
-                    service = EmbeddingService()
-                    service.initialize()
-                    first_http_state = service._http_server_started
-
-                    service.initialize()
-                    second_http_state = service._http_server_started
-
-                    service.initialize()
-                    third_http_state = service._http_server_started
-
-                    # All should have same state (initialized once)
-                    assert first_http_state == second_http_state == third_http_state
-                    assert first_http_state is True
+                assert first_backend == second_backend == "fallback"
 
 
 class TestEmbeddingServiceSingleton:
@@ -229,83 +221,30 @@ class TestEmbeddingServiceSingleton:
 
 
 class TestEmbeddingServiceModelLoading:
-    """Tests for background model loading."""
+    """start_model_loading is a no-op (no in-process model)."""
 
-    def setup_method(self):
-        """Reset singleton before each test."""
+    def test_start_model_loading_no_op(self):
+        """start_model_loading does nothing and does not raise."""
         from omni.foundation.services.embedding import EmbeddingService
 
         EmbeddingService._instance = None
-        EmbeddingService._initialized = True
-        EmbeddingService._model_loaded = False
-        EmbeddingService._model_loading = False
-        EmbeddingService._client_mode = False
-        EmbeddingService._http_server_started = True
-
-    def teardown_method(self):
-        """Cleanup after each test."""
-        from omni.foundation.services.embedding import EmbeddingService
-
-        EmbeddingService._instance = None
-        EmbeddingService._initialized = False
-        EmbeddingService._model_loaded = False
-        EmbeddingService._model_loading = False
-        EmbeddingService._client_mode = False
-
-    def test_start_model_loading_skips_in_client_mode(self):
-        """Should not load model in client mode."""
-        from omni.foundation.services.embedding import EmbeddingService
-
-        service = EmbeddingService()
-        # Must set BEFORE calling start_model_loading
-        service._client_mode = True
-
-        # Mock _load_local_model to verify it's not called
-        with patch.object(service, "_load_local_model") as mock_load:
-            service.start_model_loading()
-            # _load_local_model should NOT be called when in client mode
-            mock_load.assert_not_called()
-
-    def test_start_model_loading_skips_if_already_loaded(self):
-        """Should not load model if already loaded."""
-        from omni.foundation.services.embedding import EmbeddingService
-
-        EmbeddingService._model_loaded = True
-
         service = EmbeddingService()
         service.start_model_loading()
-
-        assert service._model_loading is False
-
-    def test_start_model_loading_triggers_background_load(self):
-        """Should start background thread for model loading."""
-        from omni.foundation.services.embedding import EmbeddingService
-
-        with patch.object(EmbeddingService, "_load_local_model"):
-            service = EmbeddingService()
-            service.start_model_loading()
-
-            # Should have started loading
-            assert service._model_loading is True
+        assert service.is_loading is False
 
 
 class TestEmbeddingServiceEmbed:
     """Tests for embedding operations."""
 
     def setup_method(self):
-        """Reset singleton before each test."""
+        """Reset singleton; use fallback backend for embed tests."""
         from omni.foundation.services.embedding import EmbeddingService
-        import numpy as np
 
         EmbeddingService._instance = None
         EmbeddingService._initialized = True
-        EmbeddingService._model_loaded = True
-        EmbeddingService._backend = "local"
+        EmbeddingService._backend = "fallback"
+        EmbeddingService._dimension = 3
         EmbeddingService._client_mode = False
-        EmbeddingService._model = MagicMock()
-        # Use numpy array like real sentence-transformers
-        EmbeddingService._model.encode.return_value = np.array([[0.1, 0.2, 0.3]])
-        EmbeddingService._model.get_sentence_embedding_dimension.return_value = 3
 
     def teardown_method(self):
         """Cleanup after each test."""
@@ -314,7 +253,7 @@ class TestEmbeddingServiceEmbed:
         EmbeddingService._instance = None
 
     def test_embed_single_text(self):
-        """Should generate embedding for single text."""
+        """Should generate embedding for single text (fallback)."""
         from omni.foundation.services.embedding import EmbeddingService
 
         service = EmbeddingService()
@@ -324,19 +263,14 @@ class TestEmbeddingServiceEmbed:
         assert len(result[0]) == 3
 
     def test_embed_batch_texts(self):
-        """Should generate embeddings for multiple texts."""
+        """Should generate embeddings for multiple texts (fallback)."""
         from omni.foundation.services.embedding import EmbeddingService
-        import numpy as np
-
-        # Reset model mock for this specific test
-        EmbeddingService._model = MagicMock()
-        EmbeddingService._model.encode.return_value = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
-        EmbeddingService._model.get_sentence_embedding_dimension.return_value = 3
 
         service = EmbeddingService()
         result = service.embed_batch(["text1", "text2"])
 
         assert len(result) == 2
+        assert all(len(v) == 3 for v in result)
 
     def test_embed_uses_client_in_client_mode(self):
         """Should use HTTP client in client mode."""
@@ -366,17 +300,15 @@ class TestEmbeddingServiceProperties:
 
         EmbeddingService._instance = None
         EmbeddingService._initialized = True
-        EmbeddingService._backend = "local"
+        EmbeddingService._backend = "fallback"
         EmbeddingService._dimension = 2560
-        EmbeddingService._model_loaded = True
-        EmbeddingService._model_loading = False
 
     def test_backend_property(self):
         """Should return backend type."""
         from omni.foundation.services.embedding import EmbeddingService
 
         service = EmbeddingService()
-        assert service.backend == "local"
+        assert service.backend == "fallback"
 
     def test_dimension_property(self):
         """Should return embedding dimension."""
@@ -386,19 +318,18 @@ class TestEmbeddingServiceProperties:
         assert service.dimension == 2560
 
     def test_is_loaded_property(self):
-        """Should indicate if model is loaded."""
+        """is_loaded is True when initialized (no in-process model)."""
         from omni.foundation.services.embedding import EmbeddingService
 
         service = EmbeddingService()
         assert service.is_loaded is True
 
     def test_is_loading_property(self):
-        """Should indicate if model is loading."""
+        """is_loading is always False (no in-process model)."""
         from omni.foundation.services.embedding import EmbeddingService
 
-        EmbeddingService._model_loading = True
         service = EmbeddingService()
-        assert service.is_loading is True
+        assert service.is_loading is False
 
 
 class TestEmbeddingServiceLazyLoad:
@@ -410,10 +341,7 @@ class TestEmbeddingServiceLazyLoad:
 
         EmbeddingService._instance = None
         EmbeddingService._initialized = False
-        EmbeddingService._model_loaded = False
-        EmbeddingService._model_loading = False
         EmbeddingService._client_mode = False
-        EmbeddingService._http_server_started = False
 
     def teardown_method(self):
         """Cleanup after each test."""
@@ -421,73 +349,101 @@ class TestEmbeddingServiceLazyLoad:
 
         EmbeddingService._instance = None
         EmbeddingService._initialized = False
-        EmbeddingService._model_loaded = False
-        EmbeddingService._model_loading = False
         EmbeddingService._client_mode = False
 
     def test_creating_service_does_not_load_model(self):
-        """Creating EmbeddingService should NOT load the model."""
+        """Creating EmbeddingService should NOT initialize until embed is used."""
         from omni.foundation.services.embedding import EmbeddingService
 
         service = EmbeddingService()
 
         assert service._initialized is False
-        assert service._model_loaded is False
-        assert service._model_loading is False
 
     def test_embed_auto_detects_mcp_server(self):
         """embed() should auto-detect MCP server if not initialized."""
         from omni.foundation.services.embedding import EmbeddingService
 
-        # Mock port_in_use to return True (MCP server running)
         with patch.object(EmbeddingService, "_is_port_in_use", return_value=True):
             with patch.object(EmbeddingService, "_check_http_server_healthy", return_value=True):
+                with patch.object(
+                    EmbeddingService, "_verify_embedding_service_works", return_value=True
+                ):
+                    with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
+                        mock_setting.side_effect = lambda key, default=None: {
+                            "embedding.provider": "",
+                            "embedding.http_port": 18501,
+                            "embedding.dimension": 1024,
+                            "embedding.client_url": "http://127.0.0.1:18501",
+                        }.get(key, default)
+
+                        service = EmbeddingService()
+
+                        # Mock _embed_http to avoid actual HTTP call
+                        with patch.object(
+                            service, "_embed_http", return_value=[[0.1, 0.2]]
+                        ) as mock_http:
+                            result = service.embed("test")
+
+                            assert service._initialized is True
+                            assert service._client_mode is True
+                            assert service._backend == "http"
+                            mock_http.assert_called_once()
+
+    def test_embed_client_provider_checks_health_before_client_mode(self):
+        """When provider=client, _auto_detect_and_init runs health check; if healthy, uses client mode."""
+        from omni.foundation.services.embedding import EmbeddingService
+
+        with patch.object(
+            EmbeddingService, "_check_http_server_healthy", return_value=True
+        ) as mock_health:
+            with patch.object(
+                EmbeddingService, "_verify_embedding_service_works", return_value=True
+            ):
                 with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
                     mock_setting.side_effect = lambda key, default=None: {
+                        "embedding.provider": "client",
+                        "embedding.client_url": "http://127.0.0.1:18501",
                         "embedding.http_port": 18501,
                         "embedding.dimension": 1024,
                     }.get(key, default)
 
                     service = EmbeddingService()
+                    with patch.object(service, "_embed_http", return_value=[[0.1] * 1024]):
+                        service.embed("test")
 
-                    # Mock _embed_http to avoid actual HTTP call
-                    with patch.object(
-                        service, "_embed_http", return_value=[[0.1, 0.2]]
-                    ) as mock_http:
-                        result = service.embed("test")
-
-                        # Should have auto-detected and used client mode
-                        assert service._initialized is True
-                        assert service._client_mode is True
-                        assert service._backend == "http"
-                        mock_http.assert_called_once()
+                    mock_health.assert_called()
+                    assert service._initialized is True
+                    assert service._client_mode is True
+                    assert service._client_url == "http://127.0.0.1:18501"
 
     def test_embed_batch_auto_detects_mcp_server(self):
         """embed_batch() should auto-detect MCP server if not initialized."""
         from omni.foundation.services.embedding import EmbeddingService
 
-        # Mock port_in_use to return True (MCP server running)
         with patch.object(EmbeddingService, "_is_port_in_use", return_value=True):
             with patch.object(EmbeddingService, "_check_http_server_healthy", return_value=True):
-                with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
-                    mock_setting.side_effect = lambda key, default=None: {
-                        "embedding.http_port": 18501,
-                        "embedding.dimension": 1024,
-                    }.get(key, default)
+                with patch.object(
+                    EmbeddingService, "_verify_embedding_service_works", return_value=True
+                ):
+                    with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
+                        mock_setting.side_effect = lambda key, default=None: {
+                            "embedding.provider": "",
+                            "embedding.http_port": 18501,
+                            "embedding.dimension": 1024,
+                            "embedding.client_url": "http://127.0.0.1:18501",
+                        }.get(key, default)
 
-                    service = EmbeddingService()
+                        service = EmbeddingService()
 
-                    # Mock _embed_http to avoid actual HTTP call
-                    with patch.object(
-                        service, "_embed_http", return_value=[[0.1, 0.2], [0.3, 0.4]]
-                    ) as mock_http:
-                        result = service.embed_batch(["test1", "test2"])
+                        with patch.object(
+                            service, "_embed_http", return_value=[[0.1, 0.2], [0.3, 0.4]]
+                        ) as mock_http:
+                            result = service.embed_batch(["test1", "test2"])
 
-                        # Should have auto-detected and used client mode
-                        assert service._initialized is True
-                        assert service._client_mode is True
-                        assert service._backend == "http"
-                        mock_http.assert_called_once()
+                            assert service._initialized is True
+                            assert service._client_mode is True
+                            assert service._backend == "http"
+                            mock_http.assert_called_once()
 
     def test_embed_does_not_auto_detect_if_already_initialized(self):
         """embed() should not re-run auto-detect if already initialized."""
@@ -507,47 +463,234 @@ class TestEmbeddingServiceLazyLoad:
                 mock_auto.assert_not_called()
                 mock_http.assert_called_once()
 
-    def test_embed_does_not_load_local_model_in_client_mode(self):
-        """embed() should NOT call _load_local_model when in client mode."""
-        from omni.foundation.services.embedding import EmbeddingService
-
-        # Simulate MCP server is running
-        with patch.object(EmbeddingService, "_is_port_in_use", return_value=True):
-            with patch.object(EmbeddingService, "_check_http_server_healthy", return_value=True):
-                with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
-                    mock_setting.side_effect = lambda key, default=None: {
-                        "embedding.http_port": 18501,
-                        "embedding.dimension": 1024,
-                    }.get(key, default)
-
-                    service = EmbeddingService()
-
-                    # Ensure auto-detect runs
-                    with patch.object(
-                        service, "_embed_http", return_value=[[0.1, 0.2]]
-                    ) as mock_http:
-                        with patch.object(service, "_load_local_model") as mock_load:
-                            service.embed("test")
-
-                            # Should NOT have called _load_local_model
-                            mock_load.assert_not_called()
-
     def test_embed_uses_fallback_when_no_mcp_and_no_model(self):
-        """embed() should use fallback when no MCP server and model not loaded."""
+        """_embed_fallback returns vectors of configured dimension."""
         from omni.foundation.services.embedding import EmbeddingService
 
-        # Create service and set to fallback mode (simulating no local model)
         service = EmbeddingService()
         service._backend = "fallback"
         service._dimension = 8
-        service._model = None  # No local model loaded
 
-        # Should use fallback (hash-based embeddings)
         result = service._embed_fallback(["hello world"])
 
-        # Should return a vector of the configured dimension
         assert len(result) == 1
         assert len(result[0]) == 8
+
+
+class TestEmbeddingServiceHttpRaisesOnFailure:
+    """_embed_http: on HTTP failure, raise EmbeddingUnavailableError (no fallback)."""
+
+    def setup_method(self):
+        from omni.foundation.services.embedding import EmbeddingService
+
+        EmbeddingService._instance = None
+        EmbeddingService._initialized = True
+        EmbeddingService._backend = "http"
+        EmbeddingService._client_mode = True
+        EmbeddingService._client_url = "http://127.0.0.1:18501"
+        EmbeddingService._dimension = 256
+
+    def teardown_method(self):
+        from omni.foundation.services.embedding import EmbeddingService
+
+        EmbeddingService._instance = None
+        EmbeddingService._backend = "fallback"
+
+    def test_embed_http_raises_on_http_error(self):
+        """When HTTP client raises, embed() propagates EmbeddingUnavailableError."""
+        from omni.foundation.services.embedding import EmbeddingService, EmbeddingUnavailableError
+
+        service = EmbeddingService()
+        with patch("omni.foundation.embedding_client.get_embedding_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.sync_embed_batch.side_effect = RuntimeError("connection refused")
+            mock_get_client.return_value = mock_client
+            with pytest.raises(EmbeddingUnavailableError) as exc_info:
+                service.embed("hello")
+        assert "connection refused" in str(exc_info.value)
+        assert service._client_mode is True  # No switch to fallback
+
+    def test_embed_batch_raises_on_http_error(self):
+        """When HTTP client fails, embed_batch raises EmbeddingUnavailableError."""
+        from omni.foundation.services.embedding import EmbeddingService, EmbeddingUnavailableError
+
+        service = EmbeddingService()
+        with patch("omni.foundation.embedding_client.get_embedding_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.sync_embed_batch.side_effect = RuntimeError("HTTP 500")
+            mock_get_client.return_value = mock_client
+            with pytest.raises(EmbeddingUnavailableError) as exc_info:
+                service.embed_batch(["text"])
+        assert "HTTP 500" in str(exc_info.value)
+
+
+class TestEmbeddingServiceLiteLLMResilience:
+    """LiteLLM transient failure handling (retry + circuit breaker)."""
+
+    def setup_method(self):
+        from omni.foundation.services.embedding import EmbeddingService
+
+        EmbeddingService._instance = None
+        EmbeddingService._initialized = True
+        EmbeddingService._backend = "litellm"
+        EmbeddingService._litellm_model = "ollama/qwen3-embedding:0.6b"
+        EmbeddingService._litellm_api_base = "http://localhost:11434"
+        EmbeddingService._litellm_circuit_open_until = 0.0
+        EmbeddingService._litellm_last_error = None
+
+    def teardown_method(self):
+        from omni.foundation.services.embedding import EmbeddingService
+
+        EmbeddingService._instance = None
+        EmbeddingService._litellm_circuit_open_until = 0.0
+        EmbeddingService._litellm_last_error = None
+        EmbeddingService._backend = "fallback"
+
+    def test_embed_litellm_transient_failure_opens_circuit(self):
+        from omni.foundation.services.embedding import EmbeddingService, EmbeddingUnavailableError
+
+        service = EmbeddingService()
+        settings = {
+            "embedding.timeout": 1,
+            "embedding.litellm_connect_retries": 3,
+            "embedding.litellm_retry_backoff_ms": 0,
+            "embedding.litellm_circuit_open_secs": 7,
+        }
+        with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
+            mock_setting.side_effect = lambda key, default=None: settings.get(key, default)
+            with patch("litellm.embedding", side_effect=RuntimeError("Connection refused")):
+                with pytest.raises(EmbeddingUnavailableError) as exc_info:
+                    service._embed_litellm(["hello"])
+
+        message = str(exc_info.value).lower()
+        assert "endpoint unavailable" in message
+        assert "retries=3" in message
+        assert service._litellm_circuit_open_until > time.monotonic()
+        assert service._litellm_last_error is not None
+
+    def test_embed_litellm_circuit_open_fails_fast(self):
+        from omni.foundation.services.embedding import EmbeddingService, EmbeddingUnavailableError
+
+        service = EmbeddingService()
+        service._litellm_circuit_open_until = time.monotonic() + 20.0
+        service._litellm_last_error = "connection refused"
+        settings = {
+            "embedding.timeout": 1,
+            "embedding.litellm_connect_retries": 3,
+            "embedding.litellm_retry_backoff_ms": 0,
+            "embedding.litellm_circuit_open_secs": 5,
+        }
+        with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
+            mock_setting.side_effect = lambda key, default=None: settings.get(key, default)
+            with patch("litellm.embedding") as mock_embedding:
+                with pytest.raises(EmbeddingUnavailableError) as exc_info:
+                    service._embed_litellm(["hello"])
+        assert "circuit_open_remaining_secs" in str(exc_info.value)
+        mock_embedding.assert_not_called()
+
+    def test_embed_litellm_recovers_and_clears_circuit(self):
+        from omni.foundation.services.embedding import EmbeddingService
+
+        service = EmbeddingService()
+        settings = {
+            "embedding.timeout": 1,
+            "embedding.litellm_connect_retries": 2,
+            "embedding.litellm_retry_backoff_ms": 0,
+            "embedding.litellm_circuit_open_secs": 5,
+        }
+
+        class _Resp:
+            data = [{"embedding": [0.1, 0.2, 0.3]}]
+
+        with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
+            mock_setting.side_effect = lambda key, default=None: settings.get(key, default)
+            with patch(
+                "litellm.embedding",
+                side_effect=[RuntimeError("Connection refused"), _Resp()],
+            ):
+                vectors = service._embed_litellm(["hello"])
+
+        assert len(vectors) == 1
+        assert vectors[0][:3] == [0.1, 0.2, 0.3]
+        assert service._litellm_circuit_open_until == 0.0
+        assert service._litellm_last_error is None
+
+    def test_embed_litellm_retries_loopback_alias_and_recovers(self):
+        from omni.foundation.services.embedding import EmbeddingService
+
+        service = EmbeddingService()
+        service._litellm_api_base = "http://localhost:11434"
+        settings = {
+            "embedding.provider": "ollama",
+            "embedding.timeout": 1,
+            "embedding.litellm_connect_retries": 2,
+            "embedding.litellm_retry_backoff_ms": 0,
+            "embedding.litellm_circuit_open_secs": 5,
+        }
+
+        class _Resp:
+            data = [{"embedding": [0.1, 0.2, 0.3]}]
+
+        def _embedding_side_effect(*_args, **kwargs):
+            api_base = kwargs.get("api_base")
+            if api_base == "http://localhost:11434":
+                raise RuntimeError("Connection refused")
+            if api_base == "http://127.0.0.1:11434":
+                return _Resp()
+            raise AssertionError(f"unexpected api_base: {api_base}")
+
+        with patch("omni.foundation.services.embedding.get_setting") as mock_setting:
+            mock_setting.side_effect = lambda key, default=None: settings.get(key, default)
+            with patch("litellm.embedding", side_effect=_embedding_side_effect) as mock_embedding:
+                vectors = service._embed_litellm(["hello"])
+
+        assert len(vectors) == 1
+        assert vectors[0][:3] == [0.1, 0.2, 0.3]
+        assert mock_embedding.call_count == 2
+        assert service._litellm_api_base == "http://127.0.0.1:11434"
+
+
+class TestEmbeddingServiceFallbackDimension:
+    """_embed_fallback returns vectors of configured dimension."""
+
+    def test_embed_fallback_output_shape(self):
+        """_embed_fallback returns list of vectors, each of length _dimension."""
+        from omni.foundation.services.embedding import EmbeddingService
+
+        EmbeddingService._instance = None
+        service = EmbeddingService()
+        service._dimension = 64
+        result = service._embed_fallback(["a", "b"])
+        assert len(result) == 2
+        assert all(len(v) == 64 for v in result)
+        assert all(isinstance(x, float) for v in result for x in v)
+
+
+class TestEmbeddingOverride:
+    """When an override is set (e.g. by skill hooks), embed/embed_batch delegate to it."""
+
+    def test_embed_batch_uses_override_when_set(self):
+        from omni.foundation.services.embedding import (
+            get_embedding_override,
+            get_embedding_service,
+            set_embedding_override,
+        )
+
+        class MockOverride:
+            def embed(self, text: str):
+                return [[0.1] * 8]
+
+            def embed_batch(self, texts: list[str]):
+                return [[0.2] * 8 for _ in texts]
+
+        try:
+            set_embedding_override(MockOverride())
+            svc = get_embedding_service()
+            out = svc.embed_batch(["a", "b"])
+            assert out == [[0.2] * 8, [0.2] * 8]
+        finally:
+            set_embedding_override(None)
+        assert get_embedding_override() is None
 
 
 if __name__ == "__main__":

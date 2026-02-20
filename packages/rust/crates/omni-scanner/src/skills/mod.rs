@@ -1,6 +1,6 @@
 //! Skills Scanner Module
 //!
-//! Scans skill directories for SKILL.md and @skill_command scripts.
+//! Scans skill directories for SKILL.md and @`skill_command` scripts.
 
 pub mod canonical;
 pub mod metadata;

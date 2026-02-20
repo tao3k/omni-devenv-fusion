@@ -1,20 +1,47 @@
 """Git-related test fixtures."""
 
 import subprocess
-from pathlib import Path
+
 import pytest
 
 
+def _reset_git_root_caches() -> None:
+    """Reset project-root related caches for isolated git test repos."""
+    try:
+        from omni.foundation.runtime.gitops import clear_project_root_cache
+
+        clear_project_root_cache()
+
+        from omni.foundation.config.dirs import PRJ_DIRS
+
+        PRJ_DIRS.clear_cache()
+
+        # Reset ConfigPaths singletons (both class-level and module-level)
+        import omni.foundation.config.paths as paths_module
+
+        paths_module._paths_instance = None
+        paths_module.ConfigPaths._instance = None
+    except ImportError:
+        pass
+
+
 @pytest.fixture
-def temp_git_repo(tmp_path):
+def temp_git_repo(tmp_path, monkeypatch):
     """Create a temporary git repository for testing."""
+    monkeypatch.delenv("PRJ_ROOT", raising=False)
+    _reset_git_root_caches()
+
     subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True)
     (tmp_path / "README.md").write_text("# Test Repo")
     subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=tmp_path, check=True)
-    return tmp_path
+    try:
+        yield tmp_path
+    finally:
+        # Avoid leaking temporary git root into cached project-root resolution.
+        _reset_git_root_caches()
 
 
 @pytest.fixture
@@ -35,22 +62,7 @@ def git_test_env(temp_git_repo, monkeypatch):
     monkeypatch.delenv("PRJ_ROOT", raising=False)
 
     # Reset caches to pick up new CWD as project root
-    try:
-        from omni.foundation.runtime.gitops import clear_project_root_cache
-
-        clear_project_root_cache()
-
-        from omni.foundation.config.dirs import PRJ_DIRS
-
-        PRJ_DIRS.clear_cache()
-
-        # Reset ConfigPaths singletons (both class-level and module-level)
-        import omni.foundation.config.paths as paths_module
-
-        paths_module._paths_instance = None
-        paths_module.ConfigPaths._instance = None
-    except ImportError:
-        pass
+    _reset_git_root_caches()
 
     return temp_git_repo
 

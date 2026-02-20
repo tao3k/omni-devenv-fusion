@@ -1,0 +1,101 @@
+name: "Omni-Agent Memory Gates"
+
+on:
+  pull_request:
+  schedule:
+    - cron: "15 3 * * *"
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Gate profile to run"
+        required: true
+        type: choice
+        options:
+          - quick
+          - nightly
+        default: quick
+
+jobs:
+  memory-gate-quick:
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.profile == 'quick')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: ./.github/actions/common-setup
+        with:
+          SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+
+      - name: Run omni-agent memory gate (quick)
+        run: |
+          secretspec run --provider env --profile default -- devenv shell -- bash -lc '
+            set -euo pipefail
+            python3 scripts/channel/test_omni_agent_memory_ci_gate.py --profile quick
+          '
+
+  memory-gate-nightly:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.profile == 'nightly')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: ./.github/actions/common-setup
+        with:
+          SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+
+      - name: Run omni-agent memory gate (nightly)
+        run: |
+          secretspec run --provider env --profile default -- devenv shell -- bash -lc '
+            set -euo pipefail
+            python3 scripts/channel/test_omni_agent_memory_ci_gate.py \
+              --profile nightly \
+              --benchmark-iterations 3 \
+              --max-mcp-call-waiting-events 0 \
+              --max-mcp-connect-waiting-events 0 \
+              --max-mcp-waiting-events-total 0
+          '
+
+  memory-gate-a7:
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: ./.github/actions/common-setup
+        with:
+          SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+
+      - name: Run omni-agent memory gate (A7 mandatory path)
+        run: |
+          secretspec run --provider env --profile default -- devenv shell -- bash -lc '
+            set -euo pipefail
+            python3 scripts/channel/test_omni_agent_memory_ci_gate.py \
+              --profile nightly \
+              --skip-matrix \
+              --skip-evolution \
+              --benchmark-iterations 3 \
+              --max-mcp-call-waiting-events 0 \
+              --max-mcp-connect-waiting-events 0 \
+              --max-mcp-waiting-events-total 0
+          '

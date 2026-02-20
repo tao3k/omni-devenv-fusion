@@ -49,7 +49,7 @@ The `prepare` node performs all "dirty work":
 3. **Run lefthook pre-commit**: May reformat files
 4. **Re-stage reformatted files**: Detect and re-stage files that were unstaged by lefthook
 5. **Get file list**: `git diff --cached --name-only`
-6. **Extract diff**: `git diff --cached` (truncated to 6000 chars)
+6. **Extract diff**: `git diff --cached --stat` (compact) + `prepare_for_summary(git diff -U2, ...)` (~4k chars)
 7. **Scope validation**: Read valid scopes from `cog.toml`
 
 Returns to LLM: `staged_files[]`, `diff_content`, `security_issues[]`, `scope_warning`

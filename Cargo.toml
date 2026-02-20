@@ -9,9 +9,10 @@ members = [
     "packages/rust/crates/omni-events",
     "packages/rust/crates/omni-executor",
     "packages/rust/crates/omni-io",
-    "packages/rust/crates/omni-knowledge",
+    "packages/rust/crates/xiuxian-wendao",
     "packages/rust/crates/omni-lance",
     "packages/rust/crates/omni-macros",
+    "packages/rust/crates/omni-memory",
     "packages/rust/crates/omni-scanner",
     "packages/rust/crates/omni-security",
     "packages/rust/crates/omni-sniffer",
@@ -21,6 +22,10 @@ members = [
     "packages/rust/crates/omni-tui",
     "packages/rust/crates/omni-types",
     "packages/rust/crates/omni-vector",
+    "packages/rust/crates/xiuxian-qianhuan",
+    "packages/rust/crates/omni-window",
+    "packages/rust/crates/omni-mcp-client",
+    "packages/rust/crates/omni-agent",
 ]
 
 # Workspace package metadata (inherited by all crates)
@@ -46,6 +51,7 @@ chrono = { version = "0.4.38", default-features = false }
 tracing = "0.1"
 globset = "0.4"
 rand = "0.8"
+comrak = { version = "0.50.0", default-features = false }
 
 # Git operations (libgit2 for performance)
 git2 = "0.20.3"
@@ -61,6 +67,7 @@ tempfile = "3.24"
 
 # JSON Schema generation for Schema Singularity (SSOT)
 schemars = "0.8.21"
+jsonschema = "0.18.3"
 
 # LanceDB for vector storage (2.0: v2 manifest default, create_index returns IndexMetadata)
 lance = "2.0"
@@ -73,9 +80,27 @@ arrow-ipc = "57"
 
 # Logging
 log = "0.4"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Parallel processing
 rayon = "1.11"
+
+# MCP client (omni-agent Phase A; ref: codex-rs rmcp-client)
+# Note: rmcp 0.15 requires "server" feature for client build (task_manager/handler refs)
+rmcp = { version = "0.15", default-features = false, features = [
+    "client",
+    "server",
+    "macros",
+    "schemars",
+    "transport-streamable-http-client-reqwest",
+    "transport-streamable-http-server",
+    "transport-child-process",
+] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# CLI and HTTP (omni-agent gateway)
+clap = { version = "4.5", features = ["derive"] }
+axum = "0.8"
 
 # Performance optimization - Thin LTO for reduced memory
 [profile.release]
@@ -94,4 +119,3 @@ missing_docs = "warn"      # Public APIs must have documentation
 pedantic = { level = "warn", priority = -1 }
 unwrap_used = "deny"       # Deny unwrap usage in production
 expect_used = "deny"       # Deny expect usage in production
-

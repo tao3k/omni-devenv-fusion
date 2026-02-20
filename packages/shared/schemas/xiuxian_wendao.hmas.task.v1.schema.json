@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "xiuxian_wendao.hmas.task.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["requirement_id", "objective", "hard_constraints"],
+  "properties": {
+    "requirement_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hard_constraints": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "assigned_to": {
+      "type": ["string", "null"]
+    }
+  }
+}

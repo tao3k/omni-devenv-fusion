@@ -1,7 +1,7 @@
 //! omni-ast - Unified AST Utilities using ast-grep
 //!
 //! This crate provides a unified interface for AST-based code analysis
-//! across the Omni DevEnv project.
+//! across the Omni `DevEnv` project.
 //!
 //! ## Architecture
 //!

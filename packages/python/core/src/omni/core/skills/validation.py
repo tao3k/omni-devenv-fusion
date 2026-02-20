@@ -85,6 +85,14 @@ def _get_tools() -> dict[str, dict[str, Any]]:
     return _skill_tools_cache
 
 
+def warm_tool_schema_cache() -> None:
+    """Preload skill tool schemas so first MCP tool call does not pay scanner cost.
+
+    Safe to call from any thread. Idempotent (cache is filled once).
+    """
+    _get_tools()
+
+
 def _get_tool(tool_name: str) -> dict[str, Any] | None:
     """Get a specific tool's metadata.
 

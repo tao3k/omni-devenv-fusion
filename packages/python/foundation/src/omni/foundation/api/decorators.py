@@ -16,6 +16,7 @@ Modularized structure:
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -94,7 +95,11 @@ from .mcp_schema import (
     IS_ERROR_KEY as MCP_RESULT_IS_ERROR_KEY,
     SCHEMA_NAME as MCP_TOOL_RESULT_SCHEMA_V1,
     build_result as _mcp_build_result,
+    enforce_result_shape as _mcp_enforce_result_shape,
+    parse_result_payload as _mcp_parse_result_payload,
     is_canonical as is_mcp_canonical_result,
+    get_schema_path as _mcp_get_schema_path,
+    validate as _mcp_validate,
 )
 
 
@@ -108,17 +113,27 @@ def _text_from_raw(value: Any) -> str:
 
 
 def normalize_mcp_tool_result(return_value: Any) -> dict[str, Any]:
-    """Normalize any skill return value to MCP tools/call result shape (shared schema API)."""
+    """Normalize any skill return value to MCP tools/call result shape (shared schema API).
+
+    - Canonical dicts are stripped to content + isError via enforce_result_shape.
+    - All other values are wrapped with build_result(text).
+    - Final result is validated against omni.mcp.tool_result.v1 when the schema exists.
+    """
     if hasattr(return_value, "success") and hasattr(return_value, "data"):
         if return_value.success and return_value.data is not None:
             return normalize_mcp_tool_result(return_value.data)
-        return _mcp_build_result(
+        result = _mcp_build_result(
             getattr(return_value, "error", None) or str(return_value),
             is_error=True,
         )
-    if is_mcp_canonical_result(return_value):
-        return return_value
-    return _mcp_build_result(_text_from_raw(return_value), is_error=False)
+    elif is_mcp_canonical_result(return_value):
+        result = _mcp_enforce_result_shape(return_value)
+    else:
+        result = _mcp_build_result(_text_from_raw(return_value), is_error=False)
+
+    if _mcp_get_schema_path().exists():
+        _mcp_validate(result)
+    return result
 
 
 def _copy_skill_attrs(
@@ -246,12 +261,15 @@ def skill_command(
         # This wraps the function with unified error/logging/result handling
         # Only trigger when at least one handler param is explicitly set to non-default
         handler_config = None
-        has_explicit_handler_params = (
-            error_strategy is not None  # Non-default: None vs "raise"
-            or log_level is not None  # Non-default: None vs "info"
+        has_explicit_logging_params = (
+            log_level is not None  # Non-default: None vs "info"
             or trace_args is True  # Non-default: True vs False
             or trace_result is False  # Non-default: False vs True
             or trace_timing is False  # Non-default: False vs True
+        )
+        has_explicit_handler_params = (
+            error_strategy is not None  # Non-default: None vs "raise"
+            or has_explicit_logging_params
             or filter_empty is False  # Non-default: False vs True
             or max_result_depth != 3  # Non-default: not 3 vs 3
         )
@@ -291,7 +309,7 @@ def skill_command(
                     trace_result=trace_result,
                     trace_timing=trace_timing,
                 )
-                if log_level is not None or trace_args or trace_result or trace_timing
+                if has_explicit_logging_params
                 else None,
                 result_config=ResultConfig(
                     filter_empty=filter_empty,
@@ -373,13 +391,119 @@ def skill_command(
         _inner = func
         _is_async = asyncio.iscoroutinefunction(_inner)
 
+        def _extract_graph_stats_monitor_fields(payload: Any) -> dict[str, Any]:
+            """Extract graph-stats observability fields from canonical payload."""
+            if not isinstance(payload, dict):
+                return {}
+            meta = payload.get("graph_stats_meta")
+            if not isinstance(meta, dict):
+                return {}
+
+            out: dict[str, Any] = {}
+            source = str(meta.get("source", "") or "").strip()
+            if source:
+                out["graph_stats_source"] = source
+
+            cache_hit = meta.get("cache_hit")
+            if isinstance(cache_hit, bool):
+                out["graph_stats_cache_hit"] = cache_hit
+
+            fresh = meta.get("fresh")
+            if isinstance(fresh, bool):
+                out["graph_stats_fresh"] = fresh
+
+            refresh_scheduled = meta.get("refresh_scheduled")
+            if isinstance(refresh_scheduled, bool):
+                out["graph_stats_refresh_scheduled"] = refresh_scheduled
+
+            age_raw = meta.get("age_ms")
+            if isinstance(age_raw, int | float):
+                out["graph_stats_age_ms"] = max(0, int(age_raw))
+
+            stats = payload.get("graph_stats")
+            if isinstance(stats, dict):
+                total_raw = stats.get("total_notes")
+                if isinstance(total_raw, int | float):
+                    out["graph_stats_total_notes"] = max(0, int(total_raw))
+
+            return out
+
+        def _record_execution_phase(
+            duration_ms: float,
+            *,
+            success: bool,
+            payload: Any = None,
+        ) -> None:
+            """Record decorator-level skill execution timing when monitor is active."""
+            try:
+                from ..runtime.skills_monitor import record_phase
+
+                extra = {
+                    "tool": full_name,
+                    "function": _inner.__name__,
+                    "success": success,
+                }
+                extra.update(_extract_graph_stats_monitor_fields(payload))
+                record_phase(
+                    "skill_command.execute",
+                    duration_ms,
+                    **extra,
+                )
+            except Exception:
+                # Monitoring must never break command execution.
+                pass
+
         async def _async_run(*args: Any, **kwargs: Any) -> dict[str, Any]:
-            out = await _inner(*args, **kwargs)
-            return normalize_mcp_tool_result(out)
+            start = time.perf_counter()
+            success = False
+            payload: Any = None
+            try:
+                out = await _inner(*args, **kwargs)
+                normalized = normalize_mcp_tool_result(out)
+                success = not bool(normalized.get("isError"))
+                try:
+                    payload = _mcp_parse_result_payload(normalized)
+                except Exception:
+                    payload = None
+                if (
+                    success
+                    and isinstance(payload, dict)
+                    and str(payload.get("status", "")).strip().lower() == "error"
+                ):
+                    success = False
+                return normalized
+            finally:
+                _record_execution_phase(
+                    (time.perf_counter() - start) * 1000,
+                    success=success,
+                    payload=payload,
+                )
 
         def _sync_run(*args: Any, **kwargs: Any) -> dict[str, Any]:
-            out = _inner(*args, **kwargs)
-            return normalize_mcp_tool_result(out)
+            start = time.perf_counter()
+            success = False
+            payload: Any = None
+            try:
+                out = _inner(*args, **kwargs)
+                normalized = normalize_mcp_tool_result(out)
+                success = not bool(normalized.get("isError"))
+                try:
+                    payload = _mcp_parse_result_payload(normalized)
+                except Exception:
+                    payload = None
+                if (
+                    success
+                    and isinstance(payload, dict)
+                    and str(payload.get("status", "")).strip().lower() == "error"
+                ):
+                    success = False
+                return normalized
+            finally:
+                _record_execution_phase(
+                    (time.perf_counter() - start) * 1000,
+                    success=success,
+                    payload=payload,
+                )
 
         wrapper = _async_run if _is_async else _sync_run
         wrapper.__name__ = _inner.__name__

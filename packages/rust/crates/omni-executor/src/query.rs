@@ -3,12 +3,12 @@
 //! Prevents injection attacks by using a builder pattern instead of string concatenation.
 //! Automatically optimizes queries by composing efficient Nushell pipelines.
 
-use std::fmt::Write;
-
 /// Action type for semantic classification.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryAction {
+    /// Read-only intent.
     Observe,
+    /// Side-effect intent.
     Mutate,
 }
 
@@ -35,6 +35,7 @@ impl QueryBuilder {
     /// Create a new builder with the specified source command.
     ///
     /// Common sources: `ls`, `ps`, `git status`, `date`
+    #[must_use]
     pub fn new(source: &str) -> Self {
         Self {
             source_command: source.to_string(),
@@ -49,6 +50,7 @@ impl QueryBuilder {
     }
 
     /// Set the source path/argument (e.g., directory for `ls`).
+    #[must_use]
     pub fn source(mut self, path: &str) -> Self {
         self.source_args.push(path.to_string());
         self
@@ -58,10 +60,11 @@ impl QueryBuilder {
     ///
     /// # Safety
     /// The predicate is validated to prevent injection.
+    #[must_use]
     pub fn where_clause(mut self, predicate: &str) -> Self {
         // Validate predicate doesn't contain dangerous patterns
         if Self::is_safe_predicate(predicate) {
-            self.filters.push(format!("where {}", predicate));
+            self.filters.push(format!("where {predicate}"));
         }
         self
     }
@@ -69,22 +72,25 @@ impl QueryBuilder {
     /// Add a complex filter using a closure-like predicate.
     ///
     /// Wraps the predicate in a safe manner.
+    #[must_use]
     pub fn where_closure(mut self, closure: &str) -> Self {
         // Wrap in braces for closures: `where { |row| $row.size > 1kb }`
         if Self::is_safe_predicate(closure) {
-            self.filters.push(format!("where {{ |row| {} }}", closure));
+            self.filters.push(format!("where {{ |row| {closure} }}"));
         }
         self
     }
 
     /// Select specific columns for output.
+    #[must_use]
     pub fn select(mut self, columns: &[&str]) -> Self {
         self.output_columns
-            .extend(columns.iter().map(|c| c.to_string()));
+            .extend(columns.iter().map(std::string::ToString::to_string));
         self
     }
 
     /// Sort by column (ascending).
+    #[must_use]
     pub fn sort_by(mut self, column: &str) -> Self {
         self.sort_column = Some(column.to_string());
         self.sort_descending = false;
@@ -92,6 +98,7 @@ impl QueryBuilder {
     }
 
     /// Sort by column (descending).
+    #[must_use]
     pub fn sort_by_desc(mut self, column: &str) -> Self {
         self.sort_column = Some(column.to_string());
         self.sort_descending = true;
@@ -99,12 +106,14 @@ impl QueryBuilder {
     }
 
     /// Limit results to n items.
+    #[must_use]
     pub fn take(mut self, n: u32) -> Self {
         self.limit = Some(n);
         self
     }
 
     /// Set the action type (for safety validation).
+    #[must_use]
     pub fn with_action_type(mut self, action: QueryAction) -> Self {
         self.action_type = action;
         self
@@ -113,92 +122,69 @@ impl QueryBuilder {
     /// Build the final Nushell command string.
     ///
     /// Automatically composes the pipeline with `| to json --raw` for structured output.
+    #[must_use]
     pub fn build(self) -> String {
-        let mut cmd = String::new();
+        let mut cmd = self.build_base();
 
-        // 1. Source command with arguments
-        write!(cmd, "{}", self.source_command).unwrap();
-        for arg in &self.source_args {
-            write!(cmd, " {}", arg).unwrap();
-        }
-
-        // 2. Add filters (where clauses)
-        for filter in &self.filters {
-            write!(cmd, " | {}", filter).unwrap();
-        }
-
-        // 3. Add column selection
-        if !self.output_columns.is_empty() {
-            let cols = self.output_columns.join(" ");
-            write!(cmd, " | select {}", cols).unwrap();
-        }
-
-        // 4. Add sorting
-        if let Some(col) = &self.sort_column {
-            let cmd_name = if self.sort_descending {
-                "sort-by"
-            } else {
-                "sort-by"
-            };
-            write!(cmd, " | {} {}", cmd_name, col).unwrap();
-            if self.sort_descending {
-                write!(cmd, " --reverse").unwrap();
-            }
-        }
-
-        // 5. Add limit
-        if let Some(n) = self.limit {
-            write!(cmd, " | first {}", n).unwrap();
-        }
-
-        // 6. Force JSON output for structured data (Observation mode)
+        // 6. Force JSON output for structured data (observation mode)
         if self.action_type == QueryAction::Observe {
-            write!(cmd, " | to json --raw").unwrap();
+            cmd.push_str(" | to json --raw");
         }
 
         cmd
     }
 
     /// Build without JSON conversion (for further processing).
+    #[must_use]
     pub fn build_raw(&self) -> String {
-        let mut cmd = String::new();
-
-        write!(cmd, "{}", self.source_command).unwrap();
-        for arg in &self.source_args {
-            write!(cmd, " {}", arg).unwrap();
-        }
-
-        for filter in &self.filters {
-            write!(cmd, " | {}", filter).unwrap();
-        }
-
-        if !self.output_columns.is_empty() {
-            let cols = self.output_columns.join(" ");
-            write!(cmd, " | select {}", cols).unwrap();
-        }
-
-        if let Some(col) = &self.sort_column {
-            let cmd_name = if self.sort_descending {
-                "sort-by"
-            } else {
-                "sort-by"
-            };
-            write!(cmd, " | {} {}", cmd_name, col).unwrap();
-            if self.sort_descending {
-                write!(cmd, " --reverse").unwrap();
-            }
-        }
-
-        if let Some(n) = self.limit {
-            write!(cmd, " | first {}", n).unwrap();
-        }
-
-        cmd
+        self.build_base()
     }
 
     /// Get the action type (for decision making).
+    #[must_use]
     pub fn get_action_type(&self) -> &QueryAction {
         &self.action_type
+    }
+
+    fn build_base(&self) -> String {
+        let mut cmd = String::new();
+
+        // 1. Source command with arguments
+        cmd.push_str(&self.source_command);
+        for arg in &self.source_args {
+            cmd.push(' ');
+            cmd.push_str(arg);
+        }
+
+        // 2. Add filters (where clauses)
+        for filter in &self.filters {
+            cmd.push_str(" | ");
+            cmd.push_str(filter);
+        }
+
+        // 3. Add column selection
+        if !self.output_columns.is_empty() {
+            let cols = self.output_columns.join(" ");
+            cmd.push_str(" | select ");
+            cmd.push_str(&cols);
+        }
+
+        // 4. Add sorting
+        if let Some(col) = &self.sort_column {
+            cmd.push_str(" | sort-by ");
+            cmd.push_str(col);
+            if self.sort_descending {
+                cmd.push_str(" --reverse");
+            }
+        }
+
+        // 5. Add limit
+        if let Some(n) = self.limit {
+            cmd.push_str(" | first ");
+            cmd.push_str(&n.to_string());
+        }
+
+        cmd
     }
 
     /// Check if a predicate is safe (no injection patterns).
@@ -225,9 +211,7 @@ impl QueryBuilder {
         let allowed_operators = [
             "==", "!=", ">", "<", ">=", "<=", "and", "or", "not", "=~", "!~",
         ];
-        let has_operator = allowed_operators.iter().any(|op| p.contains(op));
-
-        has_operator
+        allowed_operators.iter().any(|op| p.contains(op))
     }
 }
 

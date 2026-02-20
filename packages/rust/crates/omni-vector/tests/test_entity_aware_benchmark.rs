@@ -58,6 +58,7 @@ fn generate_keyword_results(count: usize) -> Vec<ToolSearchResult> {
             routing_keywords: vec![],
             intents: vec![],
             category: "benchmark".to_string(),
+            parameters: vec![],
         })
         .collect();
 

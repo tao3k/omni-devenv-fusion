@@ -94,7 +94,8 @@ impl FoldablePanel {
 
     /// Scroll down
     pub fn scroll_down(&mut self) {
-        if self.scroll_offset < self.content.len().saturating_sub(1) as u16 {
+        let max_offset = u16::try_from(self.content.len().saturating_sub(1)).unwrap_or(u16::MAX);
+        if self.scroll_offset < max_offset {
             self.scroll_offset += 1;
         }
     }
@@ -116,8 +117,10 @@ impl FoldablePanel {
         match self.state {
             PanelState::Folded => FOLDED_HEIGHT,
             PanelState::Expanded => {
-                let max_visible = (MAX_EXPANDED_HEIGHT as usize).min(self.content.len());
-                (max_visible as u16).saturating_add(2) // +2 for borders
+                let max_visible = usize::from(MAX_EXPANDED_HEIGHT).min(self.content.len());
+                u16::try_from(max_visible)
+                    .unwrap_or(MAX_EXPANDED_HEIGHT)
+                    .saturating_add(2) // +2 for borders
             }
         }
     }

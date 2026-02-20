@@ -6,6 +6,47 @@
 
 The vector checkpoint system provides state persistence for LangGraph workflows using LanceDB. It combines traditional checkpoint storage with semantic search capabilities, enabling experience recall across sessions.
 
+## 2026-02 Update (Current Baseline)
+
+### Shared Schema Contract (Single Source of Truth)
+
+- Checkpoint payload schema is now centralized at:
+  - `packages/shared/schemas/omni.checkpoint.record.v1.schema.json`
+- Python side validates through:
+  - `omni.foundation.api.checkpoint_schema`
+- Rust binding side validates against the same JSON schema before write:
+  - `packages/rust/bindings/python/src/checkpoint.rs`
+
+### Strict Validation (No Silent Fallback)
+
+- Schema validation is mandatory for checkpoint writes.
+- Checkpoint runtime is Rust-only (`omni_core_rs`); legacy SQLite/in-memory fallback path is removed.
+- Missing schema file now fails fast (`FileNotFoundError`) instead of silently skipping validation.
+- Semantic constraints are also enforced:
+  - `table_name` must be non-empty
+  - `parent_id != checkpoint_id`
+  - timestamp must be finite
+  - embedding values must be finite
+  - metadata must decode to JSON object string
+
+### Rust Core Auto-Repair
+
+`omni-vector` checkpoint store now includes startup self-healing:
+
+- Schema drift detection and repair (`validate_dataset_schema`)
+- Startup repair guard (`run_startup_repairs_once`)
+- Interrupted/orphan state cleanup (including dangling parent chains)
+
+Store implementation was split into focused modules for maintainability:
+
+- `src/checkpoint/store/lifecycle.rs`
+- `src/checkpoint/store/schema.rs`
+- `src/checkpoint/store/maintenance.rs`
+- `src/checkpoint/store/read_ops.rs`
+- `src/checkpoint/store/write_ops.rs`
+- `src/checkpoint/store/search_ops.rs`
+- `src/checkpoint/store/timeline_ops.rs`
+
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ Python Layer (omni.langgraph.checkpoint)                                │
@@ -237,7 +278,7 @@ pub struct CheckpointRecord {
 ## Configuration
 
 ```yaml
-# settings.yaml (merged runtime view)
+# settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml)
 checkpoint:
   path: ".cache/checkpoints.lance"
   dimension: 1536 # OpenAI Ada-002 embedding dimension
@@ -338,7 +379,7 @@ logger.info(f"Compiled app checkpointer: {_app.checkpointer}")
 
 **Configuration:**
 
-- `settings.yaml` - Runtime configuration (`packages/conf/settings.yaml` system default + `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml` override)
+- Merged settings - Runtime configuration: system `packages/conf/settings.yaml`, user `$PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml`
 
 ---
 

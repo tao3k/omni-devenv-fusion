@@ -4,6 +4,16 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      run_recall_perf_gates:
+        description: "Run optional knowledge.recall perf gates"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 jobs:
   architecture-gate:
@@ -103,13 +113,27 @@ jobs:
           - os: ubuntu-latest
             perf_p95_ms: "700"
             perf_ratio_max: "4.0"
+            recall_perf_p95_ms: "2500"
+            recall_rss_peak_delta_mb: "320"
+            recall_graph_perf_p95_ms: "1800"
+            recall_graph_rss_peak_delta_mb: "280"
           - os: macos-latest
             perf_p95_ms: "900"
             perf_ratio_max: "4.5"
+            recall_perf_p95_ms: "3200"
+            recall_rss_peak_delta_mb: "360"
+            recall_graph_perf_p95_ms: "2200"
+            recall_graph_rss_peak_delta_mb: "320"
     env:
       MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
       OMNI_VECTOR_PERF_P95_MS: ${{ matrix.perf_p95_ms }}
       OMNI_VECTOR_PERF_RATIO_MAX: ${{ matrix.perf_ratio_max }}
+      OMNI_KNOWLEDGE_RECALL_P95_MS: ${{ matrix.recall_perf_p95_ms }}
+      OMNI_KNOWLEDGE_RECALL_RSS_PEAK_DELTA_MB: ${{ matrix.recall_rss_peak_delta_mb }}
+      OMNI_KNOWLEDGE_RECALL_GRAPH_P95_MS: ${{ matrix.recall_graph_perf_p95_ms }}
+      OMNI_KNOWLEDGE_RECALL_GRAPH_RSS_PEAK_DELTA_MB: ${{ matrix.recall_graph_rss_peak_delta_mb }}
+      OMNI_KNOWLEDGE_RECALL_MAX_FAILURES: "0"
+      OMNI_KNOWLEDGE_RECALL_REPORT_DIR: ".run/reports/knowledge-recall-perf"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -121,8 +145,8 @@ jobs:
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
 
-      - name: Rust gate - cargo check
-        run: secretspec run --provider env --profile default -- devenv shell -- cargo check --workspace --all-targets
+      - name: Rust gate - quality gates (strict clippy baseline)
+        run: secretspec run --provider env --profile default -- devenv shell -- just rust-quality-gate
 
       - name: Rust gate - snapshot contracts
         run: secretspec run --provider env --profile default -- devenv shell -- cargo test -p omni-vector --test test_fusion_snapshots
@@ -133,9 +157,54 @@ jobs:
       - name: Contract E2E - route test JSON (Rust -> Python -> CLI schema)
         run: secretspec run --provider env --profile default -- devenv shell -- uv run pytest packages/python/foundation/tests/unit/services/test_contract_consistency.py::test_route_test_cli_json_validates_against_schema -v
 
+      - name: Contract freeze - schemas and canonical snapshots
+        run: secretspec run --provider env --profile default -- devenv shell -- just test-contract-freeze
+
       - name: Docs advisory - vector search options contract
         continue-on-error: true
         run: secretspec run --provider env --profile default -- devenv shell -- uv run python scripts/generate_vector_search_options_contract.py --check
 
       - name: Run tests
         run: secretspec run --provider env --profile default -- devenv shell -- just test-quick
+
+      - name: Skill gate (advisory) - knowledge.recall perf
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_recall_perf_gates == 'true' }}
+        continue-on-error: true
+        run: |
+          mkdir -p "${OMNI_KNOWLEDGE_RECALL_REPORT_DIR}"
+          secretspec run --provider env --profile default -- devenv shell -- \
+            uv run python scripts/knowledge_recall_perf_gate.py \
+              --query x \
+              --limit 2 \
+              --runs 3 \
+              --warm-runs 1 \
+              --retrieval-mode auto \
+              --max-p95-ms "${OMNI_KNOWLEDGE_RECALL_P95_MS}" \
+              --max-rss-peak-delta-mb "${OMNI_KNOWLEDGE_RECALL_RSS_PEAK_DELTA_MB}" \
+              --max-failures "${OMNI_KNOWLEDGE_RECALL_MAX_FAILURES}" \
+              --json-output "${OMNI_KNOWLEDGE_RECALL_REPORT_DIR}/auto.json"
+
+      - name: Skill gate (advisory) - knowledge.recall perf (graph_only)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_recall_perf_gates == 'true' }}
+        continue-on-error: true
+        run: |
+          mkdir -p "${OMNI_KNOWLEDGE_RECALL_REPORT_DIR}"
+          secretspec run --provider env --profile default -- devenv shell -- \
+            uv run python scripts/knowledge_recall_perf_gate.py \
+              --query x \
+              --limit 2 \
+              --runs 3 \
+              --warm-runs 1 \
+              --retrieval-mode graph_only \
+              --max-p95-ms "${OMNI_KNOWLEDGE_RECALL_GRAPH_P95_MS}" \
+              --max-rss-peak-delta-mb "${OMNI_KNOWLEDGE_RECALL_GRAPH_RSS_PEAK_DELTA_MB}" \
+              --max-failures "${OMNI_KNOWLEDGE_RECALL_MAX_FAILURES}" \
+              --json-output "${OMNI_KNOWLEDGE_RECALL_REPORT_DIR}/graph_only.json"
+
+      - name: Upload knowledge recall perf reports
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && github.event.inputs.run_recall_perf_gates == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: knowledge-recall-perf-${{ matrix.os }}
+          path: ${{ env.OMNI_KNOWLEDGE_RECALL_REPORT_DIR }}
+          if-no-files-found: warn

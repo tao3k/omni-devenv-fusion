@@ -106,19 +106,41 @@ If validation fails, Python returns an empty result list and does not call Rust.
 ## Recommended Profiles
 
 - `small` (local/dev, <=100k rows): `batch_size=256`, `fragment_readahead=2`, `batch_readahead=4`
-- `medium` (default balanced): `batch_size=1024`, `fragment_readahead=4`, `batch_readahead=16`
+- `medium` (balanced): `batch_size=1024`, `fragment_readahead=4`, `batch_readahead=16`
 - `large` (throughput oriented): `batch_size=2048`, `fragment_readahead=8`, `batch_readahead=32`, optionally set `scan_limit`
+
+When scanner options are omitted in Python, `run_semantic_search(...)` applies these profiles
+adaptively by `n_results`:
+
+- `n_results <= 20` → `small`
+- `20 < n_results <= 200` → `medium`
+- `n_results > 200` → `large`
 
 Start from `medium`, then benchmark against your dataset/query mix before raising readahead.
 
 ## Effective Defaults
 
-When a field is omitted (or all options are omitted), Rust applies defaults from `SearchOptions::default()`:
+Python always sends effective values for:
+
+- `batch_size`
+- `fragment_readahead`
+- `batch_readahead`
+
+`scan_limit` remains optional and is omitted unless explicitly set.
+
+Rust `SearchOptions::default()` still defines baseline values used when callers bypass this Python layer:
 
 - `batch_size = 1024`
 - `fragment_readahead = 4`
 - `batch_readahead = 16`
 - `scan_limit = None` (uses ANN fetch count)
+
+## Embedding Cache Behavior
+
+- In-process cache: LRU by query (fast path within one process).
+- Cross-process warm cache: the last query embedding is persisted at
+  `$PRJ_CACHE_HOME/omni-vector/query-embed-last.json` (keyed by embedding signature + query hash).
+- Signature mismatch (provider/model/dimension/url changes) automatically invalidates persisted reuse.
 
 ## Canonical Example
 

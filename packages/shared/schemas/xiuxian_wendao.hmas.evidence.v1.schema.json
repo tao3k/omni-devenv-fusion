@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "xiuxian_wendao.hmas.evidence.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["requirement_id", "evidence"],
+  "properties": {
+    "requirement_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_nodes_accessed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["node_id"],
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "saliency_at_time": {
+            "type": ["number", "null"]
+          }
+        }
+      }
+    }
+  }
+}

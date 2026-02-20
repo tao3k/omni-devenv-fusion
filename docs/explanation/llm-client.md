@@ -15,7 +15,7 @@ The `InferenceClient` provides a unified interface for calling LLM APIs (Anthrop
 │                                                             │
 │  ┌─────────────────┐     ┌─────────────────┐               │
 │  │  Configuration  │────▶│  API Client     │               │
-│  │  (settings.yaml)│     │  (Anthropic)    │               │
+│  │  (settings)│     │  (Anthropic)    │               │
 │  └─────────────────┘     └────────┬────────┘               │
 │                                   │                         │
 │                                   ▼                         │
@@ -185,7 +185,7 @@ for tool_call_match in matches:
 
 ## Configuration
 
-### Settings (`settings.yaml`)
+### Settings (system: packages/conf/settings.yaml, user: $PRJ_CONFIG_HOME/omni-dev-fusion/settings.yaml)
 
 ```yaml
 inference:

@@ -1,0 +1,19 @@
+[package]
+name = "omni-window"
+version.workspace = true
+edition.workspace = true
+description = "High-performance session window for 1k–10k turns (ring buffer)"
+authors = ["Omni-Dev-Fusion Team"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+serde = { workspace = true }
+pyo3 = { workspace = true, optional = true }
+
+[features]
+default = []
+pybindings = ["pyo3"]
+
+[lints]
+workspace = true

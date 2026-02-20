@@ -160,6 +160,43 @@ async fn test_delete_regression_sql_like_patterns() {
     );
 }
 
+/// Robustness: replace_documents with empty batch must not drop the table.
+#[tokio::test]
+async fn test_replace_documents_empty_batch_preserves_table() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("test_replace_empty");
+
+    let mut store = VectorStore::new(db_path.to_str().unwrap(), Some(1536))
+        .await
+        .unwrap();
+
+    // Add initial data
+    store
+        .add_documents(
+            "skills",
+            vec!["id1".to_string()],
+            vec![vec![0.1; 1536]],
+            vec!["content1".to_string()],
+            vec!["{}".to_string()],
+        )
+        .await
+        .unwrap();
+    assert_eq!(store.count("skills").await.unwrap(), 1);
+
+    // replace_documents with empty batch must not drop (robustness: avoid empty table)
+    store
+        .replace_documents("skills", vec![], vec![], vec![], vec![])
+        .await
+        .unwrap();
+
+    // Table must still have the original data
+    assert_eq!(
+        store.count("skills").await.unwrap(),
+        1,
+        "replace_documents with empty batch must preserve existing table"
+    );
+}
+
 #[tokio::test]
 async fn test_replace_documents_rebuilds_table_snapshot() {
     let temp_dir = tempfile::tempdir().unwrap();
@@ -194,4 +231,44 @@ async fn test_replace_documents_rebuilds_table_snapshot() {
 
     // Old snapshot should be fully replaced.
     assert_eq!(store.count("skills").await.unwrap(), 1);
+}
+
+#[tokio::test]
+async fn test_delete_by_metadata_source() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("test_delete_by_source");
+
+    let store = VectorStore::new(db_path.to_str().unwrap(), Some(64))
+        .await
+        .unwrap();
+
+    let source = "/tmp/docs/2602.12108.pdf";
+    let metadatas = vec![
+        serde_json::json!({"source": source, "chunk_index": 0, "title": "doc"}).to_string(),
+        serde_json::json!({"source": source, "chunk_index": 1, "title": "doc"}).to_string(),
+        serde_json::json!({"source": source, "chunk_index": 2, "title": "doc"}).to_string(),
+    ];
+    store
+        .add_documents(
+            "knowledge_chunks",
+            vec![
+                "chunk-0".to_string(),
+                "chunk-1".to_string(),
+                "chunk-2".to_string(),
+            ],
+            vec![vec![0.1; 64], vec![0.2; 64], vec![0.3; 64]],
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            metadatas,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(store.count("knowledge_chunks").await.unwrap(), 3);
+
+    let deleted = store
+        .delete_by_metadata_source("knowledge_chunks", source)
+        .await
+        .unwrap();
+    assert_eq!(deleted, 3);
+    assert_eq!(store.count("knowledge_chunks").await.unwrap(), 0);
 }

@@ -7,6 +7,7 @@ dynamic = ["version"]
 dependencies = [
     "docling>=2.72.0",
     "pdfminer-six>=20260107",
+    "pymupdf>=1.25.0",
     "raganything",
     "structlog>=25.5.0",
 ]
@@ -15,6 +16,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "omni-core-rs",
+    "xiuxian-wendao-py",
     "omni-agent",
     "omni-foundation",
     "omni-core",
@@ -31,6 +33,7 @@ dev = [
     "ruff>=0.14.10",
     "vulture>=2.14",
     "pytest-json-report>=1.5.0",
+    "pytest-rerunfailures>=14.0",
     "maturin>=1.11.5",
 ]
 
@@ -45,6 +48,7 @@ source = "vcs"
 
 
 [tool.uv.sources]
+xiuxian-wendao-py = { workspace = true }
 omni-foundation = { workspace = true }
 omni-agent = { workspace = true }
 omni-core = { workspace = true }
@@ -65,7 +69,12 @@ bypass-selection = true
 [tool.ruff]
 target-version = "py313"
 line-length = 100
-src = ["packages/python/agent/src", "packages/python/core/src", "packages/python/foundation/src"]
+src = [
+    "packages/python/agent/src",
+    "packages/python/core/src",
+    "packages/python/foundation/src",
+    "packages/python/xiuxian-wendao-py/src",
+]
 
 [tool.ruff.lint]
 select = [
@@ -86,7 +95,7 @@ ignore = ["E501"]
 keep-runtime-typing = true
 
 [tool.ruff.lint.isort]
-known-first-party = ["omni.agent", "omni.core", "omni.foundation"]
+known-first-party = ["omni.agent", "omni.core", "omni.foundation", "xiuxian_wendao_py"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.ruff.format]
@@ -101,7 +110,12 @@ warn_unused_configs = true
 disallow_untyped_defs = false
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = ["packages/python/agent/src", "packages/python/core/src", "packages/python/foundation/src"]
+mypy_path = [
+    "packages/python/agent/src",
+    "packages/python/core/src",
+    "packages/python/foundation/src",
+    "packages/python/xiuxian-wendao-py/src",
+]
 
 # Native TOML config for pytest 9.0+ (supports list, bool, dict types)
 [tool.pytest]
@@ -111,17 +125,18 @@ strict = true  # Enable strict_config, strict_markers, strict_parametrization_id
 timeout = 300  # Default timeout in seconds (5 minutes)
 addopts = [
     "--timeout=300",
-    "-n", "auto",  # Parallel execution with auto-detected workers
-    "--maxprocesses=4",  # Limit to 4 processes
+    "-n", "1",  # Single process to prevent 4×10GB=40GB OOM; use OMNIDEV_TEST_WORKERS=4 for parallel
     "-p", "no:randomly",  # Disable random order for consistent output
     "-p", "no:benchmark", # Disable benchmark to avoid xdist warnings
 ]
 testpaths = [
     "packages/python/agent/tests",
     "packages/python/core/tests",
-    "packages/python/mcp-server/tests",
     "packages/python/foundation/tests",
-    "assets/skills"
+    "packages/python/mcp-server/tests",
+    "packages/python/test-kit/tests",
+    "packages/python/xiuxian-wendao-py/tests",
+    "assets/skills",
 ]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
@@ -137,6 +152,7 @@ filterwarnings = [
     "ignore:coroutine 'Logging\\.async_success_handler' was never awaited:RuntimeWarning:litellm\\.litellm_core_utils\\.logging_worker",
     # Ignore benchmark disabled warning when running in parallel (xdist)
     "ignore:Benchmarks are automatically disabled:pytest_benchmark.logger.PytestBenchmarkWarning",
+    "ignore:Module already imported so cannot be rewritten; omni\\.test_kit\\.fixtures:pytest.PytestAssertRewriteWarning",
 ]
 norecursedirs = ["stress_tests"]
 markers = [

@@ -10,6 +10,7 @@ use lance::deps::arrow_array::{DictionaryArray, ListArray};
 /// Returns the string at row index `i` for a column that may be Utf8 or Dictionary<Int32, Utf8>.
 /// Returns empty string when the column is null at `i` or the column type is unsupported.
 #[inline]
+#[allow(clippy::collapsible_if)]
 pub fn get_utf8_at(array: &dyn Array, i: usize) -> String {
     if let Some(s) = array.as_any().downcast_ref::<StringArray>() {
         if s.is_null(i) {
@@ -41,9 +42,8 @@ fn get_string_list_at_impl(
             return Vec::new();
         }
         let slice = list.value(i);
-        let str_arr = match slice.as_any().downcast_ref::<StringArray>() {
-            Some(a) => a,
-            None => return Vec::new(),
+        let Some(str_arr) = slice.as_any().downcast_ref::<StringArray>() else {
+            return Vec::new();
         };
         return (0..str_arr.len())
             .map(|j| {

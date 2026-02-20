@@ -35,6 +35,16 @@ class _ClientTextList:
         return [{"type": "text", "text": '{"docs":["j1","j2"],"status":"ok"}'}]
 
 
+class _ClientCanonicalDict:
+    async def call_tool(self, name: str, arguments: dict | None = None):
+        assert name == "retriever.search"
+        assert arguments == {"query": "typed languages"}
+        return {
+            "content": [{"type": "text", "text": '{"docs":["c1","c2"],"status":"ok"}'}],
+            "isError": False,
+        }
+
+
 @pytest.mark.asyncio
 async def test_mcp_invoker_supports_positional_arguments_signature():
     invoker = MCPToolInvoker(_ClientPositional())
@@ -69,6 +79,18 @@ async def test_mcp_invoker_normalizes_text_content_json():
         state={},
     )
     assert result["docs"] == ["j1", "j2"]
+
+
+@pytest.mark.asyncio
+async def test_mcp_invoker_normalizes_canonical_dict_json():
+    invoker = MCPToolInvoker(_ClientCanonicalDict())
+    result = await invoker.invoke(
+        server="retriever",
+        tool="search",
+        payload={"query": "typed languages"},
+        state={},
+    )
+    assert result["docs"] == ["c1", "c2"]
 
 
 @pytest.mark.asyncio

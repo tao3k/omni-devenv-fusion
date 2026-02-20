@@ -1,0 +1,61 @@
+[package]
+name = "omni-memory"
+version.workspace = true
+edition.workspace = true
+description = "Self-evolving memory engine with Q-Learning and Two-Phase Search"
+authors = ["Omni-Dev-Fusion Team"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+# Note: LanceDB persistence is deferred due to API changes in newer LanceDB versions.
+# Use JSON persistence instead. Re-add when ready to upgrade.
+# lance = { workspace = true }
+# lance-arrow = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "fs"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+chrono = { workspace = true, features = ["clock"] }
+uuid = { workspace = true }
+
+# Async stream combinators
+futures = "0.3"
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Reuse common types
+omni-types = { path = "../omni-types" }
+
+# Vector operations for embedding similarity (using our own simple implementation)
+# lance-linalg = "2.0"  # Deferred
+
+# DashMap for concurrent Q-table
+dashmap = "7.0.0-rc2"
+
+# Logging
+log = { workspace = true }
+redis = { version = "1.0.3", default-features = false, optional = true }
+
+# Python bindings
+pyo3 = { workspace = true, optional = true }
+
+[features]
+default = []
+pybindings = ["pyo3"]
+valkey = ["dep:redis"]
+# lance = []  # Reserved for future LanceDB upgrade
+
+[dev-dependencies]
+omni-io = { path = "../omni-io" }
+tempfile = { workspace = true }
+rand = "0.8"
+
+[lints]
+workspace = true

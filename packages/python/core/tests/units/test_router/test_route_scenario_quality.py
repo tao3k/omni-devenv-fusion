@@ -161,7 +161,7 @@ ROUTE_QUALITY_SCENARIOS = [
     ("get best practice for async", ["knowledge", "best_practice"], "knowledge-best-practice"),
     ("code search in project", ["knowledge", "code_search"], "knowledge-code-search"),
     ("dependency search for serde", ["knowledge", "dependency"], "knowledge-dependency"),
-    ("search ZK notes", ["knowledge", "zk_search"], "knowledge-zk"),
+    ("search link graph notes", ["knowledge", "search"], "knowledge-search-link-graph"),
     # --- Memory ---
     ("save memory", ["memory", "save_memory"], "memory-save"),
     ("search memory", ["memory", "search_memory"], "memory-search"),
@@ -267,6 +267,23 @@ class TestRouteQualityRanking:
         )
 
     @pytest.mark.asyncio
+    async def test_research_url_ranks_researcher_first(self, _synced_router):
+        """Regression: research+URL must rank researcher above crawl4ai (research intent favors repo analysis)."""
+        router = _synced_router
+        results = await router.route_hybrid(
+            "help me to research https://github.com/nickel-lang/tf-ncl/blob/main/examples/aws/modules/aws-simple-ec2.ncl",
+            limit=10,
+            threshold=0.0,
+        )
+        top = [_full_tool_name(r) for r in results[:5]]
+        researcher_idx = next((i for i, t in enumerate(top) if "researcher" in t), None)
+        crawl_idx = next((i for i, t in enumerate(top) if "crawl4ai" in t), None)
+        if researcher_idx is not None and crawl_idx is not None:
+            assert researcher_idx < crawl_idx, (
+                f"Researcher must rank above crawl4ai for research+URL. Got: {top}"
+            )
+
+    @pytest.mark.asyncio
     async def test_analyze_research_url_ranks_researcher_or_crawl_in_top2(self, _synced_router):
         """When user says analyze/research + URL, data-driven intent boost should put researcher or crawl4ai in top 2 (no hardcoded skill name)."""
         router = _synced_router
@@ -279,6 +296,41 @@ class TestRouteQualityRanking:
         top2 = [_full_tool_name(r) for r in results[:2]]
         assert any("researcher" in t or "crawl4ai" in t for t in top2), (
             f"Analyze/research + URL should rank researcher or crawl4ai in top 2 (data-driven). Got top 3: {[_full_tool_name(r) for r in results[:3]]}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_research_url_with_embed_func_ranks_researcher_or_crawl_in_top2(
+        self, _synced_router
+    ):
+        """Research+URL scenario must pass with _embed_func (MCP warm path); rust_limit expansion ensures URL tools enter top-N."""
+        import asyncio
+
+        from omni.foundation.services.embedding import get_embedding_service
+
+        router = _synced_router
+        embed_svc = get_embedding_service()
+        embed_svc.initialize()
+        if embed_svc.backend == "unavailable":
+            pytest.skip("Embedding service unavailable (Ollama not running)")
+
+        async def mcp_like_embed(texts):
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(None, lambda: embed_svc.embed_batch(texts))
+
+        router._hybrid._embed_func = mcp_like_embed
+        try:
+            results = await router.route_hybrid(
+                "help me to research https://github.com/nickel-lang/tf-ncl/blob/main/examples/aws/modules/aws-simple-ec2.ncl",
+                limit=10,
+                threshold=0.0,
+            )
+        finally:
+            router._hybrid._embed_func = None
+
+        assert len(results) >= 2, "Need at least 2 results to check ranking"
+        top2 = [_full_tool_name(r) for r in results[:2]]
+        assert any("researcher" in t or "crawl4ai" in t for t in top2), (
+            f"With _embed_func (MCP path), researcher or crawl4ai must be in top 2. Got top 3: {[_full_tool_name(r) for r in results[:3]]}"
         )
 
     @pytest.mark.asyncio

@@ -7,6 +7,7 @@ use crate::ToolSearchResult;
 use super::types::HybridSearchResult;
 
 /// Apply Reciprocal Rank Fusion to combine vector and keyword results.
+#[must_use]
 pub fn apply_rrf(
     vector_results: Vec<(String, f32)>,
     keyword_results: Vec<ToolSearchResult>,

@@ -1,0 +1,37 @@
+link_graph:
+  backend: "wendao"
+  config_relative_path: ".wendao/config.toml"
+
+  # Real-world documentation experiment scope.
+  include_dirs:
+    - "docs"
+    - "assets/skills"
+  include_dirs_auto: false
+
+  # Keep watcher scope aligned with index scope.
+  watch_dirs:
+    - "docs"
+    - "assets/skills"
+  watch_patterns:
+    - "**/*.md"
+    - "**/*.markdown"
+    - "**/*.mdx"
+    - "**/SKILL.md"
+
+  # Additional non-hidden excludes only.
+  exclude_dirs:
+    - "target"
+    - "node_modules"
+
+  cache:
+    valkey_url: "redis://127.0.0.1:6379/0"
+    key_prefix: "xiuxian_wendao:link_graph:index"
+    ttl_seconds: 300
+
+  stats_persistent_cache_ttl_sec: 120.0
+  stats_response_probe_timeout_sec: 0.05
+  stats_response_refresh_timeout_sec: 5.0
+
+  index:
+    delta:
+      full_rebuild_threshold: 256

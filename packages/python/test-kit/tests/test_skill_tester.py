@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 from omni.test_kit.skill import SkillCommandTester, ensure_skills_import_path
 
@@ -48,11 +47,7 @@ def test_skill_command_tester_uses_repo_fallback_skills_path(monkeypatch, tmp_pa
     PRJ_DIRS.clear_cache()
 
     tester = SkillCommandTester()
-    command = tester.load("demo", "scripts.commands", "echo")
-    assert callable(command)
-    # Ensure we loaded the repo skill module, not a temp path.
-    assert (
-        Path(command.__code__.co_filename)
-        .as_posix()
-        .endswith("assets/skills/demo/scripts/commands.py")
-    )
+    result = tester.run("demo", "scripts.commands", "echo", message="fallback")
+    # Ensure we loaded the repo demo skill (produces expected echo output).
+    assert result["original_message"] == "fallback"
+    assert result["echoed_message"] == "Echo: fallback"

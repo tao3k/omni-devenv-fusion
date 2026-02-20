@@ -43,8 +43,8 @@
         _module.args.workspaceRoot = ./.;
         imports = [
           inputs.nci.flakeModule
-          ./assets/nix/modules/flake-parts/omni-core-rs.nix
-          ./assets/nix/modules/flake-parts/omni-dev-fusion.nix
+          ./nix/modules/flake-parts/omni-core-rs.nix
+          ./nix/modules/flake-parts/omni-dev-fusion.nix
         ];
       };
 

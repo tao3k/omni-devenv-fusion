@@ -1,4 +1,5 @@
-//! omni-vector - High-Performance Embedded Vector Database using LanceDB
+//! omni-vector - High-Performance Embedded Vector Database using `LanceDB`
+#![allow(clippy::doc_markdown)]
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -62,6 +63,7 @@ pub mod index;
 pub mod keyword;
 pub mod ops;
 pub mod search;
+pub mod search_cache;
 pub mod skill;
 
 // ============================================================================
@@ -106,6 +108,7 @@ include!("search/search_impl.rs");
 
 impl VectorStore {
     /// Check if a metadata value matches the filter conditions.
+    #[must_use]
     pub fn matches_filter(metadata: &serde_json::Value, conditions: &serde_json::Value) -> bool {
         match conditions {
             serde_json::Value::Object(obj) => {

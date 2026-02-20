@@ -5,6 +5,7 @@
 //!
 //! Uses both `SkillScanner` (for SKILL.md) and `ToolsScanner` (for scripts/)
 //! to properly enrich tool records with routing_keywords from SKILL.md.
+#![allow(clippy::doc_markdown)]
 
 use serde::Serialize;
 use serde_json::Value;
@@ -41,6 +42,8 @@ pub struct ToolSearchResult {
     pub intents: Vec<String>,
     /// Tool category from decorator metadata (or inferred fallback).
     pub category: String,
+    /// Parameter names from index (for param-type boost when input_schema is empty).
+    pub parameters: Vec<String>,
 }
 
 /// Optional runtime controls for `search_tools` ranking pipeline.
@@ -93,6 +96,7 @@ fn is_uuid_like(value: &str) -> bool {
 ///
 /// We intentionally reject UUID-like names and whitespace-only identifiers to prevent
 /// non-command documents from polluting routing results.
+#[must_use]
 pub fn is_routable_tool_name(value: &str) -> bool {
     let name = value.trim();
     if name.is_empty() || name.len() > 160 {
@@ -130,6 +134,7 @@ pub fn is_routable_tool_name(value: &str) -> bool {
 /// - doubly-encoded JSON string object (parsed twice)
 ///
 /// Falls back to `{}` for invalid/non-object payloads.
+#[must_use]
 pub fn normalize_input_schema_value(value: &Value) -> Value {
     fn parse_object_from_str(raw: &str) -> Option<Value> {
         let first: Value = serde_json::from_str(raw).ok()?;
@@ -174,11 +179,13 @@ fn extract_string_array_field(meta: &Value, key: &str) -> Vec<String> {
 }
 
 /// Resolve routing keywords from metadata (strict single-field contract).
+#[must_use]
 pub fn resolve_routing_keywords(meta: &Value) -> Vec<String> {
     extract_string_array_field(meta, "routing_keywords")
 }
 
 /// Resolve intents from metadata with basic normalization.
+#[must_use]
 pub fn resolve_intents(meta: &Value) -> Vec<String> {
     extract_string_array_field(meta, "intents")
 }

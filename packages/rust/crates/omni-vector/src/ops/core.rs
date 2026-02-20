@@ -2,7 +2,12 @@
 static NEXT_MEMORY_MODE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 impl VectorStore {
-    /// Create a new VectorStore instance.
+    /// Create a new `VectorStore` instance.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if parent directories cannot be created.
+    #[allow(clippy::unused_async, clippy::collapsible_if)]
     pub async fn new(path: &str, dimension: Option<usize>) -> Result<Self, VectorStoreError> {
         let base_path = PathBuf::from(path);
         let memory_mode_id = if path == ":memory:" {
@@ -33,7 +38,11 @@ impl VectorStore {
         })
     }
 
-    /// Create a new VectorStore with optional dataset cache limit (LRU eviction when exceeded).
+    /// Create a new `VectorStore` with optional dataset cache limit (LRU eviction when exceeded).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when base store initialization fails.
     pub async fn new_with_cache_options(
         path: &str,
         dimension: Option<usize>,
@@ -44,7 +53,11 @@ impl VectorStore {
         Ok(store)
     }
 
-    /// Create a new VectorStore instance with optional keyword index and optional dataset cache.
+    /// Create a new `VectorStore` instance with optional keyword index and optional dataset cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when store initialization or keyword-index setup fails.
     pub async fn new_with_keyword_index(
         path: &str,
         dimension: Option<usize>,
@@ -63,7 +76,11 @@ impl VectorStore {
         .await
     }
 
-    /// Create a new VectorStore with explicit keyword backend and optional dataset cache.
+    /// Create a new `VectorStore` with explicit keyword backend and optional dataset cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when store initialization or keyword-index setup fails.
     pub async fn new_with_keyword_backend(
         path: &str,
         dimension: Option<usize>,
@@ -85,12 +102,17 @@ impl VectorStore {
     }
 
     /// Set an optional callback for index build progress (Started/Done; Progress when Lance exposes API).
+    #[must_use]
     pub fn with_index_progress_callback(mut self, cb: crate::IndexProgressCallback) -> Self {
         self.index_progress_callback = Some(cb);
         self
     }
 
     /// Open an existing dataset at the given URI, using optional index cache size when set.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the dataset cannot be opened or loaded.
     pub async fn open_dataset_at_uri(&self, uri: &str) -> Result<Dataset, VectorStoreError> {
         match self.index_cache_size_bytes {
             None => Dataset::open(uri).await.map_err(Into::into),
@@ -103,9 +125,10 @@ impl VectorStore {
     }
 
     /// Get the filesystem path for a specific table.
+    #[must_use]
     pub fn table_path(&self, table_name: &str) -> PathBuf {
         if self.base_path.as_os_str() == ":memory:" {
-            PathBuf::from(format!(":memory:_{}", table_name))
+            PathBuf::from(format!(":memory:_{table_name}"))
         } else {
             // Check if base_path already ends with .lance (any table directory)
             // This handles cases where the storage path is passed as "xxx.lance"
@@ -122,8 +145,10 @@ impl VectorStore {
 
     /// Create the Arrow schema for the vector store tables.
     ///
-    /// Uses Dictionary encoding for low-cardinality columns (SKILL_NAME, CATEGORY, TOOL_NAME)
+    /// Uses Dictionary encoding for low-cardinality columns
+    /// (`SKILL_NAME`, `CATEGORY`, `TOOL_NAME`)
     /// and field metadata for self-documentation and index hints.
+    #[must_use]
     pub fn create_schema(&self) -> Arc<lance::deps::arrow_schema::Schema> {
         use lance::deps::arrow_schema::{DataType, Field};
         use std::collections::HashMap;
@@ -207,6 +232,11 @@ impl VectorStore {
     }
 
     /// Enable keyword support for hybrid search.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in `:memory:` mode or when keyword index initialization fails.
+    #[allow(clippy::arc_with_non_send_sync)]
     pub fn enable_keyword_index(&mut self) -> Result<(), VectorStoreError> {
         if self.keyword_backend == KeywordSearchBackend::LanceFts {
             // Lance FTS path does not require in-memory Tantivy index object.
@@ -225,6 +255,10 @@ impl VectorStore {
     }
 
     /// Switch keyword backend at runtime.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when switching to Tantivy and index initialization fails.
     pub fn set_keyword_backend(
         &mut self,
         backend: KeywordSearchBackend,

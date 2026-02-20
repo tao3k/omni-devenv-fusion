@@ -569,6 +569,140 @@ class TestDecoratorMetadata:
         config = get_script_config(docstring_test)
         assert config["description"] == "This is my custom docstring description."
 
+    def test_default_skill_command_keeps_handler_disabled(self):
+        """Default decorator args should not enable execution handler config."""
+
+        @skill_command(name="default_handler_off")
+        def default_handler_off() -> dict:
+            """Default handler config test."""
+            return {"ok": True}
+
+        config = get_script_config(default_handler_off)
+        assert config["execution"]["handler"] is None
+
+    def test_skill_command_records_execution_phase(self, monkeypatch: pytest.MonkeyPatch):
+        """Decorator wrapper should emit skill_command.execute phase timing."""
+        captured: dict[str, Any] = {}
+
+        def _fake_record_phase(phase: str, duration_ms: float, **extra: Any) -> None:
+            captured["phase"] = phase
+            captured["duration_ms"] = duration_ms
+            captured["extra"] = extra
+
+        monkeypatch.setattr(
+            "omni.foundation.runtime.skills_monitor.record_phase",
+            _fake_record_phase,
+        )
+
+        @skill_command(name="phase_probe")
+        def phase_probe(value: int) -> dict:
+            """Probe skill_command monitor phase."""
+            return {"value": value}
+
+        _ = phase_probe(1)
+
+        assert captured["phase"] == "skill_command.execute"
+        assert captured["extra"]["tool"] == "general.phase_probe"
+        assert captured["extra"]["function"] == "phase_probe"
+        assert captured["extra"]["success"] is True
+        assert captured["duration_ms"] >= 0
+
+    def test_skill_command_records_execution_failure_for_error_payload(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Decorator monitor success should be false when normalized MCP payload is error."""
+        captured: dict[str, Any] = {}
+
+        def _fake_record_phase(phase: str, duration_ms: float, **extra: Any) -> None:
+            captured["phase"] = phase
+            captured["duration_ms"] = duration_ms
+            captured["extra"] = extra
+
+        monkeypatch.setattr(
+            "omni.foundation.runtime.skills_monitor.record_phase",
+            _fake_record_phase,
+        )
+
+        @skill_command(name="phase_probe_error")
+        def phase_probe_error() -> dict:
+            """Probe error payload."""
+            return {"content": [{"type": "text", "text": "failed"}], "isError": True}
+
+        _ = phase_probe_error()
+
+        assert captured["phase"] == "skill_command.execute"
+        assert captured["extra"]["tool"] == "general.phase_probe_error"
+        assert captured["extra"]["function"] == "phase_probe_error"
+        assert captured["extra"]["success"] is False
+        assert captured["duration_ms"] >= 0
+
+    def test_skill_command_records_execution_failure_for_error_status_payload(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Decorator monitor success should be false when payload status is error."""
+        captured: dict[str, Any] = {}
+
+        def _fake_record_phase(phase: str, duration_ms: float, **extra: Any) -> None:
+            captured["phase"] = phase
+            captured["duration_ms"] = duration_ms
+            captured["extra"] = extra
+
+        monkeypatch.setattr(
+            "omni.foundation.runtime.skills_monitor.record_phase",
+            _fake_record_phase,
+        )
+
+        @skill_command(name="phase_probe_status_error")
+        def phase_probe_status_error() -> str:
+            """Probe status error payload."""
+            return '{"status":"error","error":"boom","results":[]}'
+
+        _ = phase_probe_status_error()
+
+        assert captured["phase"] == "skill_command.execute"
+        assert captured["extra"]["tool"] == "general.phase_probe_status_error"
+        assert captured["extra"]["function"] == "phase_probe_status_error"
+        assert captured["extra"]["success"] is False
+        assert captured["duration_ms"] >= 0
+
+    def test_skill_command_records_graph_stats_meta_fields(self, monkeypatch: pytest.MonkeyPatch):
+        """Decorator monitor should emit graph stats meta fields when present in payload."""
+        captured: dict[str, Any] = {}
+
+        def _fake_record_phase(phase: str, duration_ms: float, **extra: Any) -> None:
+            captured["phase"] = phase
+            captured["duration_ms"] = duration_ms
+            captured["extra"] = extra
+
+        monkeypatch.setattr(
+            "omni.foundation.runtime.skills_monitor.record_phase",
+            _fake_record_phase,
+        )
+
+        @skill_command(name="phase_probe_graph_meta")
+        def phase_probe_graph_meta() -> dict:
+            return {
+                "success": True,
+                "graph_stats": {"total_notes": 337},
+                "graph_stats_meta": {
+                    "source": "cache",
+                    "cache_hit": True,
+                    "fresh": True,
+                    "age_ms": 12,
+                    "refresh_scheduled": False,
+                },
+            }
+
+        _ = phase_probe_graph_meta()
+
+        assert captured["phase"] == "skill_command.execute"
+        assert captured["extra"]["graph_stats_source"] == "cache"
+        assert captured["extra"]["graph_stats_cache_hit"] is True
+        assert captured["extra"]["graph_stats_fresh"] is True
+        assert captured["extra"]["graph_stats_age_ms"] == 12
+        assert captured["extra"]["graph_stats_refresh_scheduled"] is False
+        assert captured["extra"]["graph_stats_total_notes"] == 337
+
 
 class TestDecoratorEdgeCases:
     """Additional edge case tests."""
@@ -637,3 +771,19 @@ def test_mcp_tool_result_validates_against_shared_schema():
         result = normalize_mcp_tool_result(raw)
         assert is_mcp_canonical_result(result)
         validate(result)
+
+
+def test_normalize_mcp_tool_result_strips_extra_keys():
+    """Canonical-shaped return with extra keys (e.g. 'result') must be stripped to schema-only."""
+    from omni.foundation.api.mcp_schema import CONTENT_KEY, IS_ERROR_KEY
+
+    canonical_with_extra = {
+        CONTENT_KEY: [{"type": "text", "text": "ok"}],
+        IS_ERROR_KEY: False,
+        "result": {"nested": "data"},
+        "method": "tools/call",
+    }
+    out = normalize_mcp_tool_result(canonical_with_extra)
+    assert list(out.keys()) == [CONTENT_KEY, IS_ERROR_KEY]
+    assert out[CONTENT_KEY] == [{"type": "text", "text": "ok"}]
+    assert out[IS_ERROR_KEY] is False

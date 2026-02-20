@@ -1,11 +1,11 @@
-//! KeywordIndex - Tantivy wrapper for keyword search with BM25
+//! `KeywordIndex` - Tantivy wrapper for keyword search with `BM25`.
 
 use std::cell::RefCell;
 use std::path::Path;
 
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
-use tantivy::schema::*;
+use tantivy::schema::{Field, IndexRecordOption, Schema, TextOptions, Value};
 use tantivy::tokenizer::{
     AsciiFoldingFilter, LowerCaser, RemoveLongFilter, SimpleTokenizer, TextAnalyzer,
 };
@@ -16,8 +16,9 @@ use tantivy::{
 use crate::ToolSearchResult;
 use crate::error::VectorStoreError;
 
-/// KeywordIndex - Tantivy wrapper for keyword search with BM25.
-/// Caches a single IndexWriter and reuses it across bulk_upsert/upsert_document/index_batch
+/// `KeywordIndex` - Tantivy wrapper for keyword search with `BM25`.
+/// Caches a single `IndexWriter` and reuses it across
+/// `bulk_upsert` / `upsert_document` / `index_batch`
 /// to avoid repeated writer creation/teardown.
 pub struct KeywordIndex {
     /// Tantivy index for full-text search
@@ -38,6 +39,7 @@ pub struct KeywordIndex {
     pub intents: Field,
 }
 
+#[allow(clippy::missing_errors_doc, clippy::doc_markdown)]
 impl KeywordIndex {
     /// Helper to create a fresh index with correct schema
     fn create_new_index(path: &Path) -> Result<Index, TantivyError> {
@@ -72,7 +74,7 @@ impl KeywordIndex {
         // Remove old index directory if it exists
         if index_path.exists() {
             std::fs::remove_dir_all(&index_path).map_err(|e| {
-                VectorStoreError::General(format!("Failed to remove old index: {}", e))
+                VectorStoreError::General(format!("Failed to remove old index: {e}"))
             })?;
         }
 
@@ -173,12 +175,9 @@ impl KeywordIndex {
             .get_field("keywords")
             .map_err(|_| VectorStoreError::General("Missing keywords field".to_string()))?;
         // Check for intents field - if missing, recreate the index (schema migration)
-        let intents = match schema.get_field("intents") {
-            Ok(field) => field,
-            Err(_) => {
-                // Schema is missing intents field - recreate the index
-                return Self::new_with_migration(path);
-            }
+        let Ok(intents) = schema.get_field("intents") else {
+            // Schema is missing intents field - recreate the index.
+            return Self::new_with_migration(path);
         };
 
         // 3. Create Reader with Manual Policy (We control reloads)
@@ -220,7 +219,9 @@ impl KeywordIndex {
                     .map_err(VectorStoreError::Tantivy)?,
             );
         }
-        let writer = cache.as_mut().unwrap();
+        let writer = cache
+            .as_mut()
+            .ok_or_else(|| VectorStoreError::General("writer cache unavailable".to_string()))?;
         let term = Term::from_field_text(self.tool_name, name);
         writer.delete_term(term);
         writer
@@ -251,7 +252,9 @@ impl KeywordIndex {
                     .map_err(VectorStoreError::Tantivy)?,
             );
         }
-        let writer = cache.as_mut().unwrap();
+        let writer = cache
+            .as_mut()
+            .ok_or_else(|| VectorStoreError::General("writer cache unavailable".to_string()))?;
         for (name, description, category, kw_list, intent_list) in docs {
             if !crate::skill::is_routable_tool_name(&name) {
                 continue;
@@ -280,7 +283,9 @@ impl KeywordIndex {
         if cache.is_none() {
             *cache = Some(self.index.writer(100_000_000)?);
         }
-        let writer = cache.as_mut().unwrap();
+        let writer = cache
+            .as_mut()
+            .ok_or_else(|| TantivyError::InvalidArgument("writer cache unavailable".to_string()))?;
         for tool in tools {
             if !crate::skill::is_routable_tool_name(&tool.name) {
                 continue;
@@ -330,7 +335,7 @@ impl KeywordIndex {
 
         let query = query_parser
             .parse_query(query_str)
-            .map_err(|e| VectorStoreError::General(format!("Query parse error: {}", e)))?;
+            .map_err(|e| VectorStoreError::General(format!("Query parse error: {e}")))?;
 
         let top_docs = searcher
             .search(&query, &TopDocs::with_limit(limit))
@@ -366,9 +371,9 @@ impl KeywordIndex {
 
             let keywords = keywords_str
                 .split_whitespace()
-                .map(|s| s.to_string())
+                .map(ToString::to_string)
                 .collect();
-            let intents = intents_str.split(" | ").map(|s| s.to_string()).collect();
+            let intents = intents_str.split(" | ").map(ToString::to_string).collect();
 
             let skill_name = tool_name.split('.').next().unwrap_or("").to_string();
             let category = doc
@@ -390,6 +395,7 @@ impl KeywordIndex {
                 routing_keywords: keywords,
                 intents,
                 category,
+                parameters: vec![],
             });
         }
 
@@ -397,6 +403,7 @@ impl KeywordIndex {
     }
 
     /// Get the number of documents in the index
+    #[allow(clippy::unnecessary_wraps)]
     pub fn count_documents(&self) -> Result<u64, VectorStoreError> {
         let searcher = self.reader.searcher();
         Ok(searcher.num_docs())
@@ -449,9 +456,9 @@ impl KeywordIndex {
 
             let keywords = keywords_str
                 .split_whitespace()
-                .map(|s| s.to_string())
+                .map(ToString::to_string)
                 .collect();
-            let intents = intents_str.split(" | ").map(|s| s.to_string()).collect();
+            let intents = intents_str.split(" | ").map(ToString::to_string).collect();
 
             Ok(Some(ToolSearchResult {
                 name: tool_name.clone(),
@@ -462,9 +469,10 @@ impl KeywordIndex {
                 keyword_score: Some(1.0),
                 skill_name: tool_name.split('.').next().unwrap_or("").to_string(),
                 tool_name,
-                file_path: "".to_string(),
+                file_path: String::new(),
                 routing_keywords: keywords,
                 intents,
+                parameters: vec![],
                 category: doc
                     .get_first(self.category)
                     .and_then(|v| v.as_str())

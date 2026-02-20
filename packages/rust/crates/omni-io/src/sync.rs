@@ -1,6 +1,6 @@
 //! Synchronous file I/O operations.
 //!
-//! Best for Python `allow_threads` usage via PyO3.
+//! Best for Python `allow_threads` usage via `PyO3`.
 
 use std::fs as std_fs;
 use std::io::Read;
@@ -17,6 +17,10 @@ use crate::error::IoError;
 ///
 /// # Returns
 /// Decoded text content or an error.
+///
+/// # Errors
+/// Returns `IoError` when the file does not exist, exceeds `max_bytes`,
+/// cannot be read, or cannot be decoded as text.
 ///
 /// # Example
 ///
@@ -35,8 +39,10 @@ pub fn read_text_safe<P: AsRef<Path>>(path: P, max_bytes: u64) -> Result<String,
         return Err(IoError::TooLarge(metadata.len(), max_bytes));
     }
 
+    let file_len = metadata.len();
+    let capacity = usize::try_from(file_len).map_err(|_| IoError::TooLarge(file_len, max_bytes))?;
     let mut file = std_fs::File::open(path)?;
-    let mut buffer = Vec::with_capacity(metadata.len() as usize);
+    let mut buffer = Vec::with_capacity(capacity);
     file.read_to_end(&mut buffer)?;
 
     decode_buffer(buffer)

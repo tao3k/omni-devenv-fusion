@@ -38,25 +38,36 @@ pub struct CommandAnalysis {
 /// Variable information extracted from AST.
 #[derive(Debug, Clone, Serialize)]
 pub struct VariableInfo {
+    /// Variable name as parsed from the command.
     pub name: String,
+    /// Optional resolved value when available.
     pub value: Option<String>,
+    /// Whether this variable may include untrusted input.
     pub is_tainted: bool,
 }
 
 /// Security violation detected during analysis.
 #[derive(Debug, Clone, Serialize)]
 pub struct SecurityViolation {
+    /// Severity assigned to this violation.
     pub severity: ViolationSeverity,
+    /// Stable rule identifier.
     pub rule: String,
+    /// Human-readable description for logs and diagnostics.
     pub message: String,
+    /// AST node kind where the violation was detected.
     pub node_kind: String,
 }
 
+/// Severity levels for command security checks.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub enum ViolationSeverity {
-    Blocked, // Immediately reject
-    Warning, // Log and continue
-    Info,    // Just informational
+    /// Immediately reject command execution.
+    Blocked,
+    /// Allow execution but report a warning.
+    Warning,
+    /// Informational finding for diagnostics only.
+    Info,
 }
 
 /// Shell command analyzer using AST.
@@ -81,11 +92,13 @@ impl Default for AstCommandAnalyzer {
 
 impl AstCommandAnalyzer {
     /// Create a new analyzer.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Analyze a shell command using AST.
+    #[must_use]
     pub fn analyze(&self, cmd: &str) -> CommandAnalysis {
         // Parse the command into AST
         let doc = match StrDoc::<Bash>::try_new(cmd, Bash) {
@@ -100,7 +113,7 @@ impl AstCommandAnalyzer {
                     violations: vec![SecurityViolation {
                         severity: ViolationSeverity::Warning,
                         rule: "PARSE_ERROR".to_string(),
-                        message: format!("Failed to parse command: {}", e),
+                        message: format!("Failed to parse command: {e}"),
                         node_kind: "root".to_string(),
                     }],
                     fingerprint: hash_command(cmd),
@@ -150,7 +163,7 @@ impl AstCommandAnalyzer {
             }
 
             // Check for dangerous patterns
-            self.check_node_danger(kind, &node_text, &mut violations);
+            Self::check_node_danger(kind, &node_text, &mut violations);
         }
 
         // Classify as mutation if command matches
@@ -184,7 +197,7 @@ impl AstCommandAnalyzer {
     }
 
     /// Check a node for dangerous patterns.
-    fn check_node_danger(&self, kind: &str, text: &str, violations: &mut Vec<SecurityViolation>) {
+    fn check_node_danger(kind: &str, text: &str, violations: &mut Vec<SecurityViolation>) {
         // Check for fork bomb
         if kind == "function_definition" && text.contains(":|:&") {
             violations.push(SecurityViolation {
@@ -196,19 +209,17 @@ impl AstCommandAnalyzer {
         }
 
         // Check for dangerous redirections
-        if kind == "redirect" {
-            if text.contains("> /etc/") || text.contains("> /dev/") {
-                violations.push(SecurityViolation {
-                    severity: ViolationSeverity::Blocked,
-                    rule: "DANGEROUS_REDIRECT".to_string(),
-                    message: "Dangerous redirection to system directory".to_string(),
-                    node_kind: kind.to_string(),
-                });
-            }
+        if kind == "redirect" && (text.contains("> /etc/") || text.contains("> /dev/")) {
+            violations.push(SecurityViolation {
+                severity: ViolationSeverity::Blocked,
+                rule: "DANGEROUS_REDIRECT".to_string(),
+                message: "Dangerous redirection to system directory".to_string(),
+                node_kind: kind.to_string(),
+            });
         }
 
         // Check for rm -rf patterns
-        if text.contains("rm") && text.contains("-rf") && text.contains("/") {
+        if text.contains("rm") && text.contains("-rf") && text.contains('/') {
             violations.push(SecurityViolation {
                 severity: ViolationSeverity::Blocked,
                 rule: "RM_RF_ROOT".to_string(),

@@ -47,6 +47,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 # SIMD-accelerated JSON for hot-path metadata parsing (writer_impl)
 simd-json = "0.13"
+sha2 = "0.10"
+hex = "0.4"
 
 # Reuse our common types
 omni-types = { path = "../omni-types" }

@@ -1,4 +1,6 @@
+import json
 import pytest
+from copy import deepcopy
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from omni.test_kit.decorators import omni_skill
@@ -114,6 +116,77 @@ class TestResearchGraph:
 
         assert shard["name"] == "Core Module"
         assert len(shard["targets"]) == 2
+
+    def test_normalize_shards_splits_oversized(self):
+        """Oversized shards are split into chunks of at most MAX_FILES_PER_SHARD."""
+        from researcher.scripts.research_graph import (
+            MAX_FILES_PER_SHARD,
+            _normalize_shards,
+        )
+        from researcher.scripts.research_graph import ShardDef
+
+        shards: list[ShardDef] = [
+            {
+                "name": "BigCore",
+                "targets": [f"src/f{i}.py" for i in range(8)],
+                "description": "Core",
+            },
+        ]
+        out = _normalize_shards(shards)
+        assert len(out) >= 2
+        for s in out:
+            assert len(s["targets"]) <= MAX_FILES_PER_SHARD
+        total = sum(len(s["targets"]) for s in out)
+        assert total == 8
+
+    def test_normalize_shards_caps_total_files(self):
+        """Total files across shards are capped at MAX_TOTAL_FILES."""
+        from researcher.scripts.research_graph import (
+            MAX_TOTAL_FILES,
+            _normalize_shards,
+        )
+        from researcher.scripts.research_graph import ShardDef
+
+        shards: list[ShardDef] = [
+            {"name": "A", "targets": [f"a{i}.py" for i in range(15)], "description": "A"},
+            {"name": "B", "targets": [f"b{i}.py" for i in range(20)], "description": "B"},
+        ]
+        out = _normalize_shards(shards)
+        total = sum(len(s["targets"]) for s in out)
+        assert total <= MAX_TOTAL_FILES
+
+    def test_normalize_shards_merges_tiny(self):
+        """Shards with ≤ MIN_FILES_TO_MERGE files can be merged."""
+        from researcher.scripts.research_graph import _normalize_shards
+        from researcher.scripts.research_graph import ShardDef
+
+        shards: list[ShardDef] = [
+            {"name": "Tiny1", "targets": ["a.py"], "description": "T1"},
+            {"name": "Tiny2", "targets": ["b.py"], "description": "T2"},
+        ]
+        out = _normalize_shards(shards)
+        # After merge we expect 1 shard with 2 files (or 2 shards if merge logic keeps them separate in this case)
+        assert len(out) >= 1
+        total = sum(len(s["targets"]) for s in out)
+        assert total == 2
+
+    def test_build_execution_levels_respects_dependencies(self):
+        """Shards with dependencies run in topological order; same level runs in parallel."""
+        from omni.langgraph.parallel import build_execution_levels
+        from researcher.scripts.research_graph import ShardDef
+
+        shards: list[ShardDef] = [
+            {"name": "Core", "targets": ["core.py"], "description": "Core", "dependencies": []},
+            {"name": "API", "targets": ["api.py"], "description": "API", "dependencies": ["Core"]},
+            {"name": "CLI", "targets": ["cli.py"], "description": "CLI", "dependencies": ["Core"]},
+        ]
+        levels = build_execution_levels(shards, parallel_all=False)
+        assert len(levels) == 2
+        assert len(levels[0]) == 1
+        assert levels[0][0][0]["name"] == "Core"
+        assert len(levels[1]) == 2
+        names_l1 = {s["name"] for s, _ in levels[1]}
+        assert names_l1 == {"API", "CLI"}
 
 
 @pytest.mark.slow
@@ -245,6 +318,598 @@ class TestInitHarvestStructure:
             assert result == expected, f"Expected {expected}, got {result}"
 
 
+class TestResearchChunkedAPI:
+    """Tests for chunked research workflow (action=start | shard | synthesize)."""
+
+    @pytest.mark.asyncio
+    async def test_chunked_start_returns_session_id_and_shard_count(self):
+        """action=start runs setup+architect, persists state, returns session_id and next_action."""
+        from researcher.scripts.research_entry import _run_research_chunked
+
+        with patch(
+            "researcher.scripts.research_entry.run_setup_and_architect",
+            new_callable=AsyncMock,
+        ) as m_setup:
+            m_setup.return_value = {
+                "harvest_dir": "/tmp/harvest/owner/repo",
+                "shards_queue": [
+                    {"name": "Shard A", "targets": ["a.rs"], "description": "A"},
+                    {"name": "Shard B", "targets": ["b.rs"], "description": "B"},
+                ],
+                "repo_url": "https://github.com/owner/repo",
+                "request": "Analyze",
+            }
+            with (
+                patch("researcher.scripts.research_entry._RESEARCH_CHUNKED_STORE.save"),
+                patch("researcher.scripts.research_entry._save_chunked_state"),
+            ):
+                result = await _run_research_chunked(
+                    repo_url="https://github.com/owner/repo",
+                    request="Analyze",
+                    action="start",
+                    session_id="",
+                )
+        assert result.get("success") is True
+        assert "session_id" in result
+        assert result.get("shard_count") == 2
+        assert [item["chunk_id"] for item in result.get("chunk_plan", [])] == ["c1", "c2"]
+        assert result.get("harvest_dir") == "/tmp/harvest/owner/repo"
+        assert "next_action" in result
+        assert "shard" in result["next_action"].lower()
+        assert "synthesize" in result["next_action"].lower()
+
+    @pytest.mark.asyncio
+    async def test_chunked_shard_with_chunk_ids_runs_selected_chunks(self):
+        """action=shard with chunk_ids should process selected chunks and report remaining ids."""
+        from researcher.scripts.research_entry import _run_research_chunked
+
+        session_id = "sid-1"
+        states: dict[str, dict] = {
+            session_id: {
+                "chunk_plan": [
+                    {"chunk_id": "c1", "name": "Shard A"},
+                    {"chunk_id": "c2", "name": "Shard B"},
+                ],
+                "harvest_dir": "/tmp/harvest/owner/repo",
+                "shards_queue": [],
+            },
+            f"{session_id}:c1": {
+                "shards_queue": [{"name": "Shard A", "targets": ["a.rs"], "description": "A"}],
+                "shard_analyses": [],
+            },
+            f"{session_id}:c2": {
+                "shards_queue": [{"name": "Shard B", "targets": ["b.rs"], "description": "B"}],
+                "shard_analyses": [],
+            },
+        }
+
+        def _fake_load(workflow_id: str):
+            value = states.get(workflow_id)
+            return deepcopy(value) if value is not None else None
+
+        def _fake_save(workflow_id: str, state: dict):
+            states[workflow_id] = deepcopy(state)
+
+        async def _fake_run_one_shard(state: dict):
+            shard = state["shards_queue"][0]
+            return {
+                **state,
+                "shards_queue": [],
+                "current_shard": {"name": shard["name"]},
+                "shard_analyses": [f"{shard['name']} summary"],
+            }
+
+        with patch("researcher.scripts.research_entry._load_chunked_state", side_effect=_fake_load):
+            with patch(
+                "researcher.scripts.research_entry._save_chunked_state", side_effect=_fake_save
+            ):
+                with patch(
+                    "researcher.scripts.research_entry.run_one_shard",
+                    new_callable=AsyncMock,
+                ) as m_one:
+                    m_one.side_effect = _fake_run_one_shard
+                    result = await _run_research_chunked(
+                        repo_url="https://github.com/owner/repo",
+                        request="Analyze",
+                        action="shard",
+                        session_id=session_id,
+                        chunk_ids=["c1", "c2"],
+                    )
+
+        assert result.get("success") is True
+        assert result.get("chunks_requested") == 2
+        assert result.get("chunks_remaining") == 0
+        assert result.get("pending_chunk_ids") == []
+        assert sorted(result.get("completed_chunk_ids", [])) == ["c1", "c2"]
+        assert m_one.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_chunked_shard_without_chunk_ids_processes_all_pending(self):
+        """action=shard without selectors should run all pending chunk ids in parallel mode."""
+        from researcher.scripts.research_entry import _run_research_chunked
+
+        session_id = "sid-1"
+        states: dict[str, dict] = {
+            session_id: {
+                "chunk_plan": [
+                    {"chunk_id": "c1", "name": "Shard A"},
+                    {"chunk_id": "c2", "name": "Shard B"},
+                ],
+                "harvest_dir": "/tmp/harvest/owner/repo",
+                "shards_queue": [],
+            },
+            f"{session_id}:c1": {
+                "shards_queue": [{"name": "Shard A", "targets": ["a.rs"], "description": "A"}],
+                "shard_analyses": [],
+            },
+            f"{session_id}:c2": {
+                "shards_queue": [{"name": "Shard B", "targets": ["b.rs"], "description": "B"}],
+                "shard_analyses": [],
+            },
+        }
+
+        def _fake_load(workflow_id: str):
+            value = states.get(workflow_id)
+            return deepcopy(value) if value is not None else None
+
+        def _fake_save(workflow_id: str, state: dict):
+            states[workflow_id] = deepcopy(state)
+
+        async def _fake_run_one_shard(state: dict):
+            shard = state["shards_queue"][0]
+            return {
+                **state,
+                "shards_queue": [],
+                "current_shard": {"name": shard["name"]},
+                "shard_analyses": [f"{shard['name']} summary"],
+            }
+
+        with patch("researcher.scripts.research_entry._load_chunked_state", side_effect=_fake_load):
+            with patch(
+                "researcher.scripts.research_entry._save_chunked_state", side_effect=_fake_save
+            ):
+                with patch(
+                    "researcher.scripts.research_entry.run_one_shard",
+                    new_callable=AsyncMock,
+                ) as m_one:
+                    m_one.side_effect = _fake_run_one_shard
+                    result = await _run_research_chunked(
+                        repo_url="https://github.com/owner/repo",
+                        request="Analyze",
+                        action="shard",
+                        session_id=session_id,
+                    )
+
+        assert result.get("success") is True
+        assert result.get("chunks_requested") == 2
+        assert result.get("chunks_remaining") == 0
+        assert m_one.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_chunked_synthesize_with_pending_chunk_ids_returns_error(self):
+        """action=synthesize should block until all chunk ids are completed."""
+        from researcher.scripts.research_entry import _run_research_chunked
+
+        session_id = "sid-1"
+        states = {
+            session_id: {
+                "chunk_plan": [
+                    {"chunk_id": "c1", "name": "Shard A"},
+                    {"chunk_id": "c2", "name": "Shard B"},
+                ],
+                "harvest_dir": "/tmp/harvest/owner/repo",
+            },
+            f"{session_id}:c1": {"shards_queue": [], "shard_analyses": ["Shard A summary"]},
+            f"{session_id}:c2": {
+                "shards_queue": [{"name": "Shard B", "targets": ["b.rs"], "description": "B"}],
+                "shard_analyses": [],
+            },
+        }
+
+        def _fake_load(workflow_id: str):
+            value = states.get(workflow_id)
+            return deepcopy(value) if value is not None else None
+
+        with patch("researcher.scripts.research_entry._load_chunked_state", side_effect=_fake_load):
+            result = await _run_research_chunked(
+                repo_url="https://github.com/owner/repo",
+                request="Analyze",
+                action="synthesize",
+                session_id=session_id,
+            )
+
+        assert result.get("success") is False
+        assert result.get("pending_chunk_ids") == ["c2"]
+
+    @pytest.mark.asyncio
+    async def test_chunked_synthesize_collects_child_chunk_summaries(self):
+        """action=synthesize should collect summaries from child chunk sessions in plan order."""
+        from researcher.scripts.research_entry import _run_research_chunked
+
+        session_id = "sid-1"
+        states = {
+            session_id: {
+                "chunk_plan": [
+                    {"chunk_id": "c1", "name": "Shard A"},
+                    {"chunk_id": "c2", "name": "Shard B"},
+                ],
+                "harvest_dir": "/tmp/harvest/owner/repo",
+            },
+            f"{session_id}:c1": {"shards_queue": [], "shard_analyses": ["Summary A"]},
+            f"{session_id}:c2": {"shards_queue": [], "shard_analyses": ["Summary B"]},
+        }
+
+        def _fake_load(workflow_id: str):
+            value = states.get(workflow_id)
+            return deepcopy(value) if value is not None else None
+
+        with patch("researcher.scripts.research_entry._load_chunked_state", side_effect=_fake_load):
+            with patch(
+                "researcher.scripts.research_entry.run_synthesize_only",
+                new_callable=AsyncMock,
+            ) as m_synth:
+                m_synth.return_value = {
+                    "harvest_dir": "/tmp/harvest/owner/repo",
+                    "messages": [{"content": "Research complete."}],
+                    "shard_analyses": ["Summary A", "Summary B"],
+                }
+                result = await _run_research_chunked(
+                    repo_url="https://github.com/owner/repo",
+                    request="Analyze",
+                    action="synthesize",
+                    session_id=session_id,
+                )
+
+        assert result.get("success") is True
+        assert result.get("shards_analyzed") == 2
+        called_state = m_synth.await_args.args[0]
+        assert called_state.get("shard_analyses") == ["Summary A", "Summary B"]
+
+    @pytest.mark.asyncio
+    async def test_chunked_shard_without_session_id_returns_error(self):
+        """action=shard without session_id returns error."""
+        from researcher.scripts.research_entry import _run_research_chunked
+
+        result = await _run_research_chunked(
+            repo_url="https://github.com/owner/repo",
+            request="Analyze",
+            action="shard",
+            session_id="",
+        )
+        assert result.get("success") is False
+        assert "session_id" in result.get("error", "").lower()
+
+    @pytest.mark.asyncio
+    async def test_chunked_synthesize_without_session_id_returns_error(self):
+        """action=synthesize without session_id returns error."""
+        from researcher.scripts.research_entry import _run_research_chunked
+
+        result = await _run_research_chunked(
+            repo_url="https://github.com/owner/repo",
+            request="Analyze",
+            action="synthesize",
+            session_id="",
+        )
+        assert result.get("success") is False
+        assert "session_id" in result.get("error", "").lower()
+
+    @pytest.mark.asyncio
+    async def test_chunked_shard_processes_single_step_and_persists(self):
+        """action=shard should process exactly one shard and persist updated state."""
+        from researcher.scripts.research_entry import _run_research_chunked
+
+        loaded_state = {
+            "shards_queue": [
+                {"name": "Shard A", "targets": ["a.rs"], "description": "A"},
+                {"name": "Shard B", "targets": ["b.rs"], "description": "B"},
+            ]
+        }
+        updated_state = {
+            "shards_queue": [
+                {"name": "Shard B", "targets": ["b.rs"], "description": "B"},
+            ],
+            "current_shard": {"name": "Shard A"},
+            "shard_analyses": ["A summary"],
+        }
+
+        with patch("researcher.scripts.research_entry._load_chunked_state") as m_load:
+            m_load.return_value = loaded_state
+            with patch(
+                "researcher.scripts.research_entry.run_one_shard",
+                new_callable=AsyncMock,
+            ) as m_one:
+                m_one.return_value = updated_state
+                with patch("researcher.scripts.research_entry._save_chunked_state") as m_save:
+                    with patch(
+                        "researcher.scripts.research_entry._RESEARCH_CHUNKED_STORE.save"
+                    ) as m_store_save:
+                        result = await _run_research_chunked(
+                            repo_url="https://github.com/owner/repo",
+                            request="Analyze",
+                            action="shard",
+                            session_id="sid-1",
+                        )
+
+        assert result.get("success") is True
+        assert result.get("session_id") == "sid-1"
+        assert result.get("chunks_remaining") == 1
+        assert result.get("chunk_processed") == "Shard A"
+        assert "shard again" in result.get("next_action", "").lower()
+        m_one.assert_awaited_once()
+        assert m_save.call_count + m_store_save.call_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_chunked_shard_without_chunk_plan_uses_common_engine(self):
+        """Without chunk_plan, shard step should delegate to common ChunkedWorkflowEngine."""
+        from researcher.scripts.research_entry import _run_research_chunked
+
+        with patch("researcher.scripts.research_entry._load_chunked_state") as m_load:
+            m_load.return_value = {
+                "shards_queue": [{"name": "Shard A", "targets": ["a.rs"], "description": "A"}],
+            }
+            with patch(
+                "researcher.scripts.research_entry._build_research_chunked_engine"
+            ) as m_builder:
+                engine = MagicMock()
+                engine.run_step = AsyncMock(
+                    return_value={
+                        "success": True,
+                        "session_id": "sid-1",
+                        "chunks_remaining": 1,
+                        "chunk_processed": "Shard A",
+                        "workflow_type": "research_chunked",
+                        "next_action": "Call action=shard again with this session_id",
+                    }
+                )
+                m_builder.return_value = engine
+                result = await _run_research_chunked(
+                    repo_url="https://github.com/owner/repo",
+                    request="Analyze",
+                    action="shard",
+                    session_id="sid-1",
+                )
+
+        engine.run_step.assert_awaited_once_with(
+            session_id="sid-1",
+            action="shard",
+            auto_complete=False,
+        )
+        assert result.get("success") is True
+        assert result.get("chunks_remaining") == 1
+
+    @pytest.mark.asyncio
+    async def test_chunked_synthesize_returns_final_summary(self):
+        """action=synthesize should return final summary payload from synthesized state."""
+        from researcher.scripts.research_entry import _run_research_chunked
+
+        with patch("researcher.scripts.research_entry._load_chunked_state") as m_load:
+            m_load.return_value = {
+                "shards_queue": [],
+                "shard_analyses": ["A summary"],
+                "harvest_dir": "/tmp/harvest/owner/repo",
+            }
+            with patch(
+                "researcher.scripts.research_entry.run_synthesize_only",
+                new_callable=AsyncMock,
+            ) as m_synth:
+                m_synth.return_value = {
+                    "harvest_dir": "/tmp/harvest/owner/repo",
+                    "messages": [{"content": "Research complete."}],
+                    "shard_analyses": ["A summary"],
+                }
+                result = await _run_research_chunked(
+                    repo_url="https://github.com/owner/repo",
+                    request="Analyze",
+                    action="synthesize",
+                    session_id="sid-1",
+                )
+
+        assert result.get("success") is True
+        assert result.get("session_id") == "sid-1"
+        assert result.get("summary") == "Research complete."
+        assert result.get("harvest_dir") == "/tmp/harvest/owner/repo"
+        assert result.get("shards_analyzed") == 1
+        m_synth.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_chunked_synthesize_without_chunk_plan_uses_common_engine_result(self):
+        """Without chunk_plan, synthesize path should consume common engine state payload."""
+        from researcher.scripts.research_entry import _run_research_chunked
+
+        with patch("researcher.scripts.research_entry._load_chunked_state") as m_load:
+            m_load.return_value = {"shards_queue": [], "shard_analyses": ["A summary"]}
+            with patch(
+                "researcher.scripts.research_entry._build_research_chunked_engine"
+            ) as m_builder:
+                engine = MagicMock()
+                engine.run_step = AsyncMock(
+                    return_value={
+                        "success": True,
+                        "session_id": "sid-1",
+                        "workflow_type": "research_chunked",
+                        "state": {
+                            "harvest_dir": "/tmp/harvest/owner/repo",
+                            "messages": [{"content": "Research complete."}],
+                            "shard_analyses": ["A summary"],
+                        },
+                    }
+                )
+                m_builder.return_value = engine
+                result = await _run_research_chunked(
+                    repo_url="https://github.com/owner/repo",
+                    request="Analyze",
+                    action="synthesize",
+                    session_id="sid-1",
+                )
+
+        engine.run_step.assert_awaited_once_with(
+            session_id="sid-1",
+            action="synthesize",
+            auto_complete=False,
+        )
+        assert result.get("success") is True
+        assert result.get("summary") == "Research complete."
+        assert result.get("harvest_dir") == "/tmp/harvest/owner/repo"
+        assert result.get("shards_analyzed") == 1
+
+    @pytest.mark.asyncio
+    async def test_chunked_unknown_action_returns_error(self):
+        """Unknown action returns error (or no state when session_id is invalid)."""
+        from researcher.scripts.research_entry import _run_research_chunked
+
+        result = await _run_research_chunked(
+            repo_url="https://github.com/owner/repo",
+            request="Analyze",
+            action="unknown",
+            session_id="abc123",
+        )
+        assert result.get("success") is False
+        err = result.get("error", "")
+        assert "Unknown action" in err or "No state found" in err
+
+    @pytest.mark.asyncio
+    async def test_run_research_graph_chunked_start_uses_step_mode(self):
+        """Entry point: chunked+action=start must return step state, not auto-complete full workflow."""
+        from researcher.scripts.research_entry import run_research_graph
+
+        expected = {
+            "success": True,
+            "session_id": "sid-1",
+            "shard_count": 2,
+            "workflow_type": "research_chunked",
+        }
+        with patch(
+            "researcher.scripts.research_entry._run_research_chunked",
+            new_callable=AsyncMock,
+        ) as m_step:
+            m_step.return_value = expected
+            result = await run_research_graph(
+                repo_url="https://github.com/owner/repo",
+                request="Analyze",
+                chunked=True,
+                action="start",
+            )
+
+        m_step.assert_awaited_once()
+        if isinstance(result, dict) and "content" in result:
+            payload = json.loads(result["content"][0]["text"])
+        else:
+            payload = result
+        assert payload == expected
+
+    @pytest.mark.asyncio
+    async def test_chunked_auto_complete_helper_runs_full_workflow(self):
+        """Helper API: _run_research_chunked_auto_complete still supports full one-call execution."""
+        from researcher.scripts.research_entry import _run_research_chunked_auto_complete
+
+        with patch(
+            "researcher.scripts.research_entry.run_setup_and_architect",
+            new_callable=AsyncMock,
+        ) as m_setup:
+            m_setup.return_value = {
+                "harvest_dir": "/tmp/harvest/owner/repo",
+                "shards_queue": [
+                    {"name": "Shard A", "targets": ["a.rs"], "description": "A"},
+                ],
+                "repo_url": "https://github.com/owner/repo",
+                "request": "Analyze",
+            }
+            with patch(
+                "researcher.scripts.research_entry.run_one_shard",
+                new_callable=AsyncMock,
+            ) as m_shard:
+                m_shard.return_value = {
+                    "harvest_dir": "/tmp/harvest/owner/repo",
+                    "shards_queue": [],
+                    "shard_analyses": [{"name": "Shard A", "content": "Analysis A"}],
+                }
+                with patch(
+                    "researcher.scripts.research_entry.run_synthesize_only",
+                    new_callable=AsyncMock,
+                ) as m_synth:
+                    m_synth.return_value = {
+                        "harvest_dir": "/tmp/harvest/owner/repo",
+                        "messages": [{"content": "Research complete."}],
+                        "shard_analyses": [{"name": "Shard A", "content": "Analysis A"}],
+                    }
+                    result = await _run_research_chunked_auto_complete(
+                        repo_url="https://github.com/owner/repo",
+                        request="Analyze",
+                    )
+        assert result.get("success") is True
+        assert result.get("harvest_dir") == "/tmp/harvest/owner/repo"
+        assert result.get("summary") == "Research complete."
+        assert "shard_summaries" in result
+        assert "session_id" not in result  # Auto-complete returns final result, not session
+
+    @pytest.mark.asyncio
+    async def test_chunked_action_start_handles_scalar_result_gracefully(self):
+        """Regression: scalar auto-complete result must not crash with `.get`."""
+        from researcher.scripts.research_entry import _run_research_chunked_auto_complete
+
+        with patch(
+            "researcher.scripts.research_entry.run_chunked_auto_complete",
+            new_callable=AsyncMock,
+        ) as m_auto:
+            m_auto.return_value = {
+                "success": True,
+                "workflow_type": "research_chunked",
+                "result": "Research on repo complete.",
+            }
+            result = await _run_research_chunked_auto_complete(
+                repo_url="https://github.com/owner/repo",
+                request="Analyze",
+            )
+
+        assert result.get("success") is True
+        assert result.get("summary") == "Research on repo complete."
+        assert result.get("harvest_dir") == ""
+        assert result.get("shards_analyzed") == 0
+
+    @pytest.mark.asyncio
+    async def test_chunked_action_shard_completes_remainder_in_one_call(self):
+        """action=shard with session_id completes all remaining shards + synthesize (retry scenario)."""
+        from researcher.scripts.research_entry import _run_research_chunked_complete_remainder
+
+        with patch("researcher.scripts.research_entry._load_chunked_state") as m_load:
+            m_load.return_value = {
+                "harvest_dir": "/tmp/harvest/owner/repo",
+                "shards_queue": [
+                    {"name": "Shard B", "targets": ["b.rs"], "description": "B"},
+                ],
+                "shard_analyses": [{"name": "Shard A", "content": "Analysis A"}],
+            }
+            with patch(
+                "researcher.scripts.research_entry.run_one_shard",
+                new_callable=AsyncMock,
+            ) as m_shard:
+                m_shard.return_value = {
+                    "harvest_dir": "/tmp/harvest/owner/repo",
+                    "shards_queue": [],
+                    "shard_analyses": [
+                        {"name": "Shard A", "content": "Analysis A"},
+                        {"name": "Shard B", "content": "Analysis B"},
+                    ],
+                }
+                with patch(
+                    "researcher.scripts.research_entry.run_synthesize_only",
+                    new_callable=AsyncMock,
+                ) as m_synth:
+                    m_synth.return_value = {
+                        "harvest_dir": "/tmp/harvest/owner/repo",
+                        "messages": [{"content": "Research complete."}],
+                        "shard_analyses": [
+                            {"name": "Shard A", "content": "Analysis A"},
+                            {"name": "Shard B", "content": "Analysis B"},
+                        ],
+                    }
+                    with patch("researcher.scripts.research_entry._RESEARCH_CHUNKED_STORE.save"):
+                        result = await _run_research_chunked_complete_remainder("abc123")
+        assert result.get("success") is True
+        assert result.get("summary") == "Research complete."
+        assert len(result.get("shard_summaries", [])) == 2
+
+
 class TestResearchState:
     """Tests for ResearchState TypedDict."""
 
@@ -275,3 +940,17 @@ class TestResearchState:
         assert state["repo_owner"] == "example"
         assert state["repo_name"] == "repo"
         assert state["repo_revision"] == "abc123"
+
+
+class TestResearchChunkedStateStore:
+    """Tests for chunked state persistence with common WorkflowStateStore."""
+
+    def test_load_chunked_state_accepts_native_workflow_state(self):
+        """Current WorkflowStateStore payload should pass through unchanged."""
+        from researcher.scripts.research_entry import _load_chunked_state
+
+        with patch("researcher.scripts.research_entry._RESEARCH_CHUNKED_STORE.load") as m_load:
+            m_load.return_value = {"shards_queue": [], "harvest_dir": "/tmp/harvest"}
+            state = _load_chunked_state("sid-1")
+
+        assert state == {"shards_queue": [], "harvest_dir": "/tmp/harvest"}

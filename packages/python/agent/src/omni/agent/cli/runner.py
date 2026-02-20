@@ -1,16 +1,9 @@
 """
-runner.py - Skill Execution Runner (Kernel Native)
+runner.py - CLI interface for skill run.
 
-Lightweight CLI for executing skill commands using omni-core Kernel.
-Supports skill.command format with JSON arguments.
-
-UNIX Philosophy:
-- Logs go to stderr (visible to user, ignored by pipes)
-- Results go to stdout (pure data for pipes)
-
-Usage:
-    omni skill run demo.run_langgraph
-    omni skill run demo.run_langgraph --quiet  # Suppress kernel logs
+Thin layer: parse command (skill.command + JSON args) and delegate to
+omni.core.skills.run_skill(). No run logic here; the skill runner
+handles fast path and kernel fallback.
 """
 
 from __future__ import annotations
@@ -18,7 +11,8 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from collections.abc import Callable
+from contextlib import suppress
+from typing import TYPE_CHECKING
 
 import typer
 from rich.panel import Panel
@@ -27,14 +21,15 @@ from omni.foundation.utils.asyncio import run_async_blocking
 
 from .console import err_console, print_result
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 def _setup_quiet_logging():
     """Suppress verbose logging for clean skill output."""
-    # Suppress structlog/logger output during skill execution
     logging.getLogger("omni").setLevel(logging.WARNING)
     logging.getLogger("omni.core").setLevel(logging.WARNING)
     logging.getLogger("omni.foundation").setLevel(logging.WARNING)
-    # Suppress litellm logs
     logging.getLogger("litellm").setLevel(logging.WARNING)
     logging.getLogger("LiteLLM").setLevel(logging.WARNING)
 
@@ -53,9 +48,15 @@ def run_skills(
         quiet: If True, suppress kernel logs for clean output
         log_handler: Optional callback for logging messages
     """
-    # Suppress verbose logs if quiet mode
-    if quiet:
-        _setup_quiet_logging()
+    # Suppress verbose logs unless -v/--verbose (so foundation/vector logs are visible when debugging)
+    try:
+        from omni.agent.cli.app import _is_verbose
+
+        if quiet and not _is_verbose():
+            _setup_quiet_logging()
+    except Exception:
+        if quiet:
+            _setup_quiet_logging()
 
     # Log skill invocation
     if log_handler and commands and commands[0] not in ("help", "?"):
@@ -77,89 +78,73 @@ def run_skills(
     skill_name = parts[0]
     command_name = parts[1]
 
-    # Parse JSON args if provided
-    cmd_args = {}
-    if len(commands) > 1 and commands[1].startswith("{"):
-        try:
-            cmd_args = json.loads(commands[1])
-        except json.JSONDecodeError as e:
-            err_console.print(Panel(f"Invalid JSON args: {e}", title="❌ Error", style="red"))
-            raise typer.Exit(1)
+    # Parse JSON args if provided; otherwise treat single positional arg as file_path
+    cmd_args: dict = {}
+    if len(commands) > 1:
+        rest = commands[1].strip()
+        if rest.startswith("{"):
+            try:
+                cmd_args = json.loads(commands[1])
+            except json.JSONDecodeError as e:
+                err_console.print(Panel(f"Invalid JSON args: {e}", title="❌ Error", style="red"))
+                raise typer.Exit(1) from e
+        elif rest and not cmd_args:
+            # Single non-JSON arg: pass as file_path (e.g. ingest_document "https://...")
+            cmd_args = {"file_path": rest}
 
-    # [NEW] FAST-FAIL: Validate parameters BEFORE kernel initialization
-    # This prevents expensive kernel startup when args are missing
-    full_cmd = f"{skill_name}.{command_name}"
+    # Delegate to skill runner. Use unified run_with_execution_timeout (same as MCP).
+    monitor: object | None = None
     try:
-        # Temporarily disabled - Rust scanner get_skill_index() hangs
-        # from omni.core.skills.validation import validate_tool_args, format_validation_errors
-        # validation_errors = validate_tool_args(full_cmd, cmd_args)
-        # if validation_errors:
-        #     err_console.print(
-        #         Panel(
-        #             format_validation_errors(full_cmd, validation_errors),
-        #             title="❌ Missing Required Arguments",
-        #             style="red",
-        #         )
-        #     )
-        #     return  # Exit early without kernel initialization
-        pass  # Validation disabled
-    except Exception:
-        # Validation is best-effort - if it fails, continue to kernel
-        pass
+        from omni.core.skills import run_skill_with_monitor
+        from omni.foundation.api.tool_context import run_with_execution_timeout
 
-    # Use omni-core Kernel (from installed package)
-    from omni.core import get_kernel
-
-    # Create fresh kernel with cortex disabled for CLI skill run (embedding not needed)
-    # Use reset=True to ensure cortex is disabled
-    kernel = get_kernel(enable_cortex=False, reset=True)
-
-    # Ensure kernel is initialized
-    if not kernel.is_ready:
-        run_async_blocking(kernel.initialize())
-
-    ctx = kernel.skill_context
-
-    # Get skill
-    skill = ctx.get_skill(skill_name)
-    if skill is None:
-        available = ctx.list_skills()
-        err_console.print(
-            Panel(
-                f"Skill not found: {skill_name}. Available: {available}",
-                title="❌ Error",
-                style="red",
-            )
-        )
-        raise typer.Exit(1)
-
-    # Check if command exists
-    full_cmd = f"{skill_name}.{command_name}"
-    if not ctx.get_command(full_cmd):
-        # Try alternate naming
-        alt_full_cmd = f"{skill_name}.{skill_name}_{command_name}"
-        if ctx.get_command(alt_full_cmd):
-            full_cmd = alt_full_cmd
-        else:
-            err_console.print(
-                Panel(
-                    f"Command not found: {skill_name}.{command_name}",
-                    title="❌ Error",
-                    style="red",
+        result, monitor = run_async_blocking(
+            run_with_execution_timeout(
+                run_skill_with_monitor(
+                    skill_name,
+                    command_name,
+                    cmd_args,
+                    output_json=json_output,
+                    auto_report=False,
                 )
             )
-            raise typer.Exit(1)
-
-    # Execute command
-    try:
-        result = run_async_blocking(skill.execute(command_name, **cmd_args))
+        )
+    except TimeoutError as e:
+        err_console.print(
+            Panel(
+                str(e) + "\n\nLong runs (e.g. researcher.git_repo_analyer) use heartbeat(); "
+                "configure mcp.timeout and mcp.idle_timeout in settings.",
+                title="⏱ Timeout",
+                style="yellow",
+            )
+        )
+        raise typer.Exit(124) from e
+    except ValueError as e:
+        err_console.print(Panel(str(e), title="❌ Error", style="red"))
+        raise typer.Exit(1) from e
     except Exception as e:
         err_console.print(Panel(f"Execution error: {e}", title="❌ Error", style="red"))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
-    # Print result
     is_tty = sys.stdout.isatty()
-    print_result(result, is_tty, json_output)
+    try:
+        print_result(result, is_tty, json_output)
+        with suppress(Exception):
+            sys.stdout.flush()
+        if is_tty:
+            err_console.print("[dim]Command completed.[/]")
+    finally:
+        # In verbose mode, defer dashboard until after result output to keep UX order:
+        # command result first, diagnostics second.
+        if monitor is not None:
+            with suppress(Exception):
+                monitor.report(output_json=json_output)
+
+    # Close embedding client session to avoid "Unclosed client session" at exit
+    with suppress(Exception):
+        from omni.foundation.embedding_client import close_embedding_client
+
+        run_async_blocking(close_embedding_client())
 
 
 def _show_help() -> None:

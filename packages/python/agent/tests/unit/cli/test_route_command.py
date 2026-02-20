@@ -182,6 +182,41 @@ class TestRouteTestCommand:
         assert "sem=" not in result.output
 
     @patch("omni.core.router.hybrid_search.HybridSearch")
+    def test_route_test_uses_mcp_embedding_when_port_detected(self, mock_search_cls):
+        """When MCP embedding port is detected, route test uses it and prints a hint."""
+        runner = CliRunner()
+        mock_search = MagicMock()
+        mock_search.search = AsyncMock(
+            return_value=[
+                {
+                    "id": "git.commit",
+                    "skill_name": "git",
+                    "command": "commit",
+                    "score": 0.8,
+                    "final_score": 0.9,
+                    "confidence": "high",
+                }
+            ]
+        )
+        mock_search.stats.return_value = {
+            "semantic_weight": 0.7,
+            "keyword_weight": 0.3,
+            "rrf_k": 60,
+            "strategy": "weighted_rrf",
+        }
+        mock_search_cls.return_value = mock_search
+
+        with patch.object(
+            route_module,
+            "detect_mcp_port",
+            new=AsyncMock(return_value=3002),
+        ):
+            result = runner.invoke(app, ["route", "test", "git commit"])
+
+        assert result.exit_code == 0
+        assert "Using MCP embedding (port 3002)" in _strip_ansi(result.output)
+
+    @patch("omni.core.router.hybrid_search.HybridSearch")
     def test_route_test_json_outputs_full_payload(self, mock_search_cls):
         runner = CliRunner()
         mock_search = MagicMock()
@@ -319,8 +354,21 @@ class TestRouteTestCommand:
         assert payload["results"][0]["tool_name"] == expected_tool_name
         assert payload["results"][0]["payload"]["metadata"]["tool_name"] == expected_tool_name
 
+    @patch("omni.foundation.services.index_dimension.get_embedding_dimension_status")
     @patch("omni.core.router.hybrid_search.HybridSearch")
-    def test_route_test_json_empty_results_keeps_canonical_shape(self, mock_search_cls):
+    def test_route_test_json_empty_results_keeps_canonical_shape(
+        self, mock_search_cls, mock_get_dimension_status
+    ):
+        from omni.foundation.services.index_dimension import EmbeddingDimensionStatus
+
+        mock_get_dimension_status.return_value = EmbeddingDimensionStatus(
+            index_dim=384,
+            current_dim=384,
+            store_dim=384,
+            match=True,
+            needs_rebuild=False,
+            signature_path="/tmp/.embedding_signature.json",
+        )
         runner = CliRunner()
         mock_search = MagicMock()
         mock_search.search = AsyncMock(return_value=[])
@@ -340,7 +388,10 @@ class TestRouteTestCommand:
             result = runner.invoke(app, ["route", "test", "git commit", "--json"])
 
         assert result.exit_code == 0
-        payload = json.loads(_strip_ansi(result.output))
+        raw = _strip_ansi(result.output).strip()
+        # Parse JSON: take last line if multiple (logs may appear on stdout in some envs)
+        lines = [ln for ln in raw.split("\n") if ln.strip().startswith("{")]
+        payload = json.loads(lines[-1] if lines else raw)
         assert payload["schema"] == "omni.router.route_test.v1"
         assert payload["query"] == "git commit"
         assert payload["count"] == 0

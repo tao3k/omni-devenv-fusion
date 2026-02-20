@@ -18,7 +18,8 @@ pub use migration::{
     MigrateResult, MigrationItem, OMNI_SCHEMA_VERSION, schema_version_from_schema,
 };
 pub use types::{
-    CompactionStats, FragmentInfo, IndexBuildProgress, IndexCacheStats, IndexStats, IndexStatus,
-    IndexThresholds, MergeInsertStats, QueryMetrics, Recommendation, TableColumnAlteration,
-    TableColumnType, TableHealthReport, TableInfo, TableNewColumn, TableVersionInfo,
+    CompactionStats, DocumentRow, FragmentInfo, IndexBuildProgress, IndexCacheStats, IndexStats,
+    IndexStatus, IndexThresholds, MergeInsertStats, QueryMetrics, Recommendation,
+    TableColumnAlteration, TableColumnType, TableHealthReport, TableInfo, TableNewColumn,
+    TableVersionInfo,
 };

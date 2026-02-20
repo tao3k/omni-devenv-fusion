@@ -87,10 +87,12 @@ pub use sniffer::{
     PyEnvironmentSnapshot, PyGlobSniffer, PyOmniSniffer, get_environment_snapshot, py_get_sniffer,
 };
 pub use utils::run_safe;
-pub use vector::{PyToolRecord, PyVectorStore, create_vector_store_py};
+pub use vector::{
+    PyToolRecord, PyVectorStore, create_vector_store_py, evict_vector_store_cache_py,
+};
 
 // Tokenizer exports
-pub use tokenizer::{PyMessage, py_count_tokens, py_truncate, py_truncate_middle};
+pub use tokenizer::{PyMessage, py_chunk_text, py_count_tokens, py_truncate, py_truncate_middle};
 
 // Schema Registry exports (Schema Singularity)
 pub use schema::{py_get_registered_types, py_get_schema_json};
@@ -101,41 +103,58 @@ pub use tags::{
     py_search_directory, py_search_file, py_search_with_rules,
 };
 
-// Knowledge Sync Engine (omni-knowledge)
-pub use omni_knowledge::PyEntity;
-pub use omni_knowledge::PyEntityType;
-pub use omni_knowledge::PyKnowledgeGraph;
-pub use omni_knowledge::PyQueryIntent;
-pub use omni_knowledge::PyRelation;
-pub use omni_knowledge::PySyncEngine;
-pub use omni_knowledge::PySyncResult;
-pub use omni_knowledge::extract_query_intent;
+// Knowledge Sync Engine (xiuxian-wendao)
+pub use xiuxian_wendao::PyEntity;
+pub use xiuxian_wendao::PyEntityType;
+pub use xiuxian_wendao::PyKnowledgeGraph;
+pub use xiuxian_wendao::PyLinkGraphEngine;
+pub use xiuxian_wendao::PyQueryIntent;
+pub use xiuxian_wendao::PyRelation;
+pub use xiuxian_wendao::PySyncEngine;
+pub use xiuxian_wendao::PySyncResult;
+pub use xiuxian_wendao::{
+    extract_query_intent, invalidate_kg_cache, link_graph_stats_cache_del,
+    link_graph_stats_cache_get, link_graph_stats_cache_set, load_kg_from_lance_cached,
+};
+
+// Session Window (omni-window, 1k–10k scale)
+pub use omni_window::PySessionWindow;
+
+// Self-Evolving Memory (omni-memory)
+pub use omni_memory::{
+    PyEpisode, PyEpisodeStore, PyIntentEncoder, PyQTable, PyStoreConfig, PyTwoPhaseConfig,
+    PyTwoPhaseSearch, create_episode, create_episode_store, create_episode_with_embedding,
+    create_intent_encoder, create_q_table, create_two_phase_search, py_calculate_score,
+};
 
 // Dependency Indexer (External crate symbol search)
-pub use omni_knowledge::PyDependencyConfig;
-pub use omni_knowledge::PyDependencyIndexResult;
-pub use omni_knowledge::PyDependencyIndexer;
-pub use omni_knowledge::PyDependencyStats;
-pub use omni_knowledge::PyExternalSymbol;
-pub use omni_knowledge::PySymbolIndex;
+pub use xiuxian_wendao::PyDependencyConfig;
+pub use xiuxian_wendao::PyDependencyIndexResult;
+pub use xiuxian_wendao::PyDependencyIndexer;
+pub use xiuxian_wendao::PyDependencyStats;
+pub use xiuxian_wendao::PyExternalSymbol;
+pub use xiuxian_wendao::PySymbolIndex;
 
-// ZK Entity Reference Extraction (Rust-accelerated)
-pub use omni_knowledge::PyZkEntityRef;
-pub use omni_knowledge::PyZkRefStats;
-pub use omni_knowledge::zk_count_refs;
-pub use omni_knowledge::zk_extract_entity_refs;
+// LinkGraph Entity Reference Extraction (Rust-accelerated)
+pub use xiuxian_wendao::PyLinkGraphEntityRef;
+pub use xiuxian_wendao::PyLinkGraphRefStats;
+pub use xiuxian_wendao::link_graph_count_refs;
+pub use xiuxian_wendao::link_graph_extract_entity_refs;
 
-// ZK Note Enhancement (Rust-accelerated)
-pub use omni_knowledge::PyEnhancedNote;
-pub use omni_knowledge::PyInferredRelation;
-pub use omni_knowledge::PyNoteFrontmatter;
-pub use omni_knowledge::zk_enhance_note;
-pub use omni_knowledge::zk_enhance_notes_batch;
-pub use omni_knowledge::zk_find_referencing_notes;
-pub use omni_knowledge::zk_get_ref_stats;
-pub use omni_knowledge::zk_is_valid_ref;
-pub use omni_knowledge::zk_parse_entity_ref;
-pub use omni_knowledge::zk_parse_frontmatter;
+// LinkGraph Note Enhancement (Rust-accelerated)
+pub use xiuxian_wendao::PyEnhancedNote;
+pub use xiuxian_wendao::PyInferredRelation;
+pub use xiuxian_wendao::PyNoteFrontmatter;
+pub use xiuxian_wendao::link_graph_enhance_note;
+pub use xiuxian_wendao::link_graph_enhance_notes_batch;
+pub use xiuxian_wendao::link_graph_find_referencing_notes;
+pub use xiuxian_wendao::link_graph_get_ref_stats;
+pub use xiuxian_wendao::link_graph_is_valid_ref;
+pub use xiuxian_wendao::link_graph_parse_entity_ref;
+pub use xiuxian_wendao::link_graph_parse_frontmatter;
+
+// Dual-core recall boost (LinkGraph proximity, Rust computation)
+pub use xiuxian_wendao::dual_core_py::apply_link_graph_proximity_boost_py;
 
 // AST Extraction
 pub use ast::{
@@ -217,8 +236,12 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(pyo3::wrap_pyfunction!(batch_structural_replace, m)?)?;
     m.add_class::<PyBatchRefactorStats>()?;
 
+    // Session Window (omni-window)
+    m.add_class::<PySessionWindow>()?;
+
     // Vector Store (omni-vector bindings)
     m.add_function(pyo3::wrap_pyfunction!(create_vector_store_py, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(evict_vector_store_cache_py, m)?)?;
     m.add_class::<PyVectorStore>()?;
     m.add_class::<PyToolRecord>()?;
 
@@ -237,6 +260,7 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Tokenizer (High-performance token counting and context pruning)
     m.add_function(pyo3::wrap_pyfunction!(py_count_tokens, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(py_chunk_text, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(py_truncate, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(py_truncate_middle, m)?)?;
     m.add_class::<tokenizer::PyContextPruner>()?;
@@ -296,43 +320,58 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<PyFileEvent>()?;
     }
 
-    // Knowledge Sync Engine (omni-knowledge)
+    // Knowledge Sync Engine (xiuxian-wendao)
     m.add_class::<PySyncEngine>()?;
     m.add_class::<PySyncResult>()?;
-    m.add_function(pyo3::wrap_pyfunction!(omni_knowledge::compute_hash, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(xiuxian_wendao::compute_hash, m)?)?;
 
-    // Knowledge Graph (omni-knowledge)
-    m.add_class::<omni_knowledge::PyKnowledgeGraph>()?;
-    m.add_class::<omni_knowledge::PyEntity>()?;
-    m.add_class::<omni_knowledge::PyRelation>()?;
-    m.add_class::<omni_knowledge::PyEntityType>()?;
-    m.add_class::<omni_knowledge::PyQueryIntent>()?;
+    // Knowledge Graph (xiuxian-wendao)
+    m.add_class::<xiuxian_wendao::PyKnowledgeGraph>()?;
+    m.add_class::<xiuxian_wendao::PyEntity>()?;
+    m.add_class::<xiuxian_wendao::PyRelation>()?;
+    m.add_class::<xiuxian_wendao::PyEntityType>()?;
+    m.add_class::<xiuxian_wendao::PyQueryIntent>()?;
+    m.add_class::<xiuxian_wendao::PyLinkGraphEngine>()?;
     m.add_function(pyo3::wrap_pyfunction!(extract_query_intent, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(invalidate_kg_cache, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(load_kg_from_lance_cached, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(link_graph_stats_cache_get, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(link_graph_stats_cache_set, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(link_graph_stats_cache_del, m)?)?;
 
-    // ZK Entity Reference Extraction (Rust-accelerated)
-    m.add_function(pyo3::wrap_pyfunction!(zk_extract_entity_refs, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(zk_get_ref_stats, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(zk_parse_entity_ref, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(zk_is_valid_ref, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(zk_count_refs, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(zk_find_referencing_notes, m)?)?;
-    m.add_class::<omni_knowledge::PyZkEntityRef>()?;
-    m.add_class::<omni_knowledge::PyZkRefStats>()?;
+    // LinkGraph Entity Reference Extraction (Rust-accelerated)
+    m.add_function(pyo3::wrap_pyfunction!(link_graph_extract_entity_refs, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(link_graph_get_ref_stats, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(link_graph_parse_entity_ref, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(link_graph_is_valid_ref, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(link_graph_count_refs, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(
+        link_graph_find_referencing_notes,
+        m
+    )?)?;
+    m.add_class::<xiuxian_wendao::PyLinkGraphEntityRef>()?;
+    m.add_class::<xiuxian_wendao::PyLinkGraphRefStats>()?;
 
-    // ZK Note Enhancement (Rust-accelerated)
-    m.add_class::<omni_knowledge::PyEnhancedNote>()?;
-    m.add_class::<omni_knowledge::PyNoteFrontmatter>()?;
-    m.add_class::<omni_knowledge::PyInferredRelation>()?;
-    m.add_function(pyo3::wrap_pyfunction!(zk_enhance_note, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(zk_enhance_notes_batch, m)?)?;
-    m.add_function(pyo3::wrap_pyfunction!(zk_parse_frontmatter, m)?)?;
+    // LinkGraph Note Enhancement (Rust-accelerated)
+    m.add_class::<xiuxian_wendao::PyEnhancedNote>()?;
+    m.add_class::<xiuxian_wendao::PyNoteFrontmatter>()?;
+    m.add_class::<xiuxian_wendao::PyInferredRelation>()?;
+    m.add_function(pyo3::wrap_pyfunction!(link_graph_enhance_note, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(link_graph_enhance_notes_batch, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(link_graph_parse_frontmatter, m)?)?;
+
+    // Dual-core recall boost (LinkGraph proximity)
+    m.add_function(pyo3::wrap_pyfunction!(
+        apply_link_graph_proximity_boost_py,
+        m
+    )?)?;
 
     // Dependency Indexer (External crate symbol search)
-    use omni_knowledge::dep_indexer_py::register_dependency_indexer_module;
+    use xiuxian_wendao::dep_indexer_py::register_dependency_indexer_module;
     register_dependency_indexer_module(m)?;
 
     // Unified Symbol Index (Project + External dependency search)
-    use omni_knowledge::unified_symbol_py::register_unified_symbol_module;
+    use xiuxian_wendao::unified_symbol_py::register_unified_symbol_module;
     // NCL-driven Sandbox Executor (omni-sandbox)
     m.add_function(pyo3::wrap_pyfunction!(sandbox::sandbox_detect_platform, m)?)?;
     m.add_function(pyo3::wrap_pyfunction!(
@@ -350,6 +389,22 @@ fn omni_core_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<sandbox::SeatbeltExecutor>()?;
 
     register_unified_symbol_module(m)?;
+
+    // Self-Evolving Memory (omni-memory)
+    m.add_class::<PyEpisode>()?;
+    m.add_class::<PyQTable>()?;
+    m.add_class::<PyIntentEncoder>()?;
+    m.add_class::<PyStoreConfig>()?;
+    m.add_class::<PyEpisodeStore>()?;
+    m.add_class::<PyTwoPhaseConfig>()?;
+    m.add_class::<PyTwoPhaseSearch>()?;
+    m.add_function(pyo3::wrap_pyfunction!(create_episode, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(create_q_table, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(create_intent_encoder, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(create_episode_store, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(create_two_phase_search, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(py_calculate_score, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(create_episode_with_embedding, m)?)?;
 
     m.add("VERSION", "0.5.0")?;
     Ok(())
