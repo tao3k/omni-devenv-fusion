@@ -203,7 +203,7 @@ jobs:
 
       - name: Upload knowledge recall perf reports
         if: ${{ always() && github.event_name == 'workflow_dispatch' && github.event.inputs.run_recall_perf_gates == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: knowledge-recall-perf-${{ matrix.os }}
           path: ${{ env.OMNI_KNOWLEDGE_RECALL_REPORT_DIR }}
